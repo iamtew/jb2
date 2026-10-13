@@ -141,7 +141,9 @@ mod tests {
             max_duration: 600,
             ..Config::default()
         };
-        assert!(check_content(&cfg, 214, true, &["Never Gonna Give You Up", "Rick Astley"]).is_err());
+        assert!(
+            check_content(&cfg, 214, true, &["Never Gonna Give You Up", "Rick Astley"]).is_err()
+        );
     }
 
     #[test]

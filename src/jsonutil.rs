@@ -69,10 +69,7 @@ pub fn parse_query(raw: &str) -> Vec<(String, String)> {
         .filter(|p| !p.is_empty())
         .map(|pair| {
             if let Some(i) = pair.find('=') {
-                (
-                    percent_decode(&pair[..i]),
-                    percent_decode(&pair[i + 1..]),
-                )
+                (percent_decode(&pair[..i]), percent_decode(&pair[i + 1..]))
             } else {
                 (percent_decode(pair), String::new())
             }
@@ -88,7 +85,13 @@ pub fn query_get<'a>(query: &'a [(String, String)], key: &str) -> Option<&'a str
 }
 
 pub fn mime_for(path: &str) -> &'static str {
-    match path.rsplit('.').next().unwrap_or("").to_ascii_lowercase().as_str() {
+    match path
+        .rsplit('.')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
         "html" | "htm" => "text/html; charset=utf-8",
         "css" => "text/css; charset=utf-8",
         "js" => "text/javascript; charset=utf-8",

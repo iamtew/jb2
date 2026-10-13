@@ -307,9 +307,15 @@ mod tests {
             format!("<https://open.spotify.com/track/{id}>"),
             format!("https://open.spotify.com/track/{id}."),
         ] {
-            assert_eq!(canonical_spotify_track_url(&input).as_deref(), Some(want.as_str()), "{input}");
+            assert_eq!(
+                canonical_spotify_track_url(&input).as_deref(),
+                Some(want.as_str()),
+                "{input}"
+            );
         }
         assert!(canonical_spotify_track_url("https://open.spotify.com/track/abc").is_none());
-        assert!(canonical_spotify_track_url(&format!("https://open.spotify.com/album/{id}")).is_none());
+        assert!(
+            canonical_spotify_track_url(&format!("https://open.spotify.com/album/{id}")).is_none()
+        );
     }
 }

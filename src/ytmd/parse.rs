@@ -104,7 +104,8 @@ pub fn parse_current_song(song_payload: &Value) -> CurrentSong {
         }
     }
     if !is_paused {
-        if as_string(song_data.get("state").unwrap_or(&Value::Null)).eq_ignore_ascii_case("paused") {
+        if as_string(song_data.get("state").unwrap_or(&Value::Null)).eq_ignore_ascii_case("paused")
+        {
             is_paused = true;
         }
     }
@@ -200,11 +201,12 @@ pub fn lookup_song_by_video_id(client: &Client, video_id: &str) -> Result<SongLo
         "/api/v1/search",
         json!({"query": format!("https://www.youtube.com/watch?v={video_id}")}),
     )?;
-    let entry = find_queue_entry_for_video_id(&payload, video_id).ok_or_else(|| {
-        format!("song metadata not found for video ID \"{video_id}\"")
-    })?;
+    let entry = find_queue_entry_for_video_id(&payload, video_id)
+        .ok_or_else(|| format!("song metadata not found for video ID \"{video_id}\""))?;
     if entry.title.is_empty() && entry.artist.is_empty() {
-        return Err(format!("song metadata not found for video ID \"{video_id}\""));
+        return Err(format!(
+            "song metadata not found for video ID \"{video_id}\""
+        ));
     }
     Ok(SongLookup {
         title: entry.title,
@@ -436,7 +438,8 @@ fn enrich_search_entry(value: &Value, mut entry: QueueEntrySummary) -> QueueEntr
             entry.artist = extract_artist_from_search_subtitle(&subtitle);
         }
         if entry.duration_seconds == 0 {
-            entry.duration_seconds = parse_duration_seconds(&extract_duration_token_from_subtitle(&subtitle));
+            entry.duration_seconds =
+                parse_duration_seconds(&extract_duration_token_from_subtitle(&subtitle));
         }
         if entry.video_id.is_empty() {
             entry.video_id = extract_video_id_from_value(shelf);
@@ -474,7 +477,10 @@ fn extract_flex_column_metadata(renderer: &Value) -> (String, String) {
     let Some(columns) = renderer.get("flexColumns").and_then(|v| v.as_array()) else {
         return (String::new(), String::new());
     };
-    let title = columns.first().map(extract_flex_column_text).unwrap_or_default();
+    let title = columns
+        .first()
+        .map(extract_flex_column_text)
+        .unwrap_or_default();
     let artist = columns
         .get(1)
         .map(|c| normalize_byline_artist(&Value::String(extract_flex_column_text(c))))
@@ -495,7 +501,9 @@ fn extract_fixed_column_duration(renderer: &Value) -> i32 {
     };
     for column in columns {
         if let Some(flex) = nested_map(column, "musicResponsiveListItemFixedColumnRenderer") {
-            let d = parse_duration_seconds(&extract_text_from_runs(flex.get("text").unwrap_or(&Value::Null)));
+            let d = parse_duration_seconds(&extract_text_from_runs(
+                flex.get("text").unwrap_or(&Value::Null),
+            ));
             if d > 0 {
                 return d;
             }
@@ -515,7 +523,10 @@ fn extract_artist_from_search_subtitle(subtitle: &str) -> String {
             continue;
         }
         let lower = candidate.to_lowercase();
-        if matches!(lower.as_str(), "video" | "song" | "music" | "single" | "ep" | "album") {
+        if matches!(
+            lower.as_str(),
+            "video" | "song" | "music" | "single" | "ep" | "album"
+        ) {
             continue;
         }
         if lower.contains(" view") {
@@ -546,18 +557,23 @@ fn extract_video_id_from_value(value: &Value) -> String {
         return id;
     }
     if let Some(nested) = nested_map(value, "onTap") {
-        let id = extract_video_id_from_watch_endpoint(nested.get("watchEndpoint").unwrap_or(&Value::Null));
+        let id = extract_video_id_from_watch_endpoint(
+            nested.get("watchEndpoint").unwrap_or(&Value::Null),
+        );
         if !id.is_empty() {
             return id;
         }
     }
     if let Some(nested) = nested_map(value, "navigationEndpoint") {
-        let id = extract_video_id_from_watch_endpoint(nested.get("watchEndpoint").unwrap_or(&Value::Null));
+        let id = extract_video_id_from_watch_endpoint(
+            nested.get("watchEndpoint").unwrap_or(&Value::Null),
+        );
         if !id.is_empty() {
             return id;
         }
     }
-    let id = extract_video_id_from_watch_endpoint(value.get("watchEndpoint").unwrap_or(&Value::Null));
+    let id =
+        extract_video_id_from_watch_endpoint(value.get("watchEndpoint").unwrap_or(&Value::Null));
     if !id.is_empty() {
         return id;
     }
@@ -570,7 +586,9 @@ fn extract_video_id_deep(value: &Value, depth: i32) -> String {
     }
     match value {
         Value::Object(map) => {
-            let id = extract_video_id_from_watch_endpoint(map.get("watchEndpoint").unwrap_or(&Value::Null));
+            let id = extract_video_id_from_watch_endpoint(
+                map.get("watchEndpoint").unwrap_or(&Value::Null),
+            );
             if !id.is_empty() {
                 return id;
             }
@@ -632,7 +650,9 @@ fn map_references_video_id(value: &Value, video_id: &str) -> bool {
         }
     }
     if is_queue_entry_like(value) {
-        return summarize_queue_entry(value).video_id.eq_ignore_ascii_case(video_id);
+        return summarize_queue_entry(value)
+            .video_id
+            .eq_ignore_ascii_case(video_id);
     }
     false
 }
@@ -714,7 +734,11 @@ pub fn build_queue_info_response(song_payload: &Value, queue_payload: &Value) ->
     )
 }
 
-pub fn build_song_request_response(video_id: &str, queue_payload: &Value, lookup: &SongLookup) -> Envelope {
+pub fn build_song_request_response(
+    video_id: &str,
+    queue_payload: &Value,
+    lookup: &SongLookup,
+) -> Envelope {
     let mut data = json!({"videoId": video_id});
     let mut title = lookup.title.clone();
     let mut artist = lookup.artist.clone();
@@ -789,7 +813,10 @@ pub fn queue_contains_video_id(payload: &Value, video_id: &str) -> bool {
     false
 }
 
-pub fn normalize_admin_queue(song_payload: &Value, queue_payload: &Value) -> (Vec<AdminQueueItem>, String) {
+pub fn normalize_admin_queue(
+    song_payload: &Value,
+    queue_payload: &Value,
+) -> (Vec<AdminQueueItem>, String) {
     let Some(ordered) = ordered_queue_items_array(queue_payload) else {
         return (Vec::new(), "error".into());
     };
@@ -932,7 +959,11 @@ fn reorder_queue_entries_from_current_song(
 
 fn summarize_queue_entries(entries: &[QueueEntrySummary]) -> QueueSummary {
     let items = entries.to_vec();
-    let visible = if items.len() > 3 { &items[..3] } else { &items[..] };
+    let visible = if items.len() > 3 {
+        &items[..3]
+    } else {
+        &items[..]
+    };
     let mut display_parts = Vec::new();
     for entry in visible {
         if !entry.artist.is_empty() && !entry.title.is_empty() {
@@ -962,14 +993,16 @@ fn summarize_queue_entry(value: &Value) -> QueueEntrySummary {
         title = extract_text_from_runs(renderer.get("title").unwrap_or(&Value::Null));
         artist = normalize_byline_artist(renderer.get("longBylineText").unwrap_or(&Value::Null));
         video_id = as_string(renderer.get("videoId").unwrap_or(&Value::Null));
-        duration_seconds =
-            parse_duration_seconds(&extract_text_from_runs(renderer.get("lengthText").unwrap_or(&Value::Null)));
+        duration_seconds = parse_duration_seconds(&extract_text_from_runs(
+            renderer.get("lengthText").unwrap_or(&Value::Null),
+        ));
     } else {
         title = extract_text_from_runs(value.get("title").unwrap_or(&Value::Null));
         artist = normalize_byline_artist(value.get("longBylineText").unwrap_or(&Value::Null));
         video_id = as_string(value.get("videoId").unwrap_or(&Value::Null));
-        duration_seconds =
-            parse_duration_seconds(&extract_text_from_runs(value.get("lengthText").unwrap_or(&Value::Null)));
+        duration_seconds = parse_duration_seconds(&extract_text_from_runs(
+            value.get("lengthText").unwrap_or(&Value::Null),
+        ));
     }
     if title.is_empty() {
         title = as_string(value.get("title").unwrap_or(&Value::Null));
@@ -981,7 +1014,8 @@ fn summarize_queue_entry(value: &Value) -> QueueEntrySummary {
         video_id = as_string(value.get("id").unwrap_or(&Value::Null));
     }
     if duration_seconds == 0 {
-        duration_seconds = parse_duration_seconds(&as_string(value.get("duration").unwrap_or(&Value::Null)));
+        duration_seconds =
+            parse_duration_seconds(&as_string(value.get("duration").unwrap_or(&Value::Null)));
     }
     let mut display_text = title.clone();
     if !artist.is_empty() {
@@ -1065,10 +1099,18 @@ fn extract_text_from_runs(value: &Value) -> String {
     match value {
         Value::Null => String::new(),
         Value::String(s) => s.trim().to_string(),
-        Value::Array(arr) => arr.iter().map(extract_text_from_runs).collect::<Vec<_>>().join(""),
+        Value::Array(arr) => arr
+            .iter()
+            .map(extract_text_from_runs)
+            .collect::<Vec<_>>()
+            .join(""),
         Value::Object(map) => {
             if let Some(Value::Array(runs)) = map.get("runs") {
-                return runs.iter().map(extract_text_from_runs).collect::<Vec<_>>().join("");
+                return runs
+                    .iter()
+                    .map(extract_text_from_runs)
+                    .collect::<Vec<_>>()
+                    .join("");
             }
             if let Some(Value::String(t)) = map.get("text") {
                 return t.trim().to_string();
@@ -1130,7 +1172,10 @@ pub fn queue_item_video_ids(payload: &Value) -> Vec<String> {
         .collect()
 }
 
-pub fn queue_indices_for_video_ids(payload: &Value, video_ids: &std::collections::HashSet<String>) -> Vec<i32> {
+pub fn queue_indices_for_video_ids(
+    payload: &Value,
+    video_ids: &std::collections::HashSet<String>,
+) -> Vec<i32> {
     let Some(items) = ordered_queue_items_array(payload) else {
         return Vec::new();
     };
@@ -1271,7 +1316,8 @@ pub fn extract_playlist_name(payload: &Value) -> String {
                 "musicImmersiveHeaderRenderer",
             ] {
                 if let Some(renderer) = nested_map(header, key) {
-                    let title = extract_text_from_runs(renderer.get("title").unwrap_or(&Value::Null));
+                    let title =
+                        extract_text_from_runs(renderer.get("title").unwrap_or(&Value::Null));
                     if !title.is_empty() {
                         found = title;
                         return;

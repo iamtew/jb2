@@ -31,7 +31,11 @@ pub fn start() -> Result<(), String> {
     let (listener, port) = listen_with_fallback(&bind, preferred)?;
     *ACTUAL_PORT.lock().expect("port") = port;
     let server = Arc::new(Server::from_listener(listener, None).map_err(|e| e.to_string())?);
-    let app = APP.lock().expect("app").clone().ok_or("app not initialized")?;
+    let app = APP
+        .lock()
+        .expect("app")
+        .clone()
+        .ok_or("app not initialized")?;
     let srv = server.clone();
     let worker = std::thread::spawn(move || {
         for request in srv.incoming_requests() {
@@ -82,5 +86,7 @@ fn listen_with_fallback(bind: &str, base: u16) -> Result<(TcpListener, u16), Str
             Err(_) => continue,
         }
     }
-    Err(format!("unable to bind to port {base} or any fallback ports"))
+    Err(format!(
+        "unable to bind to port {base} or any fallback ports"
+    ))
 }

@@ -51,15 +51,12 @@ impl Client {
 
     fn get_json(&self, endpoint: &str) -> Result<Value, String> {
         let url = format!("{}{endpoint}", self.base);
-        let resp = self
-            .agent
-            .get(&url)
-            .call()
-            .map_err(|e| e.to_string())?;
+        let resp = self.agent.get(&url).call().map_err(|e| e.to_string())?;
         if resp.status() >= 400 {
             return Err(format!("endpoint returned {}", resp.status()));
         }
-        resp.into_json().map_err(|e| format!("failed to decode payload: {e}"))
+        resp.into_json()
+            .map_err(|e| format!("failed to decode payload: {e}"))
     }
 
     pub fn post_json(&self, endpoint: &str, body: Value) -> Result<Value, String> {
@@ -227,7 +224,11 @@ pub fn coerce_query_value(value: &str) -> Value {
     Value::String(value.into())
 }
 
-pub fn build_upstream_body(method: &str, query: &[(String, String)], body: &[u8]) -> Option<Vec<u8>> {
+pub fn build_upstream_body(
+    method: &str,
+    query: &[(String, String)],
+    body: &[u8],
+) -> Option<Vec<u8>> {
     let mutating = matches!(
         method.to_ascii_uppercase().as_str(),
         "POST" | "PUT" | "PATCH" | "DELETE"
@@ -245,7 +246,8 @@ pub fn build_upstream_body(method: &str, query: &[(String, String)], body: &[u8]
         return None;
     }
     let mut payload = serde_json::Map::new();
-    let mut grouped: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut grouped: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
     for (k, v) in query {
         grouped.entry(k.clone()).or_default().push(v.clone());
     }
@@ -366,7 +368,9 @@ pub fn lookup_playlist_by_id(client: &Client, playlist_id: &str) -> Result<Playl
     } else {
         attempts.join("; ")
     };
-    Err(format!("no tracks found for playlist \"{playlist_id}\" ({detail})"))
+    Err(format!(
+        "no tracks found for playlist \"{playlist_id}\" ({detail})"
+    ))
 }
 
 fn lookup_playlist_via_innertube(playlist_id: &str) -> Result<PlaylistLookup, String> {
@@ -374,7 +378,9 @@ fn lookup_playlist_via_innertube(playlist_id: &str) -> Result<PlaylistLookup, St
     let mut lookup = parse_playlist_payload(playlist_id, &payload)
         .ok_or_else(|| format!("innertube returned no tracks for playlist \"{playlist_id}\""))?;
     if lookup.tracks.is_empty() {
-        return Err(format!("innertube returned no tracks for playlist \"{playlist_id}\""));
+        return Err(format!(
+            "innertube returned no tracks for playlist \"{playlist_id}\""
+        ));
     }
     if lookup.name.trim().eq_ignore_ascii_case(playlist_id) {
         if let Some(album_id) = extract_album_browse_id(&payload) {
@@ -393,7 +399,10 @@ fn lookup_playlist_via_ytmd_search(
     client: &Client,
     playlist_id: &str,
 ) -> Result<PlaylistLookup, String> {
-    let queries = [crate::videoid::playlist_url(playlist_id), playlist_id.to_string()];
+    let queries = [
+        crate::videoid::playlist_url(playlist_id),
+        playlist_id.to_string(),
+    ];
     let mut last_err = None;
     for query in queries {
         match client.post_json("/api/v1/search", json!({"query": query})) {
@@ -410,7 +419,9 @@ fn lookup_playlist_via_ytmd_search(
     if let Some(e) = last_err {
         return Err(e);
     }
-    Err(format!("search returned no tracks for playlist \"{playlist_id}\""))
+    Err(format!(
+        "search returned no tracks for playlist \"{playlist_id}\""
+    ))
 }
 
 // silence unused innertube key const if rustc complains about the split URL

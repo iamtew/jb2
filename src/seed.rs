@@ -103,7 +103,11 @@ impl State {
     }
 }
 
-fn request_insert_index_locked(queue_payload: &Value, current_video_id: &str, requests: &[String]) -> i32 {
+fn request_insert_index_locked(
+    queue_payload: &Value,
+    current_video_id: &str,
+    requests: &[String],
+) -> i32 {
     let current_index = ytmd::resolve_current_queue_index(queue_payload, current_video_id);
     if current_index < 0 {
         return -1;
@@ -195,4 +199,3 @@ fn sync_from_queue_locked(s: &mut Inner, queue_payload: &Value, current_video_id
 fn normalize_id(video_id: &str) -> String {
     video_id.trim().to_lowercase()
 }
-
