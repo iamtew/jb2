@@ -31,6 +31,14 @@ pub struct Config {
     pub twitch_oauth: String,
     #[serde(rename = "twitchNick", default)]
     pub twitch_nick: String,
+    #[serde(rename = "twitchClientId", default)]
+    pub twitch_client_id: String,
+    #[serde(rename = "twitchClientSecret", default)]
+    pub twitch_client_secret: String,
+    #[serde(rename = "twitchRefreshToken", default)]
+    pub twitch_refresh_token: String,
+    #[serde(rename = "twitchOAuthExpiresAt", default)]
+    pub twitch_oauth_expires_at: i64,
 }
 
 impl Default for Config {
@@ -43,6 +51,10 @@ impl Default for Config {
             twitch_channel: String::new(),
             twitch_oauth: String::new(),
             twitch_nick: String::new(),
+            twitch_client_id: String::new(),
+            twitch_client_secret: String::new(),
+            twitch_refresh_token: String::new(),
+            twitch_oauth_expires_at: 0,
         }
     }
 }
@@ -95,6 +107,24 @@ pub fn normalize(mut cfg: Config) -> Config {
     }
     cfg.seed_playlists = seeds;
     cfg
+}
+
+/// Hide live secrets in Admin JSON dumps. `***` is also ignored on save.
+pub fn public_json(cfg: &Config) -> serde_json::Value {
+    let mut v = serde_json::to_value(cfg).unwrap_or(serde_json::json!({}));
+    if let Some(obj) = v.as_object_mut() {
+        for key in ["twitchOAuth", "twitchClientSecret", "twitchRefreshToken"] {
+            let nonempty = obj
+                .get(key)
+                .and_then(|x| x.as_str())
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false);
+            if nonempty {
+                obj.insert(key.to_string(), serde_json::json!("***"));
+            }
+        }
+    }
+    v
 }
 
 pub fn load(path: &Path) -> Result<Config, String> {

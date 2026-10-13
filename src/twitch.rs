@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, Store};
 use crate::envelope::Envelope;
 use crate::server::App;
 use serde_json::{json, Value};
@@ -8,11 +8,14 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message, WebSocket};
+use url::Url;
 
 type Ws = WebSocket<MaybeTlsStream<TcpStream>>;
 
 const CHAT_CAP: usize = 200;
 const MAX_PRIVMSG: usize = 500;
+const OAUTH_SCOPES: &str = "chat:read chat:edit";
+const TOKEN_SKEW_SECS: i64 = 120;
 
 pub struct Hub {
     inner: Mutex<Inner>,
@@ -28,6 +31,8 @@ struct Inner {
     next_id: u64,
     chat: VecDeque<ChatLine>,
     outbound: VecDeque<String>,
+    oauth_nonce: u64,
+    oauth_state: Option<(String, String)>,
 }
 
 #[derive(Clone)]
@@ -51,6 +56,8 @@ impl Hub {
                 next_id: 1,
                 chat: VecDeque::new(),
                 outbound: VecDeque::new(),
+                oauth_nonce: 1,
+                oauth_state: None,
             }),
         }
     }
@@ -139,7 +146,27 @@ impl Hub {
         Ok(())
     }
 
-    pub fn status_json(&self, oauth_set: bool) -> Value {
+    pub fn begin_oauth(&self, client_id: &str, redirect_uri: &str) -> Result<String, String> {
+        let client_id = client_id.trim();
+        if client_id.is_empty() {
+            return Err("save twitch Client ID first".into());
+        }
+        let mut s = self.inner.lock().expect("twitch");
+        s.oauth_nonce = s.oauth_nonce.saturating_add(1);
+        let state = format!("{:x}-{}", now_ms(), s.oauth_nonce);
+        s.oauth_state = Some((state.clone(), redirect_uri.to_string()));
+        authorize_url(client_id, redirect_uri, &state)
+    }
+
+    pub fn take_oauth_redirect(&self, state: &str) -> Result<String, String> {
+        let mut s = self.inner.lock().expect("twitch");
+        match s.oauth_state.take() {
+            Some((want, redirect)) if want == state => Ok(redirect),
+            _ => Err("oauth state mismatch; click Login with Twitch again".into()),
+        }
+    }
+
+    pub fn status_json(&self, cfg: &Config) -> Value {
         let s = self.inner.lock().expect("twitch");
         json!({
             "connected": s.connected,
@@ -147,7 +174,11 @@ impl Hub {
             "channel": s.channel,
             "nick": s.nick,
             "lastError": s.last_error,
-            "oauthSet": oauth_set,
+            "oauthSet": !cfg.twitch_oauth.trim().is_empty(),
+            "refreshSet": !cfg.twitch_refresh_token.trim().is_empty(),
+            "clientIdSet": !cfg.twitch_client_id.trim().is_empty(),
+            "secretSet": !cfg.twitch_client_secret.trim().is_empty(),
+            "clientId": cfg.twitch_client_id.trim(),
         })
     }
 
@@ -171,7 +202,7 @@ impl Hub {
 
 pub fn spawn(app: Arc<App>) {
     if let Ok(cfg) = app.store.get() {
-        if creds_from_config(&cfg).is_some() {
+        if can_auto_connect(&cfg) {
             app.twitch.set_wanted(true);
         }
     }
@@ -188,8 +219,13 @@ fn worker(app: Arc<App>) {
             std::thread::sleep(Duration::from_millis(200));
             continue;
         }
+        if let Err(e) = ensure_access_token(&app.store, false) {
+            app.twitch.set_error(&e);
+            std::thread::sleep(Duration::from_millis(500));
+            continue;
+        }
         let Some((channel, oauth, nick)) = app.store.get().ok().and_then(|c| creds_from_config(&c)) else {
-            app.twitch.set_error("set twitchChannel + twitchOAuth");
+            app.twitch.set_error("set join channel and log in with Twitch");
             std::thread::sleep(Duration::from_millis(500));
             continue;
         };
@@ -197,10 +233,18 @@ fn worker(app: Arc<App>) {
         match run(&app, &channel, &oauth, &nick, gen) {
             Ok(()) => {}
             Err(e) => {
+                let auth_fail = is_auth_fail(&e);
+                if auth_fail {
+                    if let Ok(mut cfg) = app.store.get() {
+                        cfg.twitch_oauth_expires_at = 0;
+                        let _ = app.store.save(cfg);
+                    }
+                }
                 app.twitch.set_error(&e);
                 eprintln!("twitch: {e}; retry in 10s");
                 // ponytail: 200ms polls instead of one 10s sleep so disconnect is snappy
-                for _ in 0..50 {
+                let waits = if auth_fail { 1 } else { 50 };
+                for _ in 0..waits {
                     if !app.twitch.wanted() || app.twitch.generation() != gen {
                         break;
                     }
@@ -283,6 +327,9 @@ fn handle_line(
     if line.starts_with("PING") {
         return send(ws, &format!("{}\r\n", line.replacen("PING", "PONG", 1)));
     }
+    if is_auth_fail(line) {
+        return Err(line.to_string());
+    }
     let Some((from, body)) = parse_privmsg(line) else {
         return Ok(());
     };
@@ -315,6 +362,156 @@ fn envelope_text(env: Envelope) -> String {
             "failed".into()
         }
     })
+}
+
+fn can_auto_connect(cfg: &Config) -> bool {
+    let channel = cfg.twitch_channel.trim();
+    !channel.is_empty()
+        && (!cfg.twitch_oauth.trim().is_empty() || !cfg.twitch_refresh_token.trim().is_empty())
+}
+
+fn is_auth_fail(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("login authentication failed")
+        || m.contains("improperly formatted auth")
+        || m.contains("login unsuccessful")
+}
+
+fn bare_token(oauth: &str) -> String {
+    oauth
+        .trim()
+        .strip_prefix("oauth:")
+        .unwrap_or(oauth.trim())
+        .to_string()
+}
+
+fn authorize_url(client_id: &str, redirect_uri: &str, state: &str) -> Result<String, String> {
+    let mut url = Url::parse("https://id.twitch.tv/oauth2/authorize").map_err(|e| e.to_string())?;
+    url.query_pairs_mut()
+        .append_pair("client_id", client_id)
+        .append_pair("redirect_uri", redirect_uri)
+        .append_pair("response_type", "code")
+        .append_pair("scope", OAUTH_SCOPES)
+        .append_pair("state", state)
+        .append_pair("force_verify", "true");
+    Ok(url.into())
+}
+
+fn twitch_form(url: &str, fields: &[(&str, &str)]) -> Result<Value, String> {
+    match ureq::post(url)
+        .set("Content-Type", "application/x-www-form-urlencoded")
+        .timeout(Duration::from_secs(15))
+        .send_form(fields)
+    {
+        Ok(resp) => resp.into_json().map_err(|e| format!("twitch oauth: {e}")),
+        Err(ureq::Error::Status(code, resp)) => {
+            let body = resp.into_string().unwrap_or_default();
+            Err(format!("twitch oauth HTTP {code}: {body}"))
+        }
+        Err(e) => Err(format!("twitch oauth: {e}")),
+    }
+}
+
+fn apply_token_payload(cfg: &mut Config, payload: &Value) -> Result<(), String> {
+    let access = payload
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "twitch oauth: missing access_token".to_string())?;
+    cfg.twitch_oauth = access.to_string();
+    if let Some(refresh) = payload
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        cfg.twitch_refresh_token = refresh.to_string();
+    }
+    let expires_in = payload.get("expires_in").and_then(|v| v.as_i64()).unwrap_or(0);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    cfg.twitch_oauth_expires_at = if expires_in > 0 { now + expires_in } else { 0 };
+    Ok(())
+}
+
+fn validate_login(access: &str) -> Result<String, String> {
+    let token = bare_token(access);
+    let resp = ureq::get("https://id.twitch.tv/oauth2/validate")
+        .set("Authorization", &format!("OAuth {token}"))
+        .timeout(Duration::from_secs(15))
+        .call()
+        .map_err(|e| format!("twitch validate: {e}"))?;
+    let payload: Value = resp
+        .into_json()
+        .map_err(|e| format!("twitch validate: {e}"))?;
+    payload
+        .get("login")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "twitch validate: missing login".into())
+}
+
+pub fn exchange_code(store: &Store, code: &str, redirect_uri: &str) -> Result<String, String> {
+    let mut cfg = store.get()?;
+    let client_id = cfg.twitch_client_id.trim().to_string();
+    let client_secret = cfg.twitch_client_secret.trim().to_string();
+    if client_id.is_empty() || client_secret.is_empty() {
+        return Err("save twitch Client ID and Secret first".into());
+    }
+    let payload = twitch_form(
+        "https://id.twitch.tv/oauth2/token",
+        &[
+            ("client_id", &client_id),
+            ("client_secret", &client_secret),
+            ("code", code.trim()),
+            ("grant_type", "authorization_code"),
+            ("redirect_uri", redirect_uri),
+        ],
+    )?;
+    apply_token_payload(&mut cfg, &payload)?;
+    let login = validate_login(&cfg.twitch_oauth)?;
+    cfg.twitch_nick = login.clone();
+    store.save(cfg)?;
+    Ok(login)
+}
+
+pub fn ensure_access_token(store: &Store, force: bool) -> Result<Config, String> {
+    let mut cfg = store.get()?;
+    if cfg.twitch_refresh_token.trim().is_empty() {
+        return Ok(cfg);
+    }
+    if cfg.twitch_client_id.trim().is_empty() || cfg.twitch_client_secret.trim().is_empty() {
+        return Ok(cfg);
+    }
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let still_good = !force
+        && !cfg.twitch_oauth.trim().is_empty()
+        && cfg.twitch_oauth_expires_at > now + TOKEN_SKEW_SECS;
+    if still_good {
+        return Ok(cfg);
+    }
+    let payload = twitch_form(
+        "https://id.twitch.tv/oauth2/token",
+        &[
+            ("client_id", cfg.twitch_client_id.trim()),
+            ("client_secret", cfg.twitch_client_secret.trim()),
+            ("grant_type", "refresh_token"),
+            ("refresh_token", cfg.twitch_refresh_token.trim()),
+        ],
+    )?;
+    apply_token_payload(&mut cfg, &payload)?;
+    if let Ok(login) = validate_login(&cfg.twitch_oauth) {
+        cfg.twitch_nick = login;
+    }
+    store.save(cfg.clone())?;
+    Ok(cfg)
 }
 
 fn creds_from_config(cfg: &Config) -> Option<(String, String, String)> {
@@ -430,5 +627,52 @@ mod tests {
         assert_eq!(sanitize_privmsg(" hi\r\nthere "), "hithere");
         assert_eq!(sanitize_privmsg(&"a".repeat(600)).len(), MAX_PRIVMSG);
         assert!(sanitize_privmsg("  \n").is_empty());
+    }
+
+    #[test]
+    fn authorize_url_includes_scopes_and_state() {
+        let url = authorize_url(
+            "abc123",
+            "http://localhost:42042/api/twitch/callback",
+            "st-1",
+        )
+        .unwrap();
+        assert!(url.contains("client_id=abc123"));
+        assert!(url.contains("response_type=code"));
+        assert!(url.contains("chat%3Aread"));
+        assert!(url.contains("force_verify=true"));
+        assert!(url.contains("state=st-1"));
+    }
+
+    #[test]
+    fn apply_token_payload_sets_access_and_refresh() {
+        let mut cfg = Config::default();
+        apply_token_payload(
+            &mut cfg,
+            &json!({
+                "access_token": "acc",
+                "refresh_token": "ref",
+                "expires_in": 14400
+            }),
+        )
+        .unwrap();
+        assert_eq!(cfg.twitch_oauth, "acc");
+        assert_eq!(cfg.twitch_refresh_token, "ref");
+        assert!(cfg.twitch_oauth_expires_at > 0);
+    }
+
+    #[test]
+    fn bare_token_strips_prefix() {
+        assert_eq!(bare_token("oauth:abc"), "abc");
+        assert_eq!(bare_token("abc"), "abc");
+    }
+
+    #[test]
+    fn auto_connect_needs_channel_and_token_or_refresh() {
+        let mut cfg = Config::default();
+        cfg.twitch_channel = "streamer".into();
+        assert!(!can_auto_connect(&cfg));
+        cfg.twitch_refresh_token = "r".into();
+        assert!(can_auto_connect(&cfg));
     }
 }

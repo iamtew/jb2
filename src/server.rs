@@ -1,4 +1,4 @@
-use crate::config::{Config, SeedPlaylist, Store};
+use crate::config::{self, Config, SeedPlaylist, Store};
 use crate::envelope::Envelope;
 use crate::jsonutil::{mime_for, parse_query, percent_decode, query_get, split_url};
 use crate::policy;
@@ -42,6 +42,7 @@ impl App {
         let mut body = Vec::new();
         let _ = std::io::Read::read_to_end(request.as_reader(), &mut body);
 
+        let host = header_host(&request);
         let method_s = method_str(&method);
         eprintln!("{method_s} {path}");
 
@@ -50,9 +51,10 @@ impl App {
             return;
         }
 
-        let env = self.dispatch(&method_s, &path, &query, &body);
+        let env = self.dispatch(&method_s, &path, &query, &body, &host);
         match env {
             Dispatch::Json(status, envelope) => respond_json(request, status, &envelope),
+            Dispatch::Html(status, body) => respond_html(request, status, &body),
             Dispatch::Static => self.serve_static(request, &path),
         }
     }
@@ -63,6 +65,7 @@ impl App {
         path: &str,
         query: &[(String, String)],
         body: &[u8],
+        host: &str,
     ) -> Dispatch {
         let p = path.trim_end_matches('/');
         match (method, p) {
@@ -77,6 +80,8 @@ impl App {
             ("POST", "/api/twitch/disconnect") => self.twitch_disconnect(),
             ("GET", "/api/twitch/chat") => self.twitch_chat_get(),
             ("POST", "/api/twitch/chat") => self.twitch_chat_send(body),
+            ("POST", "/api/twitch/oauth/start") => self.twitch_oauth_start(host),
+            ("GET", "/api/twitch/callback") => self.twitch_oauth_callback(query),
             ("GET", "/api/queue") => self.admin_queue(),
             ("GET", "/api/seed/status") => self.seed_status(),
             ("POST", "/api/seed/resolve") => self.seed_resolve(query, body),
@@ -334,7 +339,7 @@ impl App {
 
     fn config_get(&self) -> Dispatch {
         match self.store.get() {
-            Ok(cfg) => Dispatch::Json(200, Envelope::ok_data(serde_json::to_value(cfg).unwrap_or(json!({})))),
+            Ok(cfg) => Dispatch::Json(200, Envelope::ok_data(config::public_json(&cfg))),
             Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
         }
     }
@@ -366,12 +371,11 @@ impl App {
         if let Some(s) = parsed.get("twitchNick").and_then(|v| v.as_str()) {
             existing.twitch_nick = s.trim().to_string();
         }
-        // Empty oauth from Admin means keep the stored token so a blank password field cannot wipe it.
-        if let Some(s) = parsed.get("twitchOAuth").and_then(|v| v.as_str()) {
-            let token = s.trim();
-            if !token.is_empty() {
-                existing.twitch_oauth = token.to_string();
-            }
+        // Empty / *** from Admin means keep the stored secret so a blank field cannot wipe it.
+        patch_kept_secret(&mut existing.twitch_oauth, &parsed, "twitchOAuth");
+        patch_kept_secret(&mut existing.twitch_client_secret, &parsed, "twitchClientSecret");
+        if let Some(s) = parsed.get("twitchClientId").and_then(|v| v.as_str()) {
+            existing.twitch_client_id = s.trim().to_string();
         }
         if let Err(e) = self.store.save(existing) {
             return Dispatch::Json(200, Envelope::fail(format!("failed to save config: {e}")));
@@ -382,36 +386,82 @@ impl App {
         match self.store.get() {
             Ok(saved) => Dispatch::Json(
                 200,
-                Envelope::ok_msg("config saved", serde_json::to_value(saved).unwrap_or(json!({}))),
+                Envelope::ok_msg("config saved", config::public_json(&saved)),
             ),
             Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to load saved config: {e}"))),
         }
     }
 
     fn twitch_status(&self) -> Dispatch {
-        let oauth_set = self
-            .store
-            .get()
-            .map(|c| !c.twitch_oauth.trim().is_empty())
-            .unwrap_or(false);
-        Dispatch::Json(200, Envelope::ok_data(self.twitch.status_json(oauth_set)))
+        match self.store.get() {
+            Ok(cfg) => Dispatch::Json(200, Envelope::ok_data(self.twitch.status_json(&cfg))),
+            Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
+        }
     }
 
     fn twitch_connect(&self) -> Dispatch {
+        if let Err(e) = twitch::ensure_access_token(&self.store, false) {
+            return Dispatch::Json(200, Envelope::fail(e));
+        }
         match self.store.get() {
-            Ok(cfg)
-                if cfg.twitch_channel.trim().is_empty() || cfg.twitch_oauth.trim().is_empty() =>
-            {
-                Dispatch::Json(
-                    200,
-                    Envelope::fail("save twitchChannel and twitchOAuth before connecting"),
-                )
-            }
+            Ok(cfg) if cfg.twitch_channel.trim().is_empty() => Dispatch::Json(
+                200,
+                Envelope::fail("save a join channel before connecting"),
+            ),
+            Ok(cfg) if cfg.twitch_oauth.trim().is_empty() => Dispatch::Json(
+                200,
+                Envelope::fail("log in with Twitch before connecting"),
+            ),
             Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
             Ok(_) => {
                 self.twitch.connect();
                 self.twitch_status()
             }
+        }
+    }
+
+    fn twitch_oauth_start(&self, host: &str) -> Dispatch {
+        let cfg = match self.store.get() {
+            Ok(c) => c,
+            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
+        };
+        if cfg.twitch_client_secret.trim().is_empty() {
+            return Dispatch::Json(200, Envelope::fail("save twitch Client Secret first"));
+        }
+        let redirect = twitch_redirect_uri(host);
+        match self.twitch.begin_oauth(&cfg.twitch_client_id, &redirect) {
+            Ok(url) => Dispatch::Json(
+                200,
+                Envelope::ok_msg("authorize", json!({"url": url, "redirectUri": redirect})),
+            ),
+            Err(e) => Dispatch::Json(200, Envelope::fail(e)),
+        }
+    }
+
+    fn twitch_oauth_callback(&self, query: &[(String, String)]) -> Dispatch {
+        if let Some(err) = query_get(query, "error") {
+            let desc = query_get(query, "error_description").unwrap_or(err);
+            return Dispatch::Html(200, oauth_html(&format!("Twitch login failed: {desc}")));
+        }
+        let Some(code) = query_get(query, "code").filter(|s| !s.trim().is_empty()) else {
+            return Dispatch::Html(400, oauth_html("Twitch login missing code."));
+        };
+        let Some(state) = query_get(query, "state") else {
+            return Dispatch::Html(400, oauth_html("Twitch login missing state."));
+        };
+        let redirect = match self.twitch.take_oauth_redirect(state) {
+            Ok(r) => r,
+            Err(e) => return Dispatch::Html(400, oauth_html(&e)),
+        };
+        match twitch::exchange_code(&self.store, code, &redirect) {
+            Ok(login) => {
+                self.twitch.bump_if_wanted();
+                Dispatch::Html(
+                    200,
+                    oauth_html(&format!("JB2 logged in as {login}. You can close this tab.")),
+                )
+            }
+            Err(e) => Dispatch::Html(200, oauth_html(&format!("Twitch login failed: {e}"))),
         }
     }
 
@@ -1057,6 +1107,7 @@ impl App {
 
 pub enum Dispatch {
     Json(u16, Envelope),
+    Html(u16, String),
     Static,
 }
 
@@ -1064,6 +1115,7 @@ impl Dispatch {
     pub fn envelope(self) -> Envelope {
         match self {
             Dispatch::Json(_, e) => e,
+            Dispatch::Html(_, msg) => Envelope::ok_only(msg),
             Dispatch::Static => Envelope::fail("not a json route"),
         }
     }
@@ -1132,6 +1184,46 @@ fn method_str(m: &Method) -> String {
         Method::Options => "OPTIONS".into(),
         other => format!("{other:?}"),
     }
+}
+
+fn header_host(request: &Request) -> String {
+    request
+        .headers()
+        .iter()
+        .find(|h| h.field.equiv("Host"))
+        .map(|h| h.value.as_str().trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "localhost:42042".into())
+}
+
+fn twitch_redirect_uri(host: &str) -> String {
+    format!("http://{}/api/twitch/callback", host.trim())
+}
+
+fn patch_kept_secret(dst: &mut String, parsed: &Value, key: &str) {
+    let Some(s) = parsed.get(key).and_then(|v| v.as_str()) else {
+        return;
+    };
+    let token = s.trim();
+    if token.is_empty() || token == "***" {
+        return;
+    }
+    *dst = token.to_string();
+}
+
+fn oauth_html(message: &str) -> String {
+    let safe = message.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    format!(
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>JB2 Twitch</title></head><body><p>{safe}</p><script>window.close()</script></body></html>"
+    )
+}
+
+fn respond_html(request: Request, status: u16, body: &str) {
+    let mut resp = Response::from_string(body.to_string()).with_status_code(StatusCode(status));
+    if let Ok(h) = Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..]) {
+        resp = resp.with_header(h);
+    }
+    let _ = request.respond(resp);
 }
 
 fn respond_json(request: Request, status: u16, envelope: &Envelope) {
