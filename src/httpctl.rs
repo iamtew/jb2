@@ -69,8 +69,12 @@ pub fn restart() {
 }
 
 pub fn serving_url(path: &str) -> String {
-    let port = *ACTUAL_PORT.lock().expect("port");
+    let port = listen_port();
     format!("http://127.0.0.1:{port}{path}")
+}
+
+pub fn listen_port() -> u16 {
+    *ACTUAL_PORT.lock().expect("port")
 }
 
 fn listen_with_fallback(bind: &str, base: u16) -> Result<(TcpListener, u16), String> {

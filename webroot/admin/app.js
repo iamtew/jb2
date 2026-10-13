@@ -67,8 +67,6 @@ const seedPlaylistList = document.getElementById('seedPlaylistList');
 const twitchStatusLine = document.getElementById('twitchStatusLine');
 const twitchChannelInput = document.getElementById('twitchChannelInput');
 const twitchNickInput = document.getElementById('twitchNickInput');
-const twitchClientIdInput = document.getElementById('twitchClientIdInput');
-const twitchClientSecretInput = document.getElementById('twitchClientSecretInput');
 const twitchSaveButton = document.getElementById('twitchSaveButton');
 const twitchLoginButton = document.getElementById('twitchLoginButton');
 const twitchConnectButton = document.getElementById('twitchConnectButton');
@@ -395,9 +393,6 @@ async function loadTwitchSettings() {
     }
     twitchChannelInput.value = payload.data?.twitchChannel || '';
     twitchNickInput.value = payload.data?.twitchNick || '';
-    if (twitchClientIdInput) {
-      twitchClientIdInput.value = payload.data?.twitchClientId || '';
-    }
   } catch (err) {
     setTwitchFeedback(`Failed to load settings: ${err.message}`);
   }
@@ -444,9 +439,6 @@ function renderTwitchStatus(data) {
   } else if (data.oauthSet) {
     text += ' · token saved';
   }
-  if (data.secretSet) {
-    text += ' · secret saved';
-  }
   twitchStatusLine.textContent = text;
   twitchStatusLine.classList.toggle('seed-status--active', !!data.connected);
 }
@@ -489,13 +481,7 @@ function setTwitchFeedback(text) {
 async function saveTwitchSettings() {
   const body = {
     twitchChannel: (twitchChannelInput?.value || '').trim(),
-    twitchNick: (twitchNickInput?.value || '').trim(),
-    twitchClientId: (twitchClientIdInput?.value || '').trim(),
   };
-  const secret = (twitchClientSecretInput?.value || '').trim();
-  if (secret) {
-    body.twitchClientSecret = secret;
-  }
   const response = await fetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -505,13 +491,9 @@ async function saveTwitchSettings() {
   if (!response.ok || payload.exitCode !== 0) {
     throw new Error(payload.message || 'Unable to save Twitch settings');
   }
-  if (twitchClientSecretInput) {
-    twitchClientSecretInput.value = '';
-  }
   twitchChannelInput.value = payload.data?.twitchChannel || body.twitchChannel;
-  twitchNickInput.value = payload.data?.twitchNick || body.twitchNick;
-  if (twitchClientIdInput) {
-    twitchClientIdInput.value = payload.data?.twitchClientId || body.twitchClientId;
+  if (twitchNickInput) {
+    twitchNickInput.value = payload.data?.twitchNick || twitchNickInput.value;
   }
 }
 

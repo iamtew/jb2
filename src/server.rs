@@ -94,7 +94,7 @@ impl App {
         path: &str,
         query: &[(String, String)],
         body: &[u8],
-        host: &str,
+        _host: &str,
     ) -> Dispatch {
         let p = path.trim_end_matches('/');
         match (method, p) {
@@ -109,7 +109,7 @@ impl App {
             ("POST", "/api/twitch/disconnect") => self.twitch_disconnect(),
             ("GET", "/api/twitch/chat") => self.twitch_chat_get(),
             ("POST", "/api/twitch/chat") => self.twitch_chat_send(body),
-            ("POST", "/api/twitch/oauth/start") => self.twitch_oauth_start(host),
+            ("POST", "/api/twitch/oauth/start") => self.twitch_oauth_start(),
             ("GET", "/api/twitch/callback") => self.twitch_oauth_callback(query),
             ("GET", "/api/queue") => self.admin_queue(),
             ("GET", "/api/seed/status") => self.seed_status(),
@@ -506,18 +506,9 @@ impl App {
         }
     }
 
-    fn twitch_oauth_start(&self, host: &str) -> Dispatch {
-        let cfg = match self.store.get() {
-            Ok(c) => c,
-            Err(e) => {
-                return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
-            }
-        };
-        if cfg.twitch_client_secret.trim().is_empty() {
-            return Dispatch::Json(200, Envelope::fail("save twitch Client Secret first"));
-        }
-        let redirect = twitch_redirect_uri(host);
-        match self.twitch.begin_oauth(&cfg.twitch_client_id, &redirect) {
+    fn twitch_oauth_start(&self) -> Dispatch {
+        let redirect = twitch_redirect_uri();
+        match self.twitch.begin_oauth(&redirect) {
             Ok(url) => Dispatch::Json(
                 200,
                 Envelope::ok_msg("authorize", json!({"url": url, "redirectUri": redirect})),
@@ -537,11 +528,11 @@ impl App {
         let Some(state) = query_get(query, "state") else {
             return Dispatch::Html(400, oauth_html("Twitch login missing state."));
         };
-        let redirect = match self.twitch.take_oauth_redirect(state) {
-            Ok(r) => r,
+        let (redirect, verifier) = match self.twitch.take_oauth_redirect(state) {
+            Ok(pair) => pair,
             Err(e) => return Dispatch::Html(400, oauth_html(&e)),
         };
-        match twitch::exchange_code(&self.store, code, &redirect) {
+        match twitch::exchange_code(&self.store, code, &redirect, &verifier) {
             Ok(login) => {
                 self.twitch.bump_if_wanted();
                 Dispatch::Html(
@@ -1405,8 +1396,11 @@ fn origin_allowed(origin: &str, host: &str) -> bool {
     !origin_host.is_empty() && origin_host.eq_ignore_ascii_case(host.trim())
 }
 
-fn twitch_redirect_uri(host: &str) -> String {
-    format!("http://{}/api/twitch/callback", host.trim())
+fn twitch_redirect_uri() -> String {
+    format!(
+        "http://localhost:{}/api/twitch/callback",
+        crate::httpctl::listen_port()
+    )
 }
 
 fn oauth_html(message: &str) -> String {

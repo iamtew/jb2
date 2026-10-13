@@ -2,6 +2,7 @@ use crate::config::{Config, Store};
 use crate::envelope::Envelope;
 use crate::server::App;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::hash_map::RandomState;
 use std::collections::VecDeque;
 use std::hash::BuildHasher;
@@ -17,6 +18,8 @@ type Ws = WebSocket<MaybeTlsStream<TcpStream>>;
 const CHAT_CAP: usize = 200;
 const MAX_PRIVMSG: usize = 500;
 const OAUTH_SCOPES: &str = "chat:read chat:edit";
+/// Public Twitch app Client ID (not a secret). Console must list localhost callback URLs.
+const TWITCH_CLIENT_ID: &str = "lax4082xr34poez274g2dzmabbwlg8";
 const TOKEN_SKEW_SECS: i64 = 120;
 /// Wait between retries after a token or repeated IRC auth failure, so a bad login
 /// cannot hammer id.twitch.tv / irc-ws.chat.twitch.tv.
@@ -39,7 +42,8 @@ struct Inner {
     next_id: u64,
     chat: VecDeque<ChatLine>,
     outbound: VecDeque<String>,
-    oauth_state: Option<(String, String)>,
+    /// (state, redirect_uri, pkce verifier)
+    oauth_state: Option<(String, String, String)>,
 }
 
 #[derive(Clone)]
@@ -152,21 +156,19 @@ impl Hub {
         Ok(())
     }
 
-    pub fn begin_oauth(&self, client_id: &str, redirect_uri: &str) -> Result<String, String> {
-        let client_id = client_id.trim();
-        if client_id.is_empty() {
-            return Err("save twitch Client ID first".into());
-        }
+    pub fn begin_oauth(&self, redirect_uri: &str) -> Result<String, String> {
         let state = random_state();
+        let verifier = pkce_verifier();
+        let challenge = pkce_challenge(&verifier);
         let mut s = self.inner.lock().expect("twitch");
-        s.oauth_state = Some((state.clone(), redirect_uri.to_string()));
-        authorize_url(client_id, redirect_uri, &state)
+        s.oauth_state = Some((state.clone(), redirect_uri.to_string(), verifier));
+        authorize_url(redirect_uri, &state, &challenge)
     }
 
-    pub fn take_oauth_redirect(&self, state: &str) -> Result<String, String> {
+    pub fn take_oauth_redirect(&self, state: &str) -> Result<(String, String), String> {
         let mut s = self.inner.lock().expect("twitch");
         match s.oauth_state.take() {
-            Some((want, redirect)) if want == state => Ok(redirect),
+            Some((want, redirect, verifier)) if want == state => Ok((redirect, verifier)),
             _ => Err("oauth state mismatch; click Login with Twitch again".into()),
         }
     }
@@ -181,9 +183,6 @@ impl Hub {
             "lastError": s.last_error,
             "oauthSet": !cfg.twitch_oauth.trim().is_empty(),
             "refreshSet": !cfg.twitch_refresh_token.trim().is_empty(),
-            "clientIdSet": !cfg.twitch_client_id.trim().is_empty(),
-            "secretSet": !cfg.twitch_client_secret.trim().is_empty(),
-            "clientId": cfg.twitch_client_id.trim(),
         })
     }
 
@@ -420,16 +419,53 @@ fn bare_token(oauth: &str) -> String {
         .to_string()
 }
 
-fn authorize_url(client_id: &str, redirect_uri: &str, state: &str) -> Result<String, String> {
+fn authorize_url(redirect_uri: &str, state: &str, challenge: &str) -> Result<String, String> {
     let mut url = Url::parse("https://id.twitch.tv/oauth2/authorize").map_err(|e| e.to_string())?;
     url.query_pairs_mut()
-        .append_pair("client_id", client_id)
+        .append_pair("client_id", TWITCH_CLIENT_ID)
         .append_pair("redirect_uri", redirect_uri)
         .append_pair("response_type", "code")
         .append_pair("scope", OAUTH_SCOPES)
         .append_pair("state", state)
-        .append_pair("force_verify", "true");
+        .append_pair("force_verify", "true")
+        .append_pair("code_challenge", challenge)
+        .append_pair("code_challenge_method", "S256");
     Ok(url.into())
+}
+
+fn pkce_verifier() -> String {
+    format!("{}{}", random_state(), random_state())
+}
+
+fn pkce_challenge(verifier: &str) -> String {
+    base64url_no_pad(&Sha256::digest(verifier.as_bytes()))
+}
+
+fn base64url_no_pad(bytes: &[u8]) -> String {
+    const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut out = String::with_capacity((bytes.len() * 4).div_ceil(3));
+    let mut i = 0;
+    while i + 3 <= bytes.len() {
+        let n = u32::from(bytes[i]) << 16 | u32::from(bytes[i + 1]) << 8 | u32::from(bytes[i + 2]);
+        out.push(T[((n >> 18) & 63) as usize] as char);
+        out.push(T[((n >> 12) & 63) as usize] as char);
+        out.push(T[((n >> 6) & 63) as usize] as char);
+        out.push(T[(n & 63) as usize] as char);
+        i += 3;
+    }
+    if i < bytes.len() {
+        let rem = bytes.len() - i;
+        let mut n = u32::from(bytes[i]) << 16;
+        if rem == 2 {
+            n |= u32::from(bytes[i + 1]) << 8;
+        }
+        out.push(T[((n >> 18) & 63) as usize] as char);
+        out.push(T[((n >> 12) & 63) as usize] as char);
+        if rem == 2 {
+            out.push(T[((n >> 6) & 63) as usize] as char);
+        }
+    }
+    out
 }
 
 fn twitch_form(url: &str, fields: &[(&str, &str)]) -> Result<Value, String> {
@@ -493,21 +529,21 @@ fn validate_login(access: &str) -> Result<String, String> {
         .ok_or_else(|| "twitch validate: missing login".into())
 }
 
-pub fn exchange_code(store: &Store, code: &str, redirect_uri: &str) -> Result<String, String> {
+pub fn exchange_code(
+    store: &Store,
+    code: &str,
+    redirect_uri: &str,
+    verifier: &str,
+) -> Result<String, String> {
     let cfg = store.get()?;
-    let client_id = cfg.twitch_client_id.trim().to_string();
-    let client_secret = cfg.twitch_client_secret.trim().to_string();
-    if client_id.is_empty() || client_secret.is_empty() {
-        return Err("save twitch Client ID and Secret first".into());
-    }
     let payload = twitch_form(
         "https://id.twitch.tv/oauth2/token",
         &[
-            ("client_id", &client_id),
-            ("client_secret", &client_secret),
+            ("client_id", TWITCH_CLIENT_ID),
             ("code", code.trim()),
             ("grant_type", "authorization_code"),
             ("redirect_uri", redirect_uri),
+            ("code_verifier", verifier),
         ],
     )?;
     // Validate on a scratch copy (network), then write only token fields to the live config.
@@ -517,6 +553,9 @@ pub fn exchange_code(store: &Store, code: &str, redirect_uri: &str) -> Result<St
     store.update(|c| {
         apply_token_payload(c, &payload)?;
         c.twitch_nick = login.clone();
+        if c.twitch_channel.trim().is_empty() {
+            c.twitch_channel = login.clone();
+        }
         Ok(())
     })?;
     Ok(login)
@@ -528,9 +567,6 @@ pub fn exchange_code(store: &Store, code: &str, redirect_uri: &str) -> Result<St
 pub fn ensure_access_token(store: &Store, force: bool) -> Result<Config, String> {
     let cfg = store.get()?;
     if cfg.twitch_refresh_token.trim().is_empty() {
-        return Ok(cfg);
-    }
-    if cfg.twitch_client_id.trim().is_empty() || cfg.twitch_client_secret.trim().is_empty() {
         return Ok(cfg);
     }
     let now = SystemTime::now()
@@ -546,8 +582,7 @@ pub fn ensure_access_token(store: &Store, force: bool) -> Result<Config, String>
     let payload = match twitch_form(
         "https://id.twitch.tv/oauth2/token",
         &[
-            ("client_id", cfg.twitch_client_id.trim()),
-            ("client_secret", cfg.twitch_client_secret.trim()),
+            ("client_id", TWITCH_CLIENT_ID),
             ("grant_type", "refresh_token"),
             ("refresh_token", cfg.twitch_refresh_token.trim()),
         ],
@@ -701,18 +736,49 @@ mod tests {
     }
 
     #[test]
-    fn authorize_url_includes_scopes_and_state() {
+    fn authorize_url_includes_scopes_state_and_pkce() {
         let url = authorize_url(
-            "abc123",
             "http://localhost:42042/api/twitch/callback",
             "st-1",
+            "challenge-abc",
         )
         .unwrap();
-        assert!(url.contains("client_id=abc123"));
+        assert!(url.contains(&format!("client_id={TWITCH_CLIENT_ID}")));
         assert!(url.contains("response_type=code"));
         assert!(url.contains("chat%3Aread"));
         assert!(url.contains("force_verify=true"));
         assert!(url.contains("state=st-1"));
+        assert!(url.contains("code_challenge=challenge-abc"));
+        assert!(url.contains("code_challenge_method=S256"));
+    }
+
+    #[test]
+    fn pkce_challenge_matches_rfc7636() {
+        assert_eq!(
+            pkce_challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        );
+    }
+
+    #[test]
+    fn oauth_start_roundtrip_keeps_verifier() {
+        let hub = Hub::new();
+        let redirect = "http://localhost:42042/api/twitch/callback";
+        let url = hub.begin_oauth(redirect).unwrap();
+        let parsed = Url::parse(&url).unwrap();
+        let state = parsed
+            .query_pairs()
+            .find(|(k, _)| k == "state")
+            .map(|(_, v)| v.into_owned())
+            .unwrap();
+        let challenge = parsed
+            .query_pairs()
+            .find(|(k, _)| k == "code_challenge")
+            .map(|(_, v)| v.into_owned())
+            .unwrap();
+        let (got_redirect, verifier) = hub.take_oauth_redirect(&state).unwrap();
+        assert_eq!(got_redirect, redirect);
+        assert_eq!(pkce_challenge(&verifier), challenge);
     }
 
     #[test]
