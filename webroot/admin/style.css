@@ -742,6 +742,27 @@ pre {
   }
 }
 
+.twitch-log {
+  margin: 4px 0;
+  padding: 6px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  max-height: 40vh;
+  overflow: auto;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.twitch-log__line {
+  word-break: break-word;
+}
+
+.twitch-log__nick {
+  color: var(--accent);
+  font-weight: 700;
+  margin-right: 6px;
+}
+
 .seed-status {
   margin: 0 0 6px;
   font-weight: bold;

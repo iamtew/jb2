@@ -52,6 +52,7 @@
       <nav class="tabs" aria-label="Admin sections">
         <button class="tab active" data-page="queue">Queue</button>
         <button class="tab" data-page="seed">Seed</button>
+        <button class="tab" data-page="twitch">Twitch</button>
         <button class="tab" data-page="settings">Settings</button>
         <button class="tab" data-page="system">API</button>
       </nav>
@@ -84,6 +85,40 @@
           </div>
           <div class="settings-block">
             <ul id="seedPlaylistList" class="seed-list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-twitch" class="page">
+        <div class="panel">
+          <p id="twitchStatusLine" class="seed-status">Twitch: loading…</p>
+          <div class="settings-block">
+            <label for="twitchChannelInput">Join channel</label>
+            <input id="twitchChannelInput" type="text" placeholder="streamer login, not #channel" autocomplete="off" />
+          </div>
+          <div class="settings-block">
+            <label for="twitchNickInput">Bot nick</label>
+            <input id="twitchNickInput" type="text" placeholder="bot account login" autocomplete="off" />
+          </div>
+          <div class="settings-block">
+            <label for="twitchOAuthInput">Bot oauth</label>
+            <input id="twitchOAuthInput" type="password" placeholder="leave blank to keep saved token" autocomplete="off" />
+          </div>
+          <div class="settings-block">
+            <div class="url-row">
+              <button id="twitchSaveButton" type="button">Save</button>
+              <button id="twitchConnectButton" type="button">Connect</button>
+              <button id="twitchDisconnectButton" type="button">Disconnect</button>
+            </div>
+            <p id="twitchFormFeedback" class="muted"></p>
+          </div>
+          <div class="settings-block">
+            <h4>Chat</h4>
+            <div id="twitchChatLog" class="twitch-log" aria-live="polite"></div>
+            <form id="twitchChatForm" class="url-row" action="#">
+              <input id="twitchChatInput" type="text" placeholder="Send as bot nick…" autocomplete="off" />
+              <button id="twitchChatSend" type="submit">Send</button>
+            </form>
           </div>
         </div>
       </section>

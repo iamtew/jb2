@@ -64,8 +64,22 @@ const addSeedPlaylistButton = document.getElementById('addSeedPlaylistButton');
 const seedInputFeedback = document.getElementById('seedInputFeedback');
 const clearQueueOnRequestCheckbox = document.getElementById('clearQueueOnRequestCheckbox');
 const seedPlaylistList = document.getElementById('seedPlaylistList');
+const twitchStatusLine = document.getElementById('twitchStatusLine');
+const twitchChannelInput = document.getElementById('twitchChannelInput');
+const twitchNickInput = document.getElementById('twitchNickInput');
+const twitchOAuthInput = document.getElementById('twitchOAuthInput');
+const twitchSaveButton = document.getElementById('twitchSaveButton');
+const twitchConnectButton = document.getElementById('twitchConnectButton');
+const twitchDisconnectButton = document.getElementById('twitchDisconnectButton');
+const twitchFormFeedback = document.getElementById('twitchFormFeedback');
+const twitchChatLog = document.getElementById('twitchChatLog');
+const twitchChatForm = document.getElementById('twitchChatForm');
+const twitchChatInput = document.getElementById('twitchChatInput');
 
 let seedStatusTimer = null;
+let twitchPollTimer = null;
+let twitchStickBottom = true;
+let twitchLastChatKey = null;
 
 function updateSelection(selected) {
   if (!selected) return;
@@ -147,6 +161,12 @@ tabs.forEach((tab) => {
       startSeedStatusPolling();
     } else {
       stopSeedStatusPolling();
+    }
+    if (tab.dataset.page === 'twitch') {
+      loadTwitchPanel();
+      startTwitchPolling();
+    } else {
+      stopTwitchPolling();
     }
   });
 });
@@ -347,6 +367,202 @@ if (seedPlaylistInput) {
 if (clearQueueOnRequestCheckbox) {
   clearQueueOnRequestCheckbox.addEventListener('change', () => {
     saveSeedSettings(clearQueueOnRequestCheckbox.checked);
+  });
+}
+
+if (twitchChatLog) {
+  twitchChatLog.addEventListener('scroll', () => {
+    twitchStickBottom = twitchChatLog.scrollHeight - twitchChatLog.scrollTop - twitchChatLog.clientHeight < 24;
+  });
+}
+
+async function loadTwitchPanel() {
+  await Promise.all([loadTwitchSettings(), loadTwitchLive()]);
+}
+
+async function loadTwitchSettings() {
+  if (!twitchChannelInput) return;
+  try {
+    const response = await fetch('/api/config');
+    const payload = await response.json();
+    if (!response.ok || payload.exitCode !== 0) {
+      throw new Error(payload.message || 'Unable to load Twitch settings');
+    }
+    twitchChannelInput.value = payload.data?.twitchChannel || '';
+    twitchNickInput.value = payload.data?.twitchNick || '';
+  } catch (err) {
+    setTwitchFeedback(`Failed to load settings: ${err.message}`);
+  }
+}
+
+async function loadTwitchLive() {
+  try {
+    const [statusRes, chatRes] = await Promise.all([
+      fetch('/api/twitch'),
+      fetch('/api/twitch/chat'),
+    ]);
+    const status = await statusRes.json();
+    const chat = await chatRes.json();
+    if (!statusRes.ok || status.exitCode !== 0) {
+      throw new Error(status.message || 'Unable to load Twitch status');
+    }
+    renderTwitchStatus(status.data || {});
+    if (chatRes.ok && chat.exitCode === 0) {
+      renderTwitchChat(chat.data?.messages || []);
+    }
+  } catch (err) {
+    if (twitchStatusLine) {
+      twitchStatusLine.textContent = `Twitch: error (${err.message})`;
+      twitchStatusLine.classList.remove('seed-status--active');
+    }
+  }
+}
+
+function renderTwitchStatus(data) {
+  if (!twitchStatusLine) return;
+  const channel = data.channel ? `#${data.channel}` : '(no channel)';
+  const nick = data.nick || '(no nick)';
+  let text = `Twitch: disconnected as ${nick} on ${channel}`;
+  if (data.connected) {
+    text = `Twitch: connected as ${nick} on ${channel}`;
+  } else if (data.wanted) {
+    text = `Twitch: connecting as ${nick} on ${channel}…`;
+  }
+  if (data.lastError) {
+    text += ` (${data.lastError})`;
+  }
+  if (data.oauthSet) {
+    text += ' · token saved';
+  }
+  twitchStatusLine.textContent = text;
+  twitchStatusLine.classList.toggle('seed-status--active', !!data.connected);
+}
+
+function renderTwitchChat(messages) {
+  if (!twitchChatLog) return;
+  const key = messages.map((m) => m.id).join(',');
+  if (key === twitchLastChatKey) return;
+  twitchLastChatKey = key;
+  if (!messages.length) {
+    twitchChatLog.innerHTML = '<div class="muted">No chat yet.</div>';
+    return;
+  }
+  twitchChatLog.innerHTML = messages.map((m) => (
+    `<div class="twitch-log__line"><span class="twitch-log__nick">${escapeHtml(m.nick)}</span>${escapeHtml(m.text)}</div>`
+  )).join('');
+  if (twitchStickBottom) {
+    twitchChatLog.scrollTop = twitchChatLog.scrollHeight;
+  }
+}
+
+function startTwitchPolling() {
+  stopTwitchPolling();
+  twitchPollTimer = window.setInterval(loadTwitchLive, 1000);
+}
+
+function stopTwitchPolling() {
+  if (twitchPollTimer) {
+    window.clearInterval(twitchPollTimer);
+    twitchPollTimer = null;
+  }
+}
+
+function setTwitchFeedback(text) {
+  if (twitchFormFeedback) {
+    twitchFormFeedback.textContent = text;
+  }
+}
+
+async function saveTwitchSettings() {
+  const body = {
+    twitchChannel: (twitchChannelInput?.value || '').trim(),
+    twitchNick: (twitchNickInput?.value || '').trim(),
+  };
+  const oauth = (twitchOAuthInput?.value || '').trim();
+  if (oauth) {
+    body.twitchOAuth = oauth;
+  }
+  const response = await fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json();
+  if (!response.ok || payload.exitCode !== 0) {
+    throw new Error(payload.message || 'Unable to save Twitch settings');
+  }
+  if (twitchOAuthInput) {
+    twitchOAuthInput.value = '';
+  }
+  twitchChannelInput.value = payload.data?.twitchChannel || body.twitchChannel;
+  twitchNickInput.value = payload.data?.twitchNick || body.twitchNick;
+}
+
+async function postTwitch(path) {
+  const response = await fetch(path, { method: 'POST' });
+  const payload = await response.json();
+  if (!response.ok || payload.exitCode !== 0) {
+    throw new Error(payload.message || `Request failed: ${path}`);
+  }
+  renderTwitchStatus(payload.data || {});
+}
+
+if (twitchSaveButton) {
+  twitchSaveButton.addEventListener('click', async () => {
+    try {
+      await saveTwitchSettings();
+      setTwitchFeedback('Saved.');
+      await loadTwitchLive();
+    } catch (err) {
+      setTwitchFeedback(err.message);
+    }
+  });
+}
+
+if (twitchConnectButton) {
+  twitchConnectButton.addEventListener('click', async () => {
+    try {
+      await saveTwitchSettings();
+      await postTwitch('/api/twitch/connect');
+      setTwitchFeedback('Connecting…');
+    } catch (err) {
+      setTwitchFeedback(err.message);
+    }
+  });
+}
+
+if (twitchDisconnectButton) {
+  twitchDisconnectButton.addEventListener('click', async () => {
+    try {
+      await postTwitch('/api/twitch/disconnect');
+      setTwitchFeedback('Disconnected.');
+    } catch (err) {
+      setTwitchFeedback(err.message);
+    }
+  });
+}
+
+if (twitchChatForm) {
+  twitchChatForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const message = (twitchChatInput?.value || '').trim();
+    if (!message) return;
+    try {
+      const response = await fetch('/api/twitch/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.exitCode !== 0) {
+        throw new Error(payload.message || 'Send failed');
+      }
+      twitchChatInput.value = '';
+      setTwitchFeedback('');
+      await loadTwitchLive();
+    } catch (err) {
+      setTwitchFeedback(err.message);
+    }
   });
 }
 
