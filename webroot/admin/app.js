@@ -77,6 +77,9 @@ const twitchFormFeedback = document.getElementById('twitchFormFeedback');
 const twitchChatLog = document.getElementById('twitchChatLog');
 const twitchChatForm = document.getElementById('twitchChatForm');
 const twitchChatInput = document.getElementById('twitchChatInput');
+const importFileInput = document.getElementById('importFileInput');
+const importConfigButton = document.getElementById('importConfigButton');
+const importFeedback = document.getElementById('importFeedback');
 
 let seedStatusTimer = null;
 let twitchPollTimer = null;
@@ -681,6 +684,40 @@ async function removeBlacklistEntry(value) {
   } catch (err) {
     settingsOutput.textContent = `Failed to save settings: ${err.message}`;
   }
+}
+
+function setImportFeedback(text) {
+  if (importFeedback) {
+    importFeedback.textContent = text;
+  }
+}
+
+async function importConfigFile() {
+  const file = importFileInput?.files?.[0];
+  if (!file) {
+    setImportFeedback('Pick a jukeboks.json or jb2.json file first.');
+    return;
+  }
+  setImportFeedback('Importing…');
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const response = await fetch('/api/config/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(parsed),
+    });
+    const payload = await readCommandEnvelope(response);
+    const source = payload.data?.source || 'config';
+    setImportFeedback(payload.message || `Imported ${source}`);
+    loadSettings();
+  } catch (err) {
+    setImportFeedback(err.message || 'Import failed');
+  }
+}
+
+if (importConfigButton) {
+  importConfigButton.addEventListener('click', importConfigFile);
 }
 
 addBlacklistButton.addEventListener('click', addBlacklistEntry);

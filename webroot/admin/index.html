@@ -54,6 +54,7 @@
         <button class="tab" data-page="seed">Seed</button>
         <button class="tab" data-page="twitch">Twitch</button>
         <button class="tab" data-page="settings">Settings</button>
+        <button class="tab" data-page="import">Import</button>
         <button class="tab" data-page="system">API</button>
       </nav>
 
@@ -144,6 +145,20 @@
             </div>
           </div>
           <pre id="commandOutput">Waiting for a command…</pre>
+        </div>
+      </section>
+
+      <section id="page-import" class="page">
+        <div class="panel">
+          <div class="settings-block">
+            <p class="muted">Import a JB1 <code>jukeboks.json</code> or JB2 <code>jb2.json</code>. Present fields overwrite; empty and <code>***</code> secrets are left as-is. JB1 files do not touch Twitch.</p>
+            <label for="importFileInput">Config JSON</label>
+            <div class="url-row">
+              <input id="importFileInput" type="file" accept=".json,application/json" />
+              <button id="importConfigButton" type="button">Import</button>
+            </div>
+            <p id="importFeedback" class="muted"></p>
+          </div>
         </div>
       </section>
 

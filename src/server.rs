@@ -69,12 +69,12 @@ impl App {
     ) -> Dispatch {
         let p = path.trim_end_matches('/');
         match (method, p) {
-            ("GET", "/health") => Dispatch::Json(
-                200,
-                Envelope::ok_msg("ok", json!({"features": ["seed"]})),
-            ),
+            ("GET", "/health") => {
+                Dispatch::Json(200, Envelope::ok_msg("ok", json!({"features": ["seed"]})))
+            }
             ("GET", "/api/config") => self.config_get(),
             ("POST" | "PUT", "/api/config") => self.config_save(body),
+            ("POST", "/api/config/import") => self.config_import(body),
             ("GET", "/api/twitch") => self.twitch_status(),
             ("POST", "/api/twitch/connect") => self.twitch_connect(),
             ("POST", "/api/twitch/disconnect") => self.twitch_disconnect(),
@@ -118,23 +118,41 @@ impl App {
     }
 
     pub fn song_info(&self) -> Dispatch {
-        match self.ytmd.fetch_json_retry("/api/v1/song", 3, Duration::from_millis(250)) {
+        match self
+            .ytmd
+            .fetch_json_retry("/api/v1/song", 3, Duration::from_millis(250))
+        {
             Ok(payload) => Dispatch::Json(200, ytmd::build_song_info_response(&payload)),
-            Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to reach song endpoint: {e}"))),
+            Err(e) => Dispatch::Json(
+                200,
+                Envelope::fail(format!("failed to reach song endpoint: {e}")),
+            ),
         }
     }
 
     pub fn queue_info(&self) -> Dispatch {
-        let song = match self.ytmd.fetch_json_retry("/api/v1/song", 3, Duration::from_millis(250)) {
+        let song = match self
+            .ytmd
+            .fetch_json_retry("/api/v1/song", 3, Duration::from_millis(250))
+        {
             Ok(v) => v,
             Err(e) => {
-                return Dispatch::Json(200, Envelope::fail(format!("failed to reach song endpoint: {e}")))
+                return Dispatch::Json(
+                    200,
+                    Envelope::fail(format!("failed to reach song endpoint: {e}")),
+                )
             }
         };
-        let queue = match self.ytmd.fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250)) {
+        let queue = match self
+            .ytmd
+            .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
+        {
             Ok(v) => v,
             Err(e) => {
-                return Dispatch::Json(200, Envelope::fail(format!("failed to reach queue endpoint: {e}")))
+                return Dispatch::Json(
+                    200,
+                    Envelope::fail(format!("failed to reach queue endpoint: {e}")),
+                )
             }
         };
         Dispatch::Json(200, ytmd::build_queue_info_response(&song, &queue))
@@ -169,7 +187,9 @@ impl App {
             return Dispatch::Json(200, Envelope::fail("input too long"));
         }
 
-        let (video_id, lookup) = if let Some(track_url) = videoid::canonical_spotify_track_url(input) {
+        let (video_id, lookup) = if let Some(track_url) =
+            videoid::canonical_spotify_track_url(input)
+        {
             match ytmd::lookup_spotify_track_query(&track_url)
                 .and_then(|q| ytmd::lookup_song_by_query(&self.ytmd, &q))
             {
@@ -210,7 +230,9 @@ impl App {
 
         let cfg = match self.store.get() {
             Ok(c) => c,
-            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
+            }
         };
         if let Err(e) = policy::check_content(
             &cfg,
@@ -221,12 +243,19 @@ impl App {
             return Dispatch::Json(200, Envelope::fail(e));
         }
 
-        let mut queue_payload = match self.ytmd.fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250)) {
-            Ok(v) => v,
-            Err(e) => {
-                return Dispatch::Json(200, Envelope::fail(format!("failed to reach queue endpoint: {e}")))
-            }
-        };
+        let mut queue_payload =
+            match self
+                .ytmd
+                .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    return Dispatch::Json(
+                        200,
+                        Envelope::fail(format!("failed to reach queue endpoint: {e}")),
+                    )
+                }
+            };
         let song_payload = self
             .ytmd
             .fetch_json_retry("/api/v1/song", 3, Duration::from_millis(250))
@@ -253,18 +282,24 @@ impl App {
                     &self.seed.video_id_set(),
                     &current_video_id,
                 ) {
-                    return Dispatch::Json(200, Envelope::fail(format!("failed to clear seed queue: {e}")));
+                    return Dispatch::Json(
+                        200,
+                        Envelope::fail(format!("failed to clear seed queue: {e}")),
+                    );
                 }
-                queue_payload = match self.ytmd.fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
-                {
-                    Ok(v) => v,
-                    Err(e) => {
-                        return Dispatch::Json(
-                            200,
-                            Envelope::fail(format!("failed to reach queue endpoint: {e}")),
-                        )
-                    }
-                };
+                queue_payload =
+                    match self
+                        .ytmd
+                        .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
+                    {
+                        Ok(v) => v,
+                        Err(e) => {
+                            return Dispatch::Json(
+                                200,
+                                Envelope::fail(format!("failed to reach queue endpoint: {e}")),
+                            )
+                        }
+                    };
             }
             match self.insert_request_during_seed(&queue_payload, &song_payload, &video_id) {
                 Ok(q) => queue_payload = q,
@@ -279,10 +314,16 @@ impl App {
             "/api/v1/queue",
             json!({"videoId": video_id, "insertPosition": "INSERT_AT_END"}),
         ) {
-            return Dispatch::Json(200, Envelope::fail(format!("failed to reach queue endpoint: {e}")));
+            return Dispatch::Json(
+                200,
+                Envelope::fail(format!("failed to reach queue endpoint: {e}")),
+            );
         }
 
-        if let Ok(fresh) = self.ytmd.fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250)) {
+        if let Ok(fresh) =
+            self.ytmd
+                .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
+        {
             queue_payload = fresh;
         }
         self.seed.sync_from_queue(&queue_payload, &current_video_id);
@@ -312,7 +353,10 @@ impl App {
         let idx = ytmd::queue_index_for_video_id(&queue_payload, video_id, true);
         if idx >= 0 {
             self.patch_queue_index(idx)?;
-            if let Ok(fresh) = self.ytmd.fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250)) {
+            if let Ok(fresh) =
+                self.ytmd
+                    .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
+            {
                 queue_payload = fresh;
             }
             self.seed.sync_from_queue(&queue_payload, video_id);
@@ -326,9 +370,13 @@ impl App {
             "/api/v1/queue",
             json!({"videoId": video_id, "insertPosition": "INSERT_AFTER_CURRENT_VIDEO"}),
         )?;
-        let (mut fresh, index) = self.wait_for_queue_video(video_id, 12, Duration::from_millis(150))?;
+        let (mut fresh, index) =
+            self.wait_for_queue_video(video_id, 12, Duration::from_millis(150))?;
         self.patch_queue_index(index)?;
-        if let Ok(q) = self.ytmd.fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250)) {
+        if let Ok(q) = self
+            .ytmd
+            .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
+        {
             fresh = q;
         }
         self.seed.sync_from_queue(&fresh, video_id);
@@ -347,11 +395,15 @@ impl App {
     fn config_save(&self, body: &[u8]) -> Dispatch {
         let mut existing = match self.store.get() {
             Ok(c) => c,
-            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
+            }
         };
         let parsed: Value = match serde_json::from_slice(body) {
             Ok(v) => v,
-            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to decode config: {e}"))),
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to decode config: {e}")))
+            }
         };
         if let Some(list) = parsed.get("blacklist").and_then(|v| v.as_array()) {
             existing.blacklist = list
@@ -373,7 +425,11 @@ impl App {
         }
         // Empty / *** from Admin means keep the stored secret so a blank field cannot wipe it.
         patch_kept_secret(&mut existing.twitch_oauth, &parsed, "twitchOAuth");
-        patch_kept_secret(&mut existing.twitch_client_secret, &parsed, "twitchClientSecret");
+        patch_kept_secret(
+            &mut existing.twitch_client_secret,
+            &parsed,
+            "twitchClientSecret",
+        );
         if let Some(s) = parsed.get("twitchClientId").and_then(|v| v.as_str()) {
             existing.twitch_client_id = s.trim().to_string();
         }
@@ -388,7 +444,55 @@ impl App {
                 200,
                 Envelope::ok_msg("config saved", config::public_json(&saved)),
             ),
-            Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to load saved config: {e}"))),
+            Err(e) => Dispatch::Json(
+                200,
+                Envelope::fail(format!("failed to load saved config: {e}")),
+            ),
+        }
+    }
+
+    fn config_import(&self, body: &[u8]) -> Dispatch {
+        let parsed: Value = match serde_json::from_slice(body) {
+            Ok(v) => v,
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to decode import: {e}")))
+            }
+        };
+        let existing = match self.store.get() {
+            Ok(c) => c,
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
+            }
+        };
+        let (merged, source) = match config::merge_import(existing, &parsed) {
+            Ok(v) => v,
+            Err(e) => return Dispatch::Json(200, Envelope::fail(e)),
+        };
+        if let Err(e) = self.store.save(merged) {
+            return Dispatch::Json(200, Envelope::fail(format!("failed to save import: {e}")));
+        }
+        if parsed
+            .as_object()
+            .map(|o| o.keys().any(|k| k.starts_with("twitch")))
+            .unwrap_or(false)
+        {
+            self.twitch.bump_if_wanted();
+        }
+        match self.store.get() {
+            Ok(saved) => {
+                let mut data = config::public_json(&saved);
+                if let Some(obj) = data.as_object_mut() {
+                    obj.insert("source".into(), json!(source.as_str()));
+                }
+                Dispatch::Json(
+                    200,
+                    Envelope::ok_msg(format!("imported {}", source.as_str()), data),
+                )
+            }
+            Err(e) => Dispatch::Json(
+                200,
+                Envelope::fail(format!("failed to load saved config: {e}")),
+            ),
         }
     }
 
@@ -404,14 +508,12 @@ impl App {
             return Dispatch::Json(200, Envelope::fail(e));
         }
         match self.store.get() {
-            Ok(cfg) if cfg.twitch_channel.trim().is_empty() => Dispatch::Json(
-                200,
-                Envelope::fail("save a join channel before connecting"),
-            ),
-            Ok(cfg) if cfg.twitch_oauth.trim().is_empty() => Dispatch::Json(
-                200,
-                Envelope::fail("log in with Twitch before connecting"),
-            ),
+            Ok(cfg) if cfg.twitch_channel.trim().is_empty() => {
+                Dispatch::Json(200, Envelope::fail("save a join channel before connecting"))
+            }
+            Ok(cfg) if cfg.twitch_oauth.trim().is_empty() => {
+                Dispatch::Json(200, Envelope::fail("log in with Twitch before connecting"))
+            }
             Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
             Ok(_) => {
                 self.twitch.connect();
@@ -423,7 +525,9 @@ impl App {
     fn twitch_oauth_start(&self, host: &str) -> Dispatch {
         let cfg = match self.store.get() {
             Ok(c) => c,
-            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
+            }
         };
         if cfg.twitch_client_secret.trim().is_empty() {
             return Dispatch::Json(200, Envelope::fail("save twitch Client Secret first"));
@@ -458,7 +562,9 @@ impl App {
                 self.twitch.bump_if_wanted();
                 Dispatch::Html(
                     200,
-                    oauth_html(&format!("JB2 logged in as {login}. You can close this tab.")),
+                    oauth_html(&format!(
+                        "JB2 logged in as {login}. You can close this tab."
+                    )),
                 )
             }
             Err(e) => Dispatch::Html(200, oauth_html(&format!("Twitch login failed: {e}"))),
@@ -477,7 +583,9 @@ impl App {
     fn twitch_chat_send(&self, body: &[u8]) -> Dispatch {
         let parsed: Value = match serde_json::from_slice(body) {
             Ok(v) => v,
-            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to decode chat: {e}"))),
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to decode chat: {e}")))
+            }
         };
         let Some(message) = parsed.get("message").and_then(|v| v.as_str()) else {
             return Dispatch::Json(200, Envelope::fail("missing message"));
@@ -493,7 +601,10 @@ impl App {
             .ytmd
             .fetch_json_retry("/api/v1/song", 2, Duration::from_millis(100))
             .unwrap_or(Value::Null);
-        match self.ytmd.fetch_json_retry("/api/v1/queue", 2, Duration::from_millis(100)) {
+        match self
+            .ytmd
+            .fetch_json_retry("/api/v1/queue", 2, Duration::from_millis(100))
+        {
             Ok(queue) => {
                 let (items, status) = ytmd::normalize_admin_queue(&song, &queue);
                 let exit = if status == "error" { 1 } else { 0 };
@@ -519,7 +630,9 @@ impl App {
     fn seed_status(&self) -> Dispatch {
         let mut cfg = match self.store.get() {
             Ok(c) => c,
-            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
+            }
         };
         if self.refresh_seed_playlist_names(&mut cfg) {
             let _ = self.store.save(cfg.clone());
@@ -528,7 +641,10 @@ impl App {
         let playing = self
             .ytmd
             .fetch_json_retry("/api/v1/song", 2, Duration::from_millis(100))
-            .map(|p| self.seed.classify_video_id(&ytmd::current_song_video_id(&p)))
+            .map(|p| {
+                self.seed
+                    .classify_video_id(&ytmd::current_song_video_id(&p))
+            })
             .unwrap_or("none");
         Dispatch::Json(
             200,
@@ -561,7 +677,10 @@ impl App {
                     json!({"id": lookup.id, "name": lookup.name, "trackCount": lookup.tracks.len()}),
                 ),
             ),
-            Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to resolve playlist: {e}"))),
+            Err(e) => Dispatch::Json(
+                200,
+                Envelope::fail(format!("failed to resolve playlist: {e}")),
+            ),
         }
     }
 
@@ -576,7 +695,12 @@ impl App {
         };
         let lookup = match ytmd::lookup_playlist_by_id(&self.ytmd, &playlist_id) {
             Ok(v) => v,
-            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to resolve playlist: {e}"))),
+            Err(e) => {
+                return Dispatch::Json(
+                    200,
+                    Envelope::fail(format!("failed to resolve playlist: {e}")),
+                )
+            }
         };
         let playlist = SeedPlaylist {
             id: lookup.id.clone(),
@@ -601,7 +725,10 @@ impl App {
             return Dispatch::Json(200, Envelope::fail("missing playlist id"));
         }
         if let Err(e) = self.remove_seed_playlist(playlist_id) {
-            return Dispatch::Json(200, Envelope::fail(format!("failed to remove playlist: {e}")));
+            return Dispatch::Json(
+                200,
+                Envelope::fail(format!("failed to remove playlist: {e}")),
+            );
         }
         Dispatch::Json(200, Envelope::ok_only("Seed playlist removed"))
     }
@@ -609,14 +736,21 @@ impl App {
     fn seed_settings(&self, body: &[u8]) -> Dispatch {
         let parsed: Value = match serde_json::from_slice(body) {
             Ok(v) => v,
-            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to decode settings: {e}"))),
+            Err(e) => {
+                return Dispatch::Json(
+                    200,
+                    Envelope::fail(format!("failed to decode settings: {e}")),
+                )
+            }
         };
         let Some(flag) = parsed.get("clearQueueOnRequest").and_then(|v| v.as_bool()) else {
             return Dispatch::Json(200, Envelope::fail("missing clearQueueOnRequest"));
         };
         let mut cfg = match self.store.get() {
             Ok(c) => c,
-            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
+            }
         };
         cfg.clear_queue_on_request = flag;
         if let Err(e) = self.store.save(cfg.clone()) {
@@ -637,20 +771,31 @@ impl App {
             return Dispatch::Json(200, Envelope::fail("missing playlistId parameter"));
         }
         if self.find_saved_seed(playlist_id).is_none() {
-            return Dispatch::Json(200, Envelope::fail("playlist is not in saved seed playlists"));
+            return Dispatch::Json(
+                200,
+                Envelope::fail("playlist is not in saved seed playlists"),
+            );
         }
         let cfg = match self.store.get() {
             Ok(c) => c,
-            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
+            }
         };
         let lookup = match ytmd::lookup_playlist_by_id(&self.ytmd, playlist_id) {
             Ok(v) => v,
             Err(e) => {
-                return Dispatch::Json(200, Envelope::fail(format!("failed to look up playlist: {e}")))
+                return Dispatch::Json(
+                    200,
+                    Envelope::fail(format!("failed to look up playlist: {e}")),
+                )
             }
         };
         let mut before_ids = HashSet::new();
-        if let Ok(queue) = self.ytmd.fetch_json_retry("/api/v1/queue", 2, Duration::from_millis(250)) {
+        if let Ok(queue) =
+            self.ytmd
+                .fetch_json_retry("/api/v1/queue", 2, Duration::from_millis(250))
+        {
             for id in ytmd::queue_item_video_ids(&queue) {
                 before_ids.insert(id.trim().to_lowercase());
             }
@@ -658,14 +803,20 @@ impl App {
         let (added, skipped, video_ids) = match self.enqueue_seed_tracks(&cfg, &lookup) {
             Ok(v) => v,
             Err(e) => {
-                return Dispatch::Json(200, Envelope::fail(format!("failed to enqueue seed playlist: {e}")))
+                return Dispatch::Json(
+                    200,
+                    Envelope::fail(format!("failed to enqueue seed playlist: {e}")),
+                )
             }
         };
         if added == 0 {
             return Dispatch::Json(200, Envelope::fail("no tracks were added to the queue"));
         }
         self.seed.register_enqueue(&lookup.id, &video_ids);
-        if let Ok(queue) = self.ytmd.fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250)) {
+        if let Ok(queue) =
+            self.ytmd
+                .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
+        {
             let live: Vec<String> = ytmd::queue_item_video_ids(&queue)
                 .into_iter()
                 .map(|id| id.trim().to_lowercase())
@@ -704,7 +855,10 @@ impl App {
         let lookup = match ytmd::lookup_playlist_by_id(&self.ytmd, playlist_id) {
             Ok(v) => v,
             Err(e) => {
-                return Dispatch::Json(200, Envelope::fail(format!("failed to look up playlist: {e}")))
+                return Dispatch::Json(
+                    200,
+                    Envelope::fail(format!("failed to look up playlist: {e}")),
+                )
             }
         };
         let target: HashSet<String> = lookup
@@ -712,10 +866,16 @@ impl App {
             .iter()
             .map(|t| t.video_id.trim().to_lowercase())
             .collect();
-        let queue = match self.ytmd.fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250)) {
+        let queue = match self
+            .ytmd
+            .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
+        {
             Ok(v) => v,
             Err(e) => {
-                return Dispatch::Json(200, Envelope::fail(format!("failed to reach queue endpoint: {e}")))
+                return Dispatch::Json(
+                    200,
+                    Envelope::fail(format!("failed to reach queue endpoint: {e}")),
+                )
             }
         };
         let indices = ytmd::queue_indices_for_video_ids(&queue, &target);
@@ -733,7 +893,8 @@ impl App {
             .ytmd
             .fetch_json_retry("/api/v1/song", 2, Duration::from_millis(250))
             .unwrap_or(Value::Null);
-        self.seed.sync_from_queue(&queue, &ytmd::current_song_video_id(&song));
+        self.seed
+            .sync_from_queue(&queue, &ytmd::current_song_video_id(&song));
         Dispatch::Json(
             200,
             Envelope::ok_msg(
@@ -762,7 +923,11 @@ impl App {
         let cfg = match self.store.get() {
             Ok(c) => c,
             Err(e) => {
-                respond_json(request, 200, &Envelope::fail(format!("failed to load config: {e}")));
+                respond_json(
+                    request,
+                    200,
+                    &Envelope::fail(format!("failed to load config: {e}")),
+                );
                 return;
             }
         };
@@ -780,7 +945,10 @@ impl App {
         }
         let upstream_path = ytmd::route_for_path(path);
         let body_bytes = ytmd::build_upstream_body(&method, query, body);
-        match self.ytmd.proxy(&method, &upstream_path, query_raw, body_bytes) {
+        match self
+            .ytmd
+            .proxy(&method, &upstream_path, query_raw, body_bytes)
+        {
             Ok((status, bytes)) if status < 400 => {
                 let decoded = if bytes.iter().all(|b| b.is_ascii_whitespace()) {
                     Envelope {
@@ -831,7 +999,8 @@ impl App {
             candidate = if ico.exists() { ico } else { png };
         }
         if !is_inside(&self.webroot, &candidate) {
-            let _ = request.respond(Response::from_string("not found").with_status_code(StatusCode(404)));
+            let _ = request
+                .respond(Response::from_string("not found").with_status_code(StatusCode(404)));
             return;
         }
         match fs::read(&candidate) {
@@ -844,7 +1013,8 @@ impl App {
                 let _ = request.respond(resp);
             }
             Err(_) => {
-                let _ = request.respond(Response::from_string("not found").with_status_code(StatusCode(404)));
+                let _ = request
+                    .respond(Response::from_string("not found").with_status_code(StatusCode(404)));
             }
         }
     }
@@ -901,7 +1071,9 @@ impl App {
                 std::thread::sleep(delay);
             }
         }
-        Err(format!("queued video \"{video_id}\" not visible in YTMD queue yet"))
+        Err(format!(
+            "queued video \"{video_id}\" not visible in YTMD queue yet"
+        ))
     }
 
     fn remove_upcoming_seed_tracks(
@@ -933,7 +1105,9 @@ impl App {
             return Ok(queue_payload);
         }
         for (offset, video_id) in requests.iter().enumerate() {
-            let fresh = self.ytmd.fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(150))?;
+            let fresh =
+                self.ytmd
+                    .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(150))?;
             queue_payload = fresh;
             current_index = ytmd::resolve_current_queue_index(&queue_payload, current_video_id);
             if current_index < 0 {
@@ -961,9 +1135,12 @@ impl App {
     ) -> Result<Value, String> {
         let current_video_id = ytmd::current_song_video_id(song_payload);
         self.seed.sync_from_queue(queue_payload, &current_video_id);
-        let queue_payload = self.repair_seed_request_block(queue_payload.clone(), &current_video_id)?;
+        let queue_payload =
+            self.repair_seed_request_block(queue_payload.clone(), &current_video_id)?;
         self.seed.sync_from_queue(&queue_payload, &current_video_id);
-        let mut target_index = self.seed.request_insert_index(&queue_payload, &current_video_id);
+        let mut target_index = self
+            .seed
+            .request_insert_index(&queue_payload, &current_video_id);
         let current_index = ytmd::resolve_current_queue_index(&queue_payload, &current_video_id);
         self.ytmd.post_json(
             "/api/v1/queue",
@@ -986,11 +1163,16 @@ impl App {
                 return Err(e);
             }
             std::thread::sleep(Duration::from_millis(150));
-            if let Ok((q, idx)) = self.wait_for_queue_video(request_video_id, 8, Duration::from_millis(150)) {
+            if let Ok((q, idx)) =
+                self.wait_for_queue_video(request_video_id, 8, Duration::from_millis(150))
+            {
                 fresh_queue = q;
                 if idx != target_index {
                     let _ = self.move_queue_item(idx, target_index);
-                    if let Ok(q2) = self.ytmd.fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(150)) {
+                    if let Ok(q2) =
+                        self.ytmd
+                            .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(150))
+                    {
                         fresh_queue = q2;
                     }
                 }
@@ -1028,7 +1210,8 @@ impl App {
                 combo = format!("{} {}", track.title, track.artist);
                 candidates.push(combo.as_str());
             }
-            if policy::check_content(cfg, track.duration, track.duration > 0, &candidates).is_err() {
+            if policy::check_content(cfg, track.duration, track.duration > 0, &candidates).is_err()
+            {
                 skipped += 1;
                 continue;
             }
@@ -1090,7 +1273,8 @@ impl App {
                 continue;
             }
             if let Ok(lookup) = ytmd::lookup_playlist_by_id(&self.ytmd, &playlist.id) {
-                if lookup.name.trim().is_empty() || lookup.name.trim().eq_ignore_ascii_case(&playlist.id)
+                if lookup.name.trim().is_empty()
+                    || lookup.name.trim().eq_ignore_ascii_case(&playlist.id)
                 {
                     continue;
                 }
@@ -1150,7 +1334,10 @@ fn seed_input(query: &[(String, String)], body: &[u8]) -> Result<String, String>
 
 fn duplicate_song(video_id: &str, lookup: &SongLookup) -> Envelope {
     let message = if !lookup.title.is_empty() && !lookup.artist.is_empty() {
-        format!("Song already in queue: {} — {}.", lookup.title, lookup.artist)
+        format!(
+            "Song already in queue: {} — {}.",
+            lookup.title, lookup.artist
+        )
     } else if !lookup.title.is_empty() {
         format!("Song already in queue: {}.", lookup.title)
     } else {
@@ -1212,7 +1399,10 @@ fn patch_kept_secret(dst: &mut String, parsed: &Value, key: &str) {
 }
 
 fn oauth_html(message: &str) -> String {
-    let safe = message.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    let safe = message
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
     format!(
         "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>JB2 Twitch</title></head><body><p>{safe}</p><script>window.close()</script></body></html>"
     )

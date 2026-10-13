@@ -2,7 +2,7 @@
 
 Rust rewrite of Jukeboks. Local HTTP control plane for [YouTube Music Desktop (pear-desktop)](https://github.com/pear-devs/pear-desktop) with Twitch chat commands, an OBS overlay, and a small admin dock.
 
-No database. No app auth. One process, one `jb2.json`, one `webroot/`.
+No app auth. One process, one `jb2.sqlite`, one `webroot/`.
 
 **Default base URL:** `http://localhost:42042` (binds `0.0.0.0:42042`, falls back through +9 if busy)
 
@@ -19,7 +19,9 @@ just package
 
 Flags: `-port`, `-bind`, `-ytmd_host`, `-ytmd_port`, `-webroot`, `-config`.
 
-Config is created next to the exe (or CWD) as `jb2.json` if missing.
+Config is created next to the exe (or CWD) as `jb2.sqlite` if missing. If a sibling `jb2.json` exists and the database is empty, it is imported once (the JSON file is left in place).
+
+Admin → Import accepts old JB1 `jukeboks.json` and JB2 `jb2.json` files. Present fields overwrite current settings; empty and `***` secrets are skipped so a JB1 dump cannot wipe Twitch.
 
 ## Twitch
 
@@ -34,7 +36,7 @@ Log in with Twitch OAuth as the **bot** account. Join channel and bot nick are s
 
 If you change JB2’s port, update the Redirect URL in the Twitch console to match.
 
-In Admin → Twitch, or in `jb2.json`:
+In Admin → Twitch, or in `jb2.sqlite`:
 
 - `twitchChannel` — channel to JOIN (without `#`)
 - `twitchNick` — bot login (set by OAuth; defaults to the channel name if empty)
@@ -43,7 +45,7 @@ In Admin → Twitch, or in `jb2.json`:
 
 Connect/disconnect from Admin without restarting JB2. Chat on that tab is the live IRC log; send posts as the bot nick.
 
-If channel+token are in `jb2.json` at process start, IRC auto-connects. Disconnect lasts until Connect or the next process start.
+If channel+token are in `jb2.sqlite` at process start, IRC auto-connects. Disconnect lasts until Connect or the next process start.
 
 Commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`
 
@@ -66,6 +68,7 @@ Responses: `{ "exitCode": 0|1, "message"?, "data"? }`. App failures are HTTP 200
 | `/cmd/ytmd/*` | YTMD proxy (method suffix or `?_method=`) |
 | `GET /api/queue` | admin queue rows |
 | `/api/config` | blacklist / maxDuration / twitch fields |
+| `POST /api/config/import` | merge JB1/JB2 JSON dump |
 | `/api/seed/*` `/cmd/jb/seed/*` | seed playlists |
 
 OBS overlay: `http://localhost:42042/overlay/`
