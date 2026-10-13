@@ -76,7 +76,7 @@ pub fn wait_for_quit() {
             ..Default::default()
         };
         copy_tip(&mut nid.szTip, "JB2");
-        if Shell_NotifyIconW(NIM_ADD, &nid).as_bool() == false {
+        if !Shell_NotifyIconW(NIM_ADD, &nid).as_bool() {
             crate::fatal("failed to add tray icon");
         }
 

@@ -7,7 +7,7 @@ mod parse;
 pub use parse::*;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
-const INNERTUBE_KEY: &str = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30";
+/// Public web key the YouTube Music site itself ships; not an operator secret.
 const INNERTUBE_BROWSE: &str =
     "https://music.youtube.com/youtubei/v1/browse?alt=json&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30";
 pub const INNERTUBE_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36";
@@ -422,10 +422,4 @@ fn lookup_playlist_via_ytmd_search(
     Err(format!(
         "search returned no tracks for playlist \"{playlist_id}\""
     ))
-}
-
-// silence unused innertube key const if rustc complains about the split URL
-#[allow(dead_code)]
-fn _innertube_key() -> &'static str {
-    INNERTUBE_KEY
 }

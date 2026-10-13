@@ -16,7 +16,7 @@ mod tray;
 
 use server::App;
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 fn main() {
@@ -138,9 +138,4 @@ pub fn alert(msg: &str) {
 pub fn fatal(msg: &str) -> ! {
     alert(msg);
     std::process::exit(1);
-}
-
-#[allow(dead_code)]
-fn _path_as_path(p: &Path) -> &Path {
-    p
 }
