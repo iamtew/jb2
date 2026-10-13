@@ -23,15 +23,23 @@ Config is created next to the exe (or CWD) as `jb2.json` if missing.
 
 ## Twitch
 
-In `jb2.json`:
+Paste an IRC oauth token for the **bot** account. Join channel and bot nick are separate so the bot can sit in someone else's chat.
 
-- `twitchChannel` — channel name without `#`
-- `twitchOAuth` — `oauth:` token for the bot account
-- `twitchNick` — optional; defaults to the channel name
+In Admin → Twitch, or in `jb2.json`:
+
+- `twitchChannel` — channel to JOIN (without `#`)
+- `twitchNick` — bot login; defaults to the channel name if empty
+- `twitchOAuth` — `oauth:` token for that bot account
+
+Connect/disconnect from Admin without restarting JB2. Chat on that tab is the live IRC log; send posts as the bot nick.
+
+If channel+token are in `jb2.json` at process start, IRC auto-connects. Disconnect lasts until Connect or the next process start.
 
 Commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`
 
 Leave channel/token empty to skip IRC.
+
+HTTP: `GET /api/twitch`, `POST /api/twitch/connect`, `POST /api/twitch/disconnect`, `GET|POST /api/twitch/chat`
 
 ## HTTP
 
@@ -47,7 +55,7 @@ Responses: `{ "exitCode": 0|1, "message"?, "data"? }`. App failures are HTTP 200
 | `GET /cmd/jb/play` `pause` `next` `previous` | transport aliases |
 | `/cmd/ytmd/*` | YTMD proxy (method suffix or `?_method=`) |
 | `GET /api/queue` | admin queue rows |
-| `/api/config` | blacklist / maxDuration |
+| `/api/config` | blacklist / maxDuration / twitch fields |
 | `/api/seed/*` `/cmd/jb/seed/*` | seed playlists |
 
 OBS overlay: `http://localhost:42042/overlay/`
