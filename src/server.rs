@@ -393,62 +393,28 @@ impl App {
     }
 
     fn config_save(&self, body: &[u8]) -> Dispatch {
-        let mut existing = match self.store.get() {
-            Ok(c) => c,
-            Err(e) => {
-                return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
-            }
-        };
         let parsed: Value = match serde_json::from_slice(body) {
             Ok(v) => v,
             Err(e) => {
                 return Dispatch::Json(200, Envelope::fail(format!("failed to decode config: {e}")))
             }
         };
-        if let Some(list) = parsed.get("blacklist").and_then(|v| v.as_array()) {
-            existing.blacklist = list
-                .iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect();
-        }
-        if let Some(n) = parsed.get("maxDuration").and_then(|v| v.as_i64()) {
-            existing.max_duration = n as i32;
-        }
-        let twitch_patch = parsed.get("twitchChannel").is_some()
-            || parsed.get("twitchNick").is_some()
-            || parsed.get("twitchOAuth").is_some();
-        if let Some(s) = parsed.get("twitchChannel").and_then(|v| v.as_str()) {
-            existing.twitch_channel = s.trim().trim_start_matches('#').to_string();
-        }
-        if let Some(s) = parsed.get("twitchNick").and_then(|v| v.as_str()) {
-            existing.twitch_nick = s.trim().to_string();
-        }
-        // Empty / *** from Admin means keep the stored secret so a blank field cannot wipe it.
-        patch_kept_secret(&mut existing.twitch_oauth, &parsed, "twitchOAuth");
-        patch_kept_secret(
-            &mut existing.twitch_client_secret,
-            &parsed,
-            "twitchClientSecret",
-        );
-        if let Some(s) = parsed.get("twitchClientId").and_then(|v| v.as_str()) {
-            existing.twitch_client_id = s.trim().to_string();
-        }
-        if let Err(e) = self.store.save(existing) {
-            return Dispatch::Json(200, Envelope::fail(format!("failed to save config: {e}")));
-        }
-        if twitch_patch {
+        let saved = match self.store.update(|cfg| {
+            config::apply_patch(cfg, &parsed);
+            Ok(())
+        }) {
+            Ok(c) => c,
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to save config: {e}")))
+            }
+        };
+        if config::touches_twitch(&parsed) {
             self.twitch.bump_if_wanted();
         }
-        match self.store.get() {
-            Ok(saved) => Dispatch::Json(
-                200,
-                Envelope::ok_msg("config saved", config::public_json(&saved)),
-            ),
-            Err(e) => Dispatch::Json(
-                200,
-                Envelope::fail(format!("failed to load saved config: {e}")),
-            ),
-        }
+        Dispatch::Json(
+            200,
+            Envelope::ok_msg("config saved", config::public_json(&saved)),
+        )
     }
 
     fn config_import(&self, body: &[u8]) -> Dispatch {
@@ -458,42 +424,30 @@ impl App {
                 return Dispatch::Json(200, Envelope::fail(format!("failed to decode import: {e}")))
             }
         };
-        let existing = match self.store.get() {
-            Ok(c) => c,
-            Err(e) => {
-                return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
-            }
-        };
-        let (merged, source) = match config::merge_import(existing, &parsed) {
-            Ok(v) => v,
+        let source = match config::detect_import(&parsed) {
+            Ok(s) => s,
             Err(e) => return Dispatch::Json(200, Envelope::fail(e)),
         };
-        if let Err(e) = self.store.save(merged) {
-            return Dispatch::Json(200, Envelope::fail(format!("failed to save import: {e}")));
-        }
-        if parsed
-            .as_object()
-            .map(|o| o.keys().any(|k| k.starts_with("twitch")))
-            .unwrap_or(false)
-        {
+        let saved = match self.store.update(|cfg| {
+            config::apply_patch(cfg, &parsed);
+            Ok(())
+        }) {
+            Ok(c) => c,
+            Err(e) => {
+                return Dispatch::Json(200, Envelope::fail(format!("failed to save import: {e}")))
+            }
+        };
+        if config::touches_twitch(&parsed) {
             self.twitch.bump_if_wanted();
         }
-        match self.store.get() {
-            Ok(saved) => {
-                let mut data = config::public_json(&saved);
-                if let Some(obj) = data.as_object_mut() {
-                    obj.insert("source".into(), json!(source.as_str()));
-                }
-                Dispatch::Json(
-                    200,
-                    Envelope::ok_msg(format!("imported {}", source.as_str()), data),
-                )
-            }
-            Err(e) => Dispatch::Json(
-                200,
-                Envelope::fail(format!("failed to load saved config: {e}")),
-            ),
+        let mut data = config::public_json(&saved);
+        if let Some(obj) = data.as_object_mut() {
+            obj.insert("source".into(), json!(source.as_str()));
         }
+        Dispatch::Json(
+            200,
+            Envelope::ok_msg(format!("imported {}", source.as_str()), data),
+        )
     }
 
     fn twitch_status(&self) -> Dispatch {
@@ -634,8 +588,24 @@ impl App {
                 return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
             }
         };
-        if self.refresh_seed_playlist_names(&mut cfg) {
-            let _ = self.store.save(cfg.clone());
+        let fresh = self.refresh_seed_playlist_names(&cfg);
+        if !fresh.is_empty() {
+            // Replace only; a playlist deleted during the YTMD lookups stays deleted.
+            let saved = self.store.update(|c| {
+                for p in &fresh {
+                    if let Some(existing) = c
+                        .seed_playlists
+                        .iter_mut()
+                        .find(|e| e.id.eq_ignore_ascii_case(&p.id))
+                    {
+                        *existing = p.clone();
+                    }
+                }
+                Ok(())
+            });
+            if let Ok(saved) = saved {
+                cfg = saved;
+            }
         }
         let (active, video_count, playlist_count) = self.seed.snapshot();
         let playing = self
@@ -746,16 +716,15 @@ impl App {
         let Some(flag) = parsed.get("clearQueueOnRequest").and_then(|v| v.as_bool()) else {
             return Dispatch::Json(200, Envelope::fail("missing clearQueueOnRequest"));
         };
-        let mut cfg = match self.store.get() {
+        let cfg = match self.store.update(|c| {
+            c.clear_queue_on_request = flag;
+            Ok(())
+        }) {
             Ok(c) => c,
             Err(e) => {
-                return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
+                return Dispatch::Json(200, Envelope::fail(format!("failed to save settings: {e}")))
             }
         };
-        cfg.clear_queue_on_request = flag;
-        if let Err(e) = self.store.save(cfg.clone()) {
-            return Dispatch::Json(200, Envelope::fail(format!("failed to save settings: {e}")));
-        }
         Dispatch::Json(
             200,
             Envelope::ok_msg(
@@ -1235,24 +1204,30 @@ impl App {
     }
 
     fn update_seed_playlist(&self, playlist: &SeedPlaylist) -> Result<(), String> {
-        let mut cfg = self.store.get()?;
-        if let Some(existing) = cfg
-            .seed_playlists
-            .iter_mut()
-            .find(|p| p.id.eq_ignore_ascii_case(&playlist.id))
-        {
-            *existing = playlist.clone();
-        } else {
-            cfg.seed_playlists.push(playlist.clone());
-        }
-        self.store.save(cfg)
+        self.store
+            .update(|cfg| {
+                if let Some(existing) = cfg
+                    .seed_playlists
+                    .iter_mut()
+                    .find(|p| p.id.eq_ignore_ascii_case(&playlist.id))
+                {
+                    *existing = playlist.clone();
+                } else {
+                    cfg.seed_playlists.push(playlist.clone());
+                }
+                Ok(())
+            })
+            .map(|_| ())
     }
 
     fn remove_seed_playlist(&self, playlist_id: &str) -> Result<(), String> {
-        let mut cfg = self.store.get()?;
-        cfg.seed_playlists
-            .retain(|p| !p.id.eq_ignore_ascii_case(playlist_id));
-        self.store.save(cfg)
+        self.store
+            .update(|cfg| {
+                cfg.seed_playlists
+                    .retain(|p| !p.id.eq_ignore_ascii_case(playlist_id));
+                Ok(())
+            })
+            .map(|_| ())
     }
 
     fn find_saved_seed(&self, playlist_id: &str) -> Option<SeedPlaylist> {
@@ -1264,9 +1239,11 @@ impl App {
             .find(|p| p.id.eq_ignore_ascii_case(playlist_id))
     }
 
-    fn refresh_seed_playlist_names(&self, cfg: &mut Config) -> bool {
-        let mut updated = false;
-        for playlist in &mut cfg.seed_playlists {
+    /// Look up real names for placeholder-named playlists. Network only; returns the
+    /// refreshed entries for the caller to merge via `Store::update`.
+    fn refresh_seed_playlist_names(&self, cfg: &Config) -> Vec<SeedPlaylist> {
+        let mut fresh = Vec::new();
+        for playlist in &cfg.seed_playlists {
             let name = playlist.name.trim();
             let id = playlist.id.trim();
             if !(name.is_empty() || name.eq_ignore_ascii_case(id) || name.starts_with("map[")) {
@@ -1278,14 +1255,15 @@ impl App {
                 {
                     continue;
                 }
-                playlist.name = lookup.name;
+                let mut p = playlist.clone();
+                p.name = lookup.name;
                 if !lookup.tracks.is_empty() {
-                    playlist.track_count = lookup.tracks.len() as i32;
+                    p.track_count = lookup.tracks.len() as i32;
                 }
-                updated = true;
+                fresh.push(p);
             }
         }
-        updated
+        fresh
     }
 }
 
@@ -1385,17 +1363,6 @@ fn header_host(request: &Request) -> String {
 
 fn twitch_redirect_uri(host: &str) -> String {
     format!("http://{}/api/twitch/callback", host.trim())
-}
-
-fn patch_kept_secret(dst: &mut String, parsed: &Value, key: &str) {
-    let Some(s) = parsed.get(key).and_then(|v| v.as_str()) else {
-        return;
-    };
-    let token = s.trim();
-    if token.is_empty() || token == "***" {
-        return;
-    }
-    *dst = token.to_string();
 }
 
 fn oauth_html(message: &str) -> String {

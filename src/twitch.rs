@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use std::collections::VecDeque;
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message, WebSocket};
 use url::Url;
@@ -16,6 +16,12 @@ const CHAT_CAP: usize = 200;
 const MAX_PRIVMSG: usize = 500;
 const OAUTH_SCOPES: &str = "chat:read chat:edit";
 const TOKEN_SKEW_SECS: i64 = 120;
+/// Wait between retries after a token or repeated IRC auth failure, so a bad login
+/// cannot hammer id.twitch.tv / irc-ws.chat.twitch.tv.
+const AUTH_BACKOFF_SECS: u64 = 30;
+/// Wait between retries after a network / server-closed error.
+const RECONNECT_SECS: u64 = 10;
+pub const LOGIN_EXPIRED: &str = "Twitch login expired; log in again";
 
 pub struct Hub {
     inner: Mutex<Inner>,
@@ -213,15 +219,24 @@ pub fn spawn(app: Arc<App>) {
 }
 
 fn worker(app: Arc<App>) {
+    // Two IRC auth failures this close together mean a refresh did not help.
+    let mut last_auth_fail: Option<Instant> = None;
     loop {
         if !app.twitch.wanted() {
             app.twitch.set_session(false, "", "");
             std::thread::sleep(Duration::from_millis(200));
             continue;
         }
+        let gen = app.twitch.generation();
         if let Err(e) = ensure_access_token(&app.store, false) {
             app.twitch.set_error(&e);
-            std::thread::sleep(Duration::from_millis(500));
+            if e == LOGIN_EXPIRED {
+                // Nothing to retry with; stay down until Login with Twitch + Connect.
+                app.twitch.set_wanted(false);
+                continue;
+            }
+            eprintln!("twitch: {e}; retry in {AUTH_BACKOFF_SECS}s");
+            wait_or_cancel(&app, gen, AUTH_BACKOFF_SECS);
             continue;
         }
         let Some((channel, oauth, nick)) = app.store.get().ok().and_then(|c| creds_from_config(&c))
@@ -231,30 +246,43 @@ fn worker(app: Arc<App>) {
             std::thread::sleep(Duration::from_millis(500));
             continue;
         };
-        let gen = app.twitch.generation();
         match run(&app, &channel, &oauth, &nick, gen) {
             Ok(()) => {}
             Err(e) => {
-                let auth_fail = is_auth_fail(&e);
-                if auth_fail {
-                    if let Ok(mut cfg) = app.store.get() {
-                        cfg.twitch_oauth_expires_at = 0;
-                        let _ = app.store.save(cfg);
+                let secs = if is_auth_fail(&e) {
+                    // Expire the stored token so the next pass forces a refresh.
+                    let _ = app.store.update(|c| {
+                        c.twitch_oauth_expires_at = 0;
+                        Ok(())
+                    });
+                    let repeated = last_auth_fail
+                        .map(|t| t.elapsed() < Duration::from_secs(AUTH_BACKOFF_SECS * 2))
+                        .unwrap_or(false);
+                    last_auth_fail = Some(Instant::now());
+                    if repeated {
+                        AUTH_BACKOFF_SECS
+                    } else {
+                        0
                     }
-                }
+                } else {
+                    RECONNECT_SECS
+                };
                 app.twitch.set_error(&e);
-                eprintln!("twitch: {e}; retry in 10s");
-                // ponytail: 200ms polls instead of one 10s sleep so disconnect is snappy
-                let waits = if auth_fail { 1 } else { 50 };
-                for _ in 0..waits {
-                    if !app.twitch.wanted() || app.twitch.generation() != gen {
-                        break;
-                    }
-                    std::thread::sleep(Duration::from_millis(200));
-                }
+                eprintln!("twitch: {e}; retry in {secs}s");
+                wait_or_cancel(&app, gen, secs);
             }
         }
         app.twitch.set_session(false, &channel, &nick);
+    }
+}
+
+/// Sleep up to `secs` in 200ms steps so Disconnect or a config change cuts the wait short.
+fn wait_or_cancel(app: &App, gen: u64, secs: u64) {
+    for _ in 0..secs * 5 {
+        if !app.twitch.wanted() || app.twitch.generation() != gen {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(200));
     }
 }
 
@@ -462,7 +490,7 @@ fn validate_login(access: &str) -> Result<String, String> {
 }
 
 pub fn exchange_code(store: &Store, code: &str, redirect_uri: &str) -> Result<String, String> {
-    let mut cfg = store.get()?;
+    let cfg = store.get()?;
     let client_id = cfg.twitch_client_id.trim().to_string();
     let client_secret = cfg.twitch_client_secret.trim().to_string();
     if client_id.is_empty() || client_secret.is_empty() {
@@ -478,15 +506,23 @@ pub fn exchange_code(store: &Store, code: &str, redirect_uri: &str) -> Result<St
             ("redirect_uri", redirect_uri),
         ],
     )?;
-    apply_token_payload(&mut cfg, &payload)?;
-    let login = validate_login(&cfg.twitch_oauth)?;
-    cfg.twitch_nick = login.clone();
-    store.save(cfg)?;
+    // Validate on a scratch copy (network), then write only token fields to the live config.
+    let mut scratch = cfg;
+    apply_token_payload(&mut scratch, &payload)?;
+    let login = validate_login(&scratch.twitch_oauth)?;
+    store.update(|c| {
+        apply_token_payload(c, &payload)?;
+        c.twitch_nick = login.clone();
+        Ok(())
+    })?;
     Ok(login)
 }
 
+/// Refresh the access token when it is missing or about to expire.
+/// A refresh token Twitch rejects (HTTP 400/401) is wiped and `LOGIN_EXPIRED` returned,
+/// so the worker stops retrying until the operator logs in again.
 pub fn ensure_access_token(store: &Store, force: bool) -> Result<Config, String> {
-    let mut cfg = store.get()?;
+    let cfg = store.get()?;
     if cfg.twitch_refresh_token.trim().is_empty() {
         return Ok(cfg);
     }
@@ -503,7 +539,7 @@ pub fn ensure_access_token(store: &Store, force: bool) -> Result<Config, String>
     if still_good {
         return Ok(cfg);
     }
-    let payload = twitch_form(
+    let payload = match twitch_form(
         "https://id.twitch.tv/oauth2/token",
         &[
             ("client_id", cfg.twitch_client_id.trim()),
@@ -511,13 +547,32 @@ pub fn ensure_access_token(store: &Store, force: bool) -> Result<Config, String>
             ("grant_type", "refresh_token"),
             ("refresh_token", cfg.twitch_refresh_token.trim()),
         ],
-    )?;
-    apply_token_payload(&mut cfg, &payload)?;
-    if let Ok(login) = validate_login(&cfg.twitch_oauth) {
-        cfg.twitch_nick = login;
-    }
-    store.save(cfg.clone())?;
-    Ok(cfg)
+    ) {
+        Ok(p) => p,
+        Err(e)
+            if e.starts_with("twitch oauth HTTP 400") || e.starts_with("twitch oauth HTTP 401") =>
+        {
+            eprintln!("twitch: refresh rejected ({e}); clearing login");
+            store.update(|c| {
+                c.twitch_oauth.clear();
+                c.twitch_refresh_token.clear();
+                c.twitch_oauth_expires_at = 0;
+                Ok(())
+            })?;
+            return Err(LOGIN_EXPIRED.into());
+        }
+        Err(e) => return Err(e),
+    };
+    let mut scratch = cfg;
+    apply_token_payload(&mut scratch, &payload)?;
+    let login = validate_login(&scratch.twitch_oauth).ok();
+    store.update(|c| {
+        apply_token_payload(c, &payload)?;
+        if let Some(login) = &login {
+            c.twitch_nick = login.clone();
+        }
+        Ok(())
+    })
 }
 
 fn creds_from_config(cfg: &Config) -> Option<(String, String, String)> {

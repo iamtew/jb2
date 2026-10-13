@@ -174,6 +174,7 @@ pub fn detect_import(parsed: &Value) -> Result<ImportSource, String> {
     Err("unrecognized config file (need JB1 jukeboks.json or JB2 jb2.json)".into())
 }
 
+/// Empty / `***` means keep the stored secret so a blank Admin field or a JB1 dump cannot wipe it.
 fn patch_secret(dst: &mut String, parsed: &Value, key: &str) {
     let Some(s) = parsed.get(key).and_then(|v| v.as_str()) else {
         return;
@@ -185,53 +186,51 @@ fn patch_secret(dst: &mut String, parsed: &Value, key: &str) {
     *dst = token.to_string();
 }
 
-pub fn merge_import(
-    mut existing: Config,
-    parsed: &Value,
-) -> Result<(Config, ImportSource), String> {
-    let source = detect_import(parsed)?;
+/// Overwrite only the fields present in `parsed` (Admin save and JB1/JB2 import share this).
+/// The store normalizes on persist, so out-of-range values fall back to defaults there.
+pub fn apply_patch(cfg: &mut Config, parsed: &Value) {
     if let Some(list) = parsed.get("blacklist").and_then(|v| v.as_array()) {
-        existing.blacklist = list
+        cfg.blacklist = list
             .iter()
             .filter_map(|v| v.as_str().map(|s| s.to_string()))
             .collect();
     }
     if let Some(n) = parsed.get("maxDuration").and_then(|v| v.as_i64()) {
-        existing.max_duration = n as i32;
+        // Out-of-range becomes 0, which normalize resets to the default instead of wrapping.
+        cfg.max_duration = i32::try_from(n).unwrap_or(0);
     }
     if let Some(list) = parsed.get("seedPlaylists").and_then(|v| v.as_array()) {
-        existing.seed_playlists = list
+        cfg.seed_playlists = list
             .iter()
             .filter_map(|v| serde_json::from_value::<SeedPlaylist>(v.clone()).ok())
             .collect();
     }
     if let Some(b) = parsed.get("clearQueueOnRequest").and_then(|v| v.as_bool()) {
-        existing.clear_queue_on_request = b;
+        cfg.clear_queue_on_request = b;
     }
     if let Some(s) = parsed.get("twitchChannel").and_then(|v| v.as_str()) {
-        existing.twitch_channel = s.trim().trim_start_matches('#').to_string();
+        cfg.twitch_channel = s.trim().trim_start_matches('#').to_string();
     }
     if let Some(s) = parsed.get("twitchNick").and_then(|v| v.as_str()) {
-        existing.twitch_nick = s.trim().to_string();
+        cfg.twitch_nick = s.trim().to_string();
     }
     if let Some(s) = parsed.get("twitchClientId").and_then(|v| v.as_str()) {
-        existing.twitch_client_id = s.trim().to_string();
+        cfg.twitch_client_id = s.trim().to_string();
     }
-    patch_secret(&mut existing.twitch_oauth, parsed, "twitchOAuth");
-    patch_secret(
-        &mut existing.twitch_client_secret,
-        parsed,
-        "twitchClientSecret",
-    );
-    patch_secret(
-        &mut existing.twitch_refresh_token,
-        parsed,
-        "twitchRefreshToken",
-    );
+    patch_secret(&mut cfg.twitch_oauth, parsed, "twitchOAuth");
+    patch_secret(&mut cfg.twitch_client_secret, parsed, "twitchClientSecret");
+    patch_secret(&mut cfg.twitch_refresh_token, parsed, "twitchRefreshToken");
     if let Some(n) = parsed.get("twitchOAuthExpiresAt").and_then(|v| v.as_i64()) {
-        existing.twitch_oauth_expires_at = n;
+        cfg.twitch_oauth_expires_at = n;
     }
-    Ok((normalize(existing), source))
+}
+
+/// True when a patch touches Twitch fields, so the IRC worker should reconnect.
+pub fn touches_twitch(parsed: &Value) -> bool {
+    parsed
+        .as_object()
+        .map(|o| o.keys().any(|k| k.starts_with("twitch")))
+        .unwrap_or(false)
 }
 
 fn open_db(path: &Path) -> Result<Connection, String> {
@@ -318,12 +317,20 @@ impl Store {
         Ok(guard.cfg.clone())
     }
 
-    pub fn save(&self, cfg: Config) -> Result<(), String> {
+    /// Read-modify-write under the lock. Always patch the latest config here instead of
+    /// `get` + edit + save: a stale copy held across a network call would wipe other edits.
+    /// Do slow work (HTTP) before calling this; the closure should only assign fields.
+    pub fn update<F>(&self, f: F) -> Result<Config, String>
+    where
+        F: FnOnce(&mut Config) -> Result<(), String>,
+    {
         let mut guard = self.inner.lock().expect("config lock");
+        let mut cfg = guard.cfg.clone();
+        f(&mut cfg)?;
         let saved =
             persist(&guard.conn, &cfg).map_err(|e| format!("{}: {e}", self.path.display()))?;
-        guard.cfg = saved;
-        Ok(())
+        guard.cfg = saved.clone();
+        Ok(saved)
     }
 }
 
@@ -334,9 +341,11 @@ mod tests {
 
     #[test]
     fn import_and_sqlite_roundtrip() {
-        let mut base = Config::default();
-        base.twitch_oauth = "keep-me".into();
-        base.twitch_channel = "streamer".into();
+        let mut cfg = Config {
+            twitch_oauth: "keep-me".into(),
+            twitch_channel: "streamer".into(),
+            ..Config::default()
+        };
 
         let jb1 = json!({
             "blacklist": ["Metallica"],
@@ -344,8 +353,8 @@ mod tests {
             "seedPlaylists": [{"id": "PL1", "name": "Mix", "trackCount": 3}],
             "clearQueueOnRequest": true
         });
-        let (cfg, src) = merge_import(base, &jb1).expect("jb1 merge");
-        assert_eq!(src, ImportSource::Jb1);
+        assert_eq!(detect_import(&jb1).unwrap(), ImportSource::Jb1);
+        apply_patch(&mut cfg, &jb1);
         assert_eq!(cfg.blacklist, vec!["Metallica"]);
         assert_eq!(cfg.max_duration, 120);
         assert_eq!(cfg.seed_playlists[0].id, "PL1");
@@ -357,13 +366,17 @@ mod tests {
             "twitchChannel": "other",
             "twitchOAuth": "***",
             "twitchClientSecret": "",
-            "blacklist": ["Foo"]
+            "blacklist": ["Foo"],
+            "maxDuration": 4294967416i64
         });
-        let (cfg2, src2) = merge_import(cfg, &jb2).expect("jb2 merge");
-        assert_eq!(src2, ImportSource::Jb2);
+        assert_eq!(detect_import(&jb2).unwrap(), ImportSource::Jb2);
+        apply_patch(&mut cfg, &jb2);
+        let cfg2 = normalize(cfg);
         assert_eq!(cfg2.twitch_channel, "other");
         assert_eq!(cfg2.twitch_oauth, "keep-me");
         assert_eq!(cfg2.blacklist, vec!["Foo"]);
+        // i64 that would wrap to 120 as i32 must fall back to the default instead.
+        assert_eq!(cfg2.max_duration, DEFAULT_MAX_DURATION);
 
         let path = std::env::temp_dir().join(format!(
             "jb2-test-{}-{}.sqlite",
@@ -375,12 +388,35 @@ mod tests {
         ));
         let _ = fs::remove_file(&path);
         let store = Store::new(path.clone()).expect("open sqlite");
-        store.save(cfg2).expect("save");
+        store
+            .update(|c| {
+                *c = cfg2;
+                Ok(())
+            })
+            .expect("save");
+
+        // Lost-update guard: an Admin edit landing while a token refresh is in flight
+        // must survive the refresh writing its own fields afterwards.
+        let _stale = store.get().expect("get");
+        store
+            .update(|c| {
+                c.blacklist = vec!["Admin edit".into()];
+                Ok(())
+            })
+            .expect("admin edit");
+        store
+            .update(|c| {
+                c.twitch_oauth = "fresh-token".into();
+                Ok(())
+            })
+            .expect("token refresh");
         drop(store);
+
         let store2 = Store::new(path.clone()).expect("reopen sqlite");
         let loaded = store2.get().expect("get");
         assert_eq!(loaded.twitch_channel, "other");
-        assert_eq!(loaded.twitch_oauth, "keep-me");
+        assert_eq!(loaded.twitch_oauth, "fresh-token");
+        assert_eq!(loaded.blacklist, vec!["Admin edit"]);
         drop(store2);
         let _ = fs::remove_file(&path);
     }
