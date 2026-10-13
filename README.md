@@ -41,13 +41,15 @@ In Admin → Twitch, or in `jb2.sqlite`:
 - `twitchNick` — bot login (set by OAuth; defaults to the channel name if empty)
 - `twitchRefreshToken` / `twitchOAuth` — filled by Login with Twitch (do not paste by hand)
 
-Connect/disconnect from Admin without restarting JB2. Chat on that tab is the live IRC log; send posts as the bot nick.
+Connect/disconnect from Admin without restarting JB2. Admin → Chat is the live IRC window (send as the bot nick). Admin → Twitch is login/connect only. The dock pill **Chat cmds ON/OFF** follows the global chat-command switch.
 
 If channel+token are in `jb2.sqlite` at process start, IRC auto-connects. Disconnect lasts until Connect or the next process start.
 
 Retries back off: 10s after a network drop, 30s after a token refresh failure or a repeated IRC login failure. If Twitch rejects the refresh token (revoked app), JB2 clears the stored login, stops reconnecting, and shows `Twitch login expired; log in again` — use **Login with Twitch**.
 
-Commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`
+Chat commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`. They run on a serial queue so a busy chat cannot stall IRC. Admin → Commands sets per-command GCD/UCD seconds (default 0) and a global on/off (`twitchCommandsEnabled`, default on). Off still logs chat; HTTP `/cmd/jb/songrequest` and Admin Add/Now stay live.
+
+Streamer.bot: `GET /cmd/jb/commands`, `GET /cmd/jb/commands/on`, `GET /cmd/jb/commands/off`
 
 Leave channel/token empty to skip IRC.
 
@@ -66,15 +68,17 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | `GET /cmd/jb/queueinfo` | upcoming queue (fails if paused) |
 | `GET /cmd/jb/songrequest?input=` | search/queue (`now=1` plays immediately) |
 | `GET /cmd/jb/search?input=` | search hits |
+| `GET /cmd/jb/commands` | Twitch chat commands on/off |
+| `GET /cmd/jb/commands/on` `off` | enable/disable Twitch chat commands |
 | `GET /cmd/jb/play` `pause` `next` `previous` | transport aliases |
 | `/cmd/ytmd/*` | YTMD proxy (method suffix or `?_method=`) |
 | `GET /api/queue` | admin queue rows |
-| `/api/config` | blacklist / maxDuration / twitch fields |
+| `/api/config` | blacklist / maxDuration / twitch / command cooldowns |
 | `POST /api/config/import` | merge JB1/JB2 JSON dump |
 | `/api/seed/*` `/cmd/jb/seed/*` | seed playlists |
 
 OBS overlay: `http://localhost:42042/overlay/`
-Admin dock: `http://localhost:42042/admin/` (polls queue/Twitch/seed over HTTP; hidden tabs do not poll; those GETs are omitted from the request log)
+Admin dock: `http://localhost:42042/admin/` (polls queue/Twitch/seed/chat-commands over HTTP; hidden tabs do not poll; those GETs are omitted from the request log)
 
 ## Logo
 
