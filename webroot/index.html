@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JB2</title>
+    <link rel="icon" href="/img/jukeboks.png" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="landing-shell">
+      <section class="hero">
+        <img class="logo" src="/img/jukeboks.png" alt="JB2" />
+        <p class="eyebrow">Twitch • Streamer.bot • YouTube Music • OBS</p>
+        <h1>JB2</h1>
+        <p class="intro">
+          JB2 is a local control layer for YouTube Music Desktop: Twitch song requests, an OBS
+          now-playing overlay, and a small admin dock from one process.
+        </p>
+      </section>
+
+      <section class="cards">
+        <article class="card">
+          <h2>Control Panel</h2>
+          <p>Use the admin dock to issue commands and test the available YTMD actions.</p>
+          <div class="actions">
+            <a href="/admin/" class="button">Open Control Panel</a>
+            <button class="button secondary" data-copy="/admin/">Copy URL</button>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>Now Playing Overlay</h2>
+          <p>Display the current track, playback state, and progress in OBS as a browser source.</p>
+          <div class="actions">
+            <a href="/overlay/" class="button">Open Overlay</a>
+            <button class="button secondary" data-copy="/overlay/">Copy URL</button>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

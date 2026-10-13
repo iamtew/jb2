@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JB2 Admin</title>
+    <link rel="icon" href="/img/jukeboks.png" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/admin/style.css" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <section class="now-playing" aria-live="polite">
+        <div class="now-playing__meta">
+          <div class="now-playing__row">
+            <div class="now-playing__state">
+              <span id="playState" class="play-state-pill">⏸</span>
+              <span class="time-pill">
+                <span id="currentTime">00:00</span>
+                <span class="time-divider">/</span>
+                <span id="totalTime">00:00</span>
+              </span>
+            </div>
+          </div>
+          <div class="now-playing__headline"><span id="currentMeta"><span class="now-playing__headline-track">Waiting for YTMD…</span></span></div>
+          <div class="progress-row">
+            <input id="progressBar" class="progress-bar" type="range" min="0" max="100" step="1" value="0" />
+          </div>
+        </div>
+      </section>
+
+      <section class="player-controls" aria-label="Playback controls">
+        <button id="prevButton" class="control-btn" type="button">⏮</button>
+        <button id="backButton" class="control-btn" type="button">⏪</button>
+        <button id="playButton" class="control-btn primary" type="button">▶</button>
+        <button id="pauseButton" class="control-btn" type="button">⏸</button>
+        <button id="forwardButton" class="control-btn" type="button">⏩</button>
+        <button id="nextButton" class="control-btn" type="button">⏭</button>
+      </section>
+      <section class="player-toggles" aria-label="Playback modes">
+        <button id="shuffleButton" class="control-btn" type="button" aria-label="Shuffle" aria-pressed="false">Shuffle</button>
+        <form id="songRequestForm" class="player-toggles__form" action="#">
+          <div class="search-wrap">
+            <input id="songRequestInput" class="player-toggles__input" type="search" placeholder="Request song…" aria-label="Song request" autocomplete="off" aria-autocomplete="list" aria-controls="songSearchPopup" />
+            <ul id="songSearchPopup" class="search-popup" role="listbox" hidden></ul>
+          </div>
+          <button id="songRequestAdd" class="player-toggles__btn" type="submit">Add</button>
+          <button id="songRequestNow" class="player-toggles__btn" type="button">Now</button>
+        </form>
+      </section>
+
+      <nav class="tabs" aria-label="Admin sections">
+        <button class="tab active" data-page="queue">Queue</button>
+        <button class="tab" data-page="seed">Seed</button>
+        <button class="tab" data-page="settings">Settings</button>
+        <button class="tab" data-page="system">API</button>
+      </nav>
+
+      <section id="page-queue" class="page active">
+        <div class="panel">
+          <div class="queue-toolbar">
+            <button id="clearQueueButton" class="queue-toolbar-btn" type="button">Clear queue</button>
+          </div>
+          <div id="queueList" class="queue-list"></div>
+        </div>
+      </section>
+
+      <section id="page-seed" class="page">
+        <div class="panel">
+          <p id="seedStatusLine" class="seed-status">Seed mode: loading…</p>
+          <div class="settings-block">
+            <label for="seedPlaylistInput">Add seed playlist</label>
+            <div class="url-row">
+              <input id="seedPlaylistInput" type="text" placeholder="Playlist URL or ID" />
+              <button id="addSeedPlaylistButton" type="button">Add</button>
+            </div>
+            <p id="seedInputFeedback" class="muted"></p>
+          </div>
+          <div class="settings-block">
+            <label class="seed-checkbox">
+              <input id="clearQueueOnRequestCheckbox" type="checkbox" />
+              Clear queue on new request
+            </label>
+          </div>
+          <div class="settings-block">
+            <ul id="seedPlaylistList" class="seed-list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-system" class="page">
+        <div class="panel">
+          <div class="controls">
+            <label for="commandSelect">Command</label>
+            <select id="commandSelect"></select>
+            <input id="argInput" type="text" placeholder="Optional params, e.g. seconds=10" />
+            <button id="runCommand">Run</button>
+          </div>
+          <div class="url-box">
+            <label for="commandUrl">Manual URL</label>
+            <div class="url-row">
+              <input id="commandUrl" type="text" readonly value="Select a command" />
+              <button id="copyUrl" type="button">Copy</button>
+            </div>
+          </div>
+          <pre id="commandOutput">Waiting for a command…</pre>
+        </div>
+      </section>
+
+      <section id="page-settings" class="page">
+        <div class="panel">
+          <div class="settings-block">
+            <label for="maxDurationInput">maxDuration</label>
+            <div class="url-row">
+              <input id="maxDurationInput" type="number" min="1" step="1" value="600" />
+              <button id="saveMaxDurationButton" type="button">Save</button>
+            </div>
+          </div>
+          <div class="settings-block">
+            <label for="blacklistInput">Add blacklist entry</label>
+            <div class="url-row">
+              <input id="blacklistInput" type="text" placeholder="Artist or title" />
+              <button id="addBlacklistButton" type="button">Add</button>
+            </div>
+          </div>
+          <div class="settings-block">
+            <h4>Blacklist</h4>
+            <ul id="blacklistList" class="chip-list"></ul>
+          </div>
+          <div class="settings-block settings-json-block">
+            <h4>Settings JSON</h4>
+            <pre id="settingsOutput">Loading settings…</pre>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/admin/app.js"></script>
+  </body>
+</html>
