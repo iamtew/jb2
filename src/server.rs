@@ -3,6 +3,7 @@ use crate::envelope::Envelope;
 use crate::jsonutil::{mime_for, parse_query, percent_decode, query_get, split_url};
 use crate::policy;
 use crate::seed::State;
+use crate::twitch;
 use crate::videoid::{self, MAX_SONG_REQUEST_INPUT_LEN};
 use crate::ytmd::{self, Client, SongLookup};
 use serde_json::{json, Value};
@@ -18,6 +19,7 @@ pub struct App {
     pub ytmd: Client,
     pub webroot: PathBuf,
     pub seed: State,
+    pub twitch: twitch::Hub,
 }
 
 impl App {
@@ -27,6 +29,7 @@ impl App {
             ytmd,
             webroot,
             seed: State::new(),
+            twitch: twitch::Hub::new(),
         })
     }
 
@@ -69,6 +72,11 @@ impl App {
             ),
             ("GET", "/api/config") => self.config_get(),
             ("POST" | "PUT", "/api/config") => self.config_save(body),
+            ("GET", "/api/twitch") => self.twitch_status(),
+            ("POST", "/api/twitch/connect") => self.twitch_connect(),
+            ("POST", "/api/twitch/disconnect") => self.twitch_disconnect(),
+            ("GET", "/api/twitch/chat") => self.twitch_chat_get(),
+            ("POST", "/api/twitch/chat") => self.twitch_chat_send(body),
             ("GET", "/api/queue") => self.admin_queue(),
             ("GET", "/api/seed/status") => self.seed_status(),
             ("POST", "/api/seed/resolve") => self.seed_resolve(query, body),
@@ -349,8 +357,27 @@ impl App {
         if let Some(n) = parsed.get("maxDuration").and_then(|v| v.as_i64()) {
             existing.max_duration = n as i32;
         }
+        let twitch_patch = parsed.get("twitchChannel").is_some()
+            || parsed.get("twitchNick").is_some()
+            || parsed.get("twitchOAuth").is_some();
+        if let Some(s) = parsed.get("twitchChannel").and_then(|v| v.as_str()) {
+            existing.twitch_channel = s.trim().trim_start_matches('#').to_string();
+        }
+        if let Some(s) = parsed.get("twitchNick").and_then(|v| v.as_str()) {
+            existing.twitch_nick = s.trim().to_string();
+        }
+        // Empty oauth from Admin means keep the stored token so a blank password field cannot wipe it.
+        if let Some(s) = parsed.get("twitchOAuth").and_then(|v| v.as_str()) {
+            let token = s.trim();
+            if !token.is_empty() {
+                existing.twitch_oauth = token.to_string();
+            }
+        }
         if let Err(e) = self.store.save(existing) {
             return Dispatch::Json(200, Envelope::fail(format!("failed to save config: {e}")));
+        }
+        if twitch_patch {
+            self.twitch.bump_if_wanted();
         }
         match self.store.get() {
             Ok(saved) => Dispatch::Json(
@@ -358,6 +385,56 @@ impl App {
                 Envelope::ok_msg("config saved", serde_json::to_value(saved).unwrap_or(json!({}))),
             ),
             Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to load saved config: {e}"))),
+        }
+    }
+
+    fn twitch_status(&self) -> Dispatch {
+        let oauth_set = self
+            .store
+            .get()
+            .map(|c| !c.twitch_oauth.trim().is_empty())
+            .unwrap_or(false);
+        Dispatch::Json(200, Envelope::ok_data(self.twitch.status_json(oauth_set)))
+    }
+
+    fn twitch_connect(&self) -> Dispatch {
+        match self.store.get() {
+            Ok(cfg)
+                if cfg.twitch_channel.trim().is_empty() || cfg.twitch_oauth.trim().is_empty() =>
+            {
+                Dispatch::Json(
+                    200,
+                    Envelope::fail("save twitchChannel and twitchOAuth before connecting"),
+                )
+            }
+            Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
+            Ok(_) => {
+                self.twitch.connect();
+                self.twitch_status()
+            }
+        }
+    }
+
+    fn twitch_disconnect(&self) -> Dispatch {
+        self.twitch.disconnect();
+        self.twitch_status()
+    }
+
+    fn twitch_chat_get(&self) -> Dispatch {
+        Dispatch::Json(200, Envelope::ok_data(self.twitch.chat_json()))
+    }
+
+    fn twitch_chat_send(&self, body: &[u8]) -> Dispatch {
+        let parsed: Value = match serde_json::from_slice(body) {
+            Ok(v) => v,
+            Err(e) => return Dispatch::Json(200, Envelope::fail(format!("failed to decode chat: {e}"))),
+        };
+        let Some(message) = parsed.get("message").and_then(|v| v.as_str()) else {
+            return Dispatch::Json(200, Envelope::fail("missing message"));
+        };
+        match self.twitch.enqueue_send(message) {
+            Ok(()) => Dispatch::Json(200, Envelope::ok_only("queued")),
+            Err(e) => Dispatch::Json(200, Envelope::fail(e)),
         }
     }
 
