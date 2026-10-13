@@ -98,15 +98,20 @@
           </div>
           <div class="settings-block">
             <label for="twitchNickInput">Bot nick</label>
-            <input id="twitchNickInput" type="text" placeholder="bot account login" autocomplete="off" />
+            <input id="twitchNickInput" type="text" placeholder="filled after login" autocomplete="off" />
           </div>
           <div class="settings-block">
-            <label for="twitchOAuthInput">Bot oauth</label>
-            <input id="twitchOAuthInput" type="password" placeholder="leave blank to keep saved token" autocomplete="off" />
+            <label for="twitchClientIdInput">Twitch Client ID</label>
+            <input id="twitchClientIdInput" type="text" placeholder="from dev.twitch.tv/console" autocomplete="off" />
+          </div>
+          <div class="settings-block">
+            <label for="twitchClientSecretInput">Twitch Client Secret</label>
+            <input id="twitchClientSecretInput" type="password" placeholder="leave blank to keep saved secret" autocomplete="off" />
           </div>
           <div class="settings-block">
             <div class="url-row">
               <button id="twitchSaveButton" type="button">Save</button>
+              <button id="twitchLoginButton" type="button">Login with Twitch</button>
               <button id="twitchConnectButton" type="button">Connect</button>
               <button id="twitchDisconnectButton" type="button">Disconnect</button>
             </div>

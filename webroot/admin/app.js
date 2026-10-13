@@ -67,8 +67,10 @@ const seedPlaylistList = document.getElementById('seedPlaylistList');
 const twitchStatusLine = document.getElementById('twitchStatusLine');
 const twitchChannelInput = document.getElementById('twitchChannelInput');
 const twitchNickInput = document.getElementById('twitchNickInput');
-const twitchOAuthInput = document.getElementById('twitchOAuthInput');
+const twitchClientIdInput = document.getElementById('twitchClientIdInput');
+const twitchClientSecretInput = document.getElementById('twitchClientSecretInput');
 const twitchSaveButton = document.getElementById('twitchSaveButton');
+const twitchLoginButton = document.getElementById('twitchLoginButton');
 const twitchConnectButton = document.getElementById('twitchConnectButton');
 const twitchDisconnectButton = document.getElementById('twitchDisconnectButton');
 const twitchFormFeedback = document.getElementById('twitchFormFeedback');
@@ -390,6 +392,9 @@ async function loadTwitchSettings() {
     }
     twitchChannelInput.value = payload.data?.twitchChannel || '';
     twitchNickInput.value = payload.data?.twitchNick || '';
+    if (twitchClientIdInput) {
+      twitchClientIdInput.value = payload.data?.twitchClientId || '';
+    }
   } catch (err) {
     setTwitchFeedback(`Failed to load settings: ${err.message}`);
   }
@@ -431,8 +436,13 @@ function renderTwitchStatus(data) {
   if (data.lastError) {
     text += ` (${data.lastError})`;
   }
-  if (data.oauthSet) {
+  if (data.refreshSet) {
+    text += ' · logged in';
+  } else if (data.oauthSet) {
     text += ' · token saved';
+  }
+  if (data.secretSet) {
+    text += ' · secret saved';
   }
   twitchStatusLine.textContent = text;
   twitchStatusLine.classList.toggle('seed-status--active', !!data.connected);
@@ -477,10 +487,11 @@ async function saveTwitchSettings() {
   const body = {
     twitchChannel: (twitchChannelInput?.value || '').trim(),
     twitchNick: (twitchNickInput?.value || '').trim(),
+    twitchClientId: (twitchClientIdInput?.value || '').trim(),
   };
-  const oauth = (twitchOAuthInput?.value || '').trim();
-  if (oauth) {
-    body.twitchOAuth = oauth;
+  const secret = (twitchClientSecretInput?.value || '').trim();
+  if (secret) {
+    body.twitchClientSecret = secret;
   }
   const response = await fetch('/api/config', {
     method: 'POST',
@@ -491,11 +502,14 @@ async function saveTwitchSettings() {
   if (!response.ok || payload.exitCode !== 0) {
     throw new Error(payload.message || 'Unable to save Twitch settings');
   }
-  if (twitchOAuthInput) {
-    twitchOAuthInput.value = '';
+  if (twitchClientSecretInput) {
+    twitchClientSecretInput.value = '';
   }
   twitchChannelInput.value = payload.data?.twitchChannel || body.twitchChannel;
   twitchNickInput.value = payload.data?.twitchNick || body.twitchNick;
+  if (twitchClientIdInput) {
+    twitchClientIdInput.value = payload.data?.twitchClientId || body.twitchClientId;
+  }
 }
 
 async function postTwitch(path) {
@@ -513,6 +527,30 @@ if (twitchSaveButton) {
       await saveTwitchSettings();
       setTwitchFeedback('Saved.');
       await loadTwitchLive();
+    } catch (err) {
+      setTwitchFeedback(err.message);
+    }
+  });
+}
+
+if (twitchLoginButton) {
+  twitchLoginButton.addEventListener('click', async () => {
+    try {
+      await saveTwitchSettings();
+      const response = await fetch('/api/twitch/oauth/start', { method: 'POST' });
+      const payload = await response.json();
+      if (!response.ok || payload.exitCode !== 0) {
+        throw new Error(payload.message || 'Unable to start Twitch login');
+      }
+      const url = payload.data?.url;
+      if (!url) {
+        throw new Error('Twitch login URL missing');
+      }
+      setTwitchFeedback('Approve as the bot account in the Twitch window.');
+      const popup = window.open(url, '_blank', 'noopener');
+      if (!popup) {
+        window.location.href = url;
+      }
     } catch (err) {
       setTwitchFeedback(err.message);
     }
