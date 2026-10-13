@@ -21,6 +21,15 @@ const commands = [
   { name: 'queue-next', path: '/cmd/ytmd/queue/next', methods: ['GET'], description: 'Get information about the next song in the queue' },
   { name: 'queue-index', path: '/cmd/ytmd/queue/{index}', methods: ['PATCH', 'DELETE'], description: 'Move or remove a queue item by index' },
   { name: 'search', path: '/cmd/ytmd/search', methods: ['POST'], description: 'Search for a song' },
+  { name: 'chat-commands', path: '/cmd/jb/commands', methods: ['GET'], description: 'Twitch chat commands on/off status' },
+  { name: 'chat-commands-on', path: '/cmd/jb/commands/on', methods: ['GET'], description: 'Enable Twitch chat commands' },
+  { name: 'chat-commands-off', path: '/cmd/jb/commands/off', methods: ['GET'], description: 'Disable Twitch chat commands' },
+];
+
+const CHAT_COMMAND_ROWS = [
+  { id: 'sr', aliases: '!sr / !songrequest' },
+  { id: 'q', aliases: '!q / !queue' },
+  { id: 'si', aliases: '!si / !songinfo' },
 ];
 
 const select = document.getElementById('commandSelect');
@@ -76,6 +85,12 @@ const twitchFormFeedback = document.getElementById('twitchFormFeedback');
 const twitchChatLog = document.getElementById('twitchChatLog');
 const twitchChatForm = document.getElementById('twitchChatForm');
 const twitchChatInput = document.getElementById('twitchChatInput');
+const chatFormFeedback = document.getElementById('chatFormFeedback');
+const chatCmdsPill = document.getElementById('chatCmdsPill');
+const chatCmdsEnabled = document.getElementById('chatCmdsEnabled');
+const cmdCooldownRows = document.getElementById('cmdCooldownRows');
+const saveCmdCooldowns = document.getElementById('saveCmdCooldowns');
+const cmdFeedback = document.getElementById('cmdFeedback');
 const importFileInput = document.getElementById('importFileInput');
 const importConfigButton = document.getElementById('importConfigButton');
 const importFeedback = document.getElementById('importFeedback');
@@ -160,25 +175,35 @@ function activeAdminPage() {
   return document.querySelector('.tab.active')?.dataset.page || 'queue';
 }
 
+function showAdminPage(page) {
+  tabs.forEach((item) => item.classList.toggle('active', item.dataset.page === page));
+  pages.forEach((el) => el.classList.toggle('active', el.id === `page-${page}`));
+  if (page === 'queue') {
+    refreshQueueFromProxy();
+  }
+  if (page === 'seed') {
+    loadSeedPanel();
+    startSeedStatusPolling();
+  } else {
+    stopSeedStatusPolling();
+  }
+  if (page === 'twitch') {
+    loadTwitchPanel();
+    startTwitchPolling();
+  } else if (page === 'chat') {
+    loadTwitchLive();
+    startTwitchPolling();
+  } else {
+    stopTwitchPolling();
+  }
+  if (page === 'commands') {
+    loadCommandsPanel();
+  }
+}
+
 tabs.forEach((tab) => {
   tab.addEventListener('click', () => {
-    tabs.forEach((item) => item.classList.toggle('active', item === tab));
-    pages.forEach((page) => page.classList.toggle('active', page.id === `page-${tab.dataset.page}`));
-    if (tab.dataset.page === 'queue') {
-      refreshQueueFromProxy();
-    }
-    if (tab.dataset.page === 'seed') {
-      loadSeedPanel();
-      startSeedStatusPolling();
-    } else {
-      stopSeedStatusPolling();
-    }
-    if (tab.dataset.page === 'twitch') {
-      loadTwitchPanel();
-      startTwitchPolling();
-    } else {
-      stopTwitchPolling();
-    }
+    showAdminPage(tab.dataset.page);
   });
 });
 
@@ -408,19 +433,23 @@ async function loadTwitchSettings() {
 }
 
 async function loadTwitchLive() {
+  const wantChat = activeAdminPage() === 'chat';
   try {
-    const [statusRes, chatRes] = await Promise.all([
-      fetch('/api/twitch'),
-      fetch('/api/twitch/chat'),
-    ]);
+    const fetches = [fetch('/api/twitch')];
+    if (wantChat) {
+      fetches.push(fetch('/api/twitch/chat'));
+    }
+    const [statusRes, chatRes] = await Promise.all(fetches);
     const status = await statusRes.json();
-    const chat = await chatRes.json();
     if (!statusRes.ok || status.exitCode !== 0) {
       throw new Error(status.message || 'Unable to load Twitch status');
     }
     renderTwitchStatus(status.data || {});
-    if (chatRes.ok && chat.exitCode === 0) {
-      renderTwitchChat(chat.data?.messages || []);
+    if (wantChat && chatRes) {
+      const chat = await chatRes.json();
+      if (chatRes.ok && chat.exitCode === 0) {
+        renderTwitchChat(chat.data?.messages || []);
+      }
     }
   } catch (err) {
     if (twitchStatusLine) {
@@ -575,6 +604,129 @@ if (twitchDisconnectButton) {
   });
 }
 
+function setChatCmdsUi(enabled) {
+  const on = Boolean(enabled);
+  if (chatCmdsPill) {
+    chatCmdsPill.textContent = on ? 'Chat cmds ON' : 'Chat cmds OFF';
+    chatCmdsPill.classList.toggle('is-on', on);
+    chatCmdsPill.classList.toggle('is-off', !on);
+  }
+  if (chatCmdsEnabled) {
+    chatCmdsEnabled.checked = on;
+  }
+}
+
+async function refreshChatCmdsPill() {
+  try {
+    const response = await fetch('/cmd/jb/commands');
+    const payload = await response.json();
+    if (!response.ok || payload.exitCode !== 0) return;
+    setChatCmdsUi(!!payload.data?.enabled);
+  } catch (_) {
+    /* pill is best-effort */
+  }
+}
+
+async function setChatCmdsEnabled(enabled) {
+  const path = enabled ? '/cmd/jb/commands/on' : '/cmd/jb/commands/off';
+  const response = await fetch(path);
+  const payload = await response.json();
+  if (!response.ok || payload.exitCode !== 0) {
+    throw new Error(payload.message || 'Unable to set chat commands');
+  }
+  setChatCmdsUi(!!payload.data?.enabled);
+}
+
+function setCmdFeedback(text) {
+  if (cmdFeedback) {
+    cmdFeedback.textContent = text;
+  }
+}
+
+function fillCmdCooldownRows(map) {
+  if (!cmdCooldownRows) return;
+  const src = map || {};
+  cmdCooldownRows.innerHTML = CHAT_COMMAND_ROWS.map((row) => {
+    const cd = src[row.id] || {};
+    const gcd = Number.isFinite(Number(cd.gcd)) ? Number(cd.gcd) : 0;
+    const ucd = Number.isFinite(Number(cd.ucd)) ? Number(cd.ucd) : 0;
+    return `<tr>
+      <td>${row.aliases}</td>
+      <td><input type="number" min="0" step="1" data-cmd="${row.id}" data-field="gcd" value="${gcd}" aria-label="${row.id} GCD seconds" /></td>
+      <td><input type="number" min="0" step="1" data-cmd="${row.id}" data-field="ucd" value="${ucd}" aria-label="${row.id} UCD seconds" /></td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadCommandsPanel() {
+  try {
+    const [cfgRes, enRes] = await Promise.all([
+      fetch('/api/config'),
+      fetch('/cmd/jb/commands'),
+    ]);
+    const cfg = await cfgRes.json();
+    const en = await enRes.json();
+    if (!cfgRes.ok || cfg.exitCode !== 0) {
+      throw new Error(cfg.message || 'Unable to load commands');
+    }
+    fillCmdCooldownRows(cfg.data?.twitchCommands);
+    if (enRes.ok && en.exitCode === 0) {
+      setChatCmdsUi(!!en.data?.enabled);
+    } else {
+      setChatCmdsUi(!!cfg.data?.twitchCommandsEnabled);
+    }
+  } catch (err) {
+    setCmdFeedback(err.message);
+  }
+}
+
+if (chatCmdsPill) {
+  chatCmdsPill.addEventListener('click', () => {
+    showAdminPage('commands');
+  });
+}
+
+if (chatCmdsEnabled) {
+  chatCmdsEnabled.addEventListener('change', async () => {
+    try {
+      await setChatCmdsEnabled(chatCmdsEnabled.checked);
+      setCmdFeedback('');
+    } catch (err) {
+      chatCmdsEnabled.checked = !chatCmdsEnabled.checked;
+      setCmdFeedback(err.message);
+    }
+  });
+}
+
+if (saveCmdCooldowns) {
+  saveCmdCooldowns.addEventListener('click', async () => {
+    const twitchCommands = {};
+    cmdCooldownRows?.querySelectorAll('input[data-cmd]').forEach((input) => {
+      const id = input.dataset.cmd;
+      if (!twitchCommands[id]) {
+        twitchCommands[id] = { gcd: 0, ucd: 0 };
+      }
+      const n = Number.parseInt(input.value, 10);
+      twitchCommands[id][input.dataset.field] = Number.isFinite(n) ? Math.max(0, n) : 0;
+    });
+    try {
+      const response = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ twitchCommands }),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.exitCode !== 0) {
+        throw new Error(payload.message || 'Unable to save cooldowns');
+      }
+      fillCmdCooldownRows(payload.data?.twitchCommands);
+      setCmdFeedback('Saved.');
+    } catch (err) {
+      setCmdFeedback(err.message);
+    }
+  });
+}
+
 if (twitchChatForm) {
   twitchChatForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -591,9 +743,11 @@ if (twitchChatForm) {
         throw new Error(payload.message || 'Send failed');
       }
       twitchChatInput.value = '';
+      if (chatFormFeedback) chatFormFeedback.textContent = '';
       setTwitchFeedback('');
       await loadTwitchLive();
     } catch (err) {
+      if (chatFormFeedback) chatFormFeedback.textContent = err.message;
       setTwitchFeedback(err.message);
     }
   });
@@ -830,6 +984,7 @@ function startPolling() {
     if (activeAdminPage() === 'queue') {
       refreshQueueFromProxy();
     }
+    refreshChatCmdsPill();
   }, intervalMs);
 }
 
@@ -849,7 +1004,13 @@ function resumeAdminPolling() {
   } else if (activeAdminPage() === 'twitch') {
     loadTwitchLive();
     startTwitchPolling();
+  } else if (activeAdminPage() === 'chat') {
+    loadTwitchLive();
+    startTwitchPolling();
+  } else if (activeAdminPage() === 'commands') {
+    loadCommandsPanel();
   }
+  refreshChatCmdsPill();
   connectNowPlaying();
   startPolling();
   updateCurrentMetaMarquee();
@@ -1824,12 +1985,32 @@ progressBar.addEventListener('change', async () => {
 
 renderCommands();
 loadSettings();
+refreshChatCmdsPill();
+fillCmdCooldownRows({});
 refreshNowPlayingFromProxy();
 refreshQueueFromProxy();
 refreshShuffleFromProxy();
 connectNowPlaying();
 startPolling();
 window.addEventListener('resize', updateCurrentMetaMarquee);
+
+const tabNav = document.querySelector('.tabs');
+const dock = document.querySelector('.dock');
+function fitAdminTabs() {
+  if (!tabNav) return;
+  tabNav.classList.remove('tabs--compact');
+  const compact = tabNav.scrollWidth > tabNav.clientWidth + 1;
+  tabNav.classList.toggle('tabs--compact', compact);
+  tabs.forEach((tab) => {
+    tab.title = compact ? (tab.querySelector('span')?.textContent || '') : '';
+  });
+}
+if (dock && typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(fitAdminTabs).observe(dock);
+} else {
+  window.addEventListener('resize', fitAdminTabs);
+  fitAdminTabs();
+}
 window.addEventListener('focus', () => {
   if (!document.hidden) resumeAdminPolling();
 });

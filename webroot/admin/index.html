@@ -22,6 +22,7 @@
                   <span id="totalTime">00:00</span>
                 </span>
               </div>
+              <button id="chatCmdsPill" class="cmd-pill is-on" type="button" aria-label="Twitch chat commands">Chat cmds ON</button>
             </div>
             <div class="now-playing__headline"><span id="currentMeta"><span class="now-playing__headline-track">Waiting for YTMD…</span></span></div>
             <div class="progress-row">
@@ -53,6 +54,8 @@
         <nav class="tabs" aria-label="Admin sections">
           <button class="tab active" data-page="queue" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#playlist"></use></svg><span>Queue</span></button>
           <button class="tab" data-page="seed" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#plant"></use></svg><span>Seed</span></button>
+          <button class="tab" data-page="chat" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#message-circle"></use></svg><span>Chat</span></button>
+          <button class="tab" data-page="commands" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#terminal-2"></use></svg><span>Commands</span></button>
           <button class="tab" data-page="twitch" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#brand-twitch"></use></svg><span>Twitch</span></button>
           <button class="tab" data-page="settings" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#settings"></use></svg><span>Settings</span></button>
           <button class="tab" data-page="import" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#file-import"></use></svg><span>Import</span></button>
@@ -93,6 +96,45 @@
         </div>
       </section>
 
+      <section id="page-chat" class="page page-chat">
+        <div class="panel">
+          <div id="twitchChatLog" class="twitch-log" aria-live="polite"></div>
+          <form id="twitchChatForm" class="url-row chat-composer" action="#">
+            <input id="twitchChatInput" type="text" placeholder="Send as bot nick…" autocomplete="off" />
+            <button id="twitchChatSend" type="submit"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#send"></use></svg>Send</button>
+          </form>
+          <p id="chatFormFeedback" class="muted"></p>
+        </div>
+      </section>
+
+      <section id="page-commands" class="page">
+        <div class="panel">
+          <div class="settings-block">
+            <label class="seed-checkbox">
+              <input id="chatCmdsEnabled" type="checkbox" checked />
+              Twitch chat commands
+            </label>
+            <p class="muted">Off still logs chat. Admin Add/Now and HTTP songrequest stay live. Streamer.bot: <code>/cmd/jb/commands/on</code> and <code>/cmd/jb/commands/off</code>.</p>
+          </div>
+          <div class="settings-block">
+            <table class="cmd-table">
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>GCD (s)</th>
+                  <th>UCD (s)</th>
+                </tr>
+              </thead>
+              <tbody id="cmdCooldownRows"></tbody>
+            </table>
+            <div class="url-row">
+              <button id="saveCmdCooldowns" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#device-floppy"></use></svg>Save cooldowns</button>
+            </div>
+            <p id="cmdFeedback" class="muted"></p>
+          </div>
+        </div>
+      </section>
+
       <section id="page-twitch" class="page">
         <div class="panel">
           <p id="twitchStatusLine" class="seed-status">Twitch: loading…</p>
@@ -112,14 +154,6 @@
               <button id="twitchDisconnectButton" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#plug-off"></use></svg>Disconnect</button>
             </div>
             <p id="twitchFormFeedback" class="muted"></p>
-          </div>
-          <div class="settings-block">
-            <h4>Chat</h4>
-            <div id="twitchChatLog" class="twitch-log" aria-live="polite"></div>
-            <form id="twitchChatForm" class="url-row" action="#">
-              <input id="twitchChatInput" type="text" placeholder="Send as bot nick…" autocomplete="off" />
-              <button id="twitchChatSend" type="submit"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#send"></use></svg>Send</button>
-            </form>
           </div>
         </div>
       </section>
