@@ -1,0 +1,11 @@
+{
+  "blacklist": [
+    "Rick Astley"
+  ],
+  "maxDuration": 600,
+  "seedPlaylists": [],
+  "clearQueueOnRequest": false,
+  "twitchChannel": "",
+  "twitchOAuth": "",
+  "twitchNick": ""
+}
