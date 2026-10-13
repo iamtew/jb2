@@ -6,8 +6,8 @@
   --text: #f4f5f7;
   --muted: #9aa3ad;
   --accent: #79d6ff;
-  --radius: 10px;
-  --gap: 8px;
+  --radius: 6px;
+  --gap: 6px;
   --hit: 40px;
   color-scheme: dark;
 }
@@ -42,16 +42,16 @@ body.is-playing {
 }
 
 .admin-shell {
-  --shell-top: max(10px, env(safe-area-inset-top));
-  --shell-x: max(10px, env(safe-area-inset-right));
-  --shell-left: max(10px, env(safe-area-inset-left));
+  --shell-top: max(6px, env(safe-area-inset-top));
+  --shell-x: max(6px, env(safe-area-inset-right));
+  --shell-left: max(6px, env(safe-area-inset-left));
   width: 100%;
   max-width: 100%;
   margin: 0;
   padding:
     var(--shell-top)
     var(--shell-x)
-    max(12px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-bottom))
     var(--shell-left);
   box-sizing: border-box;
 }
@@ -61,8 +61,8 @@ body.is-playing {
   position: sticky;
   top: 0;
   z-index: 30;
-  margin: calc(var(--shell-top) * -1) calc(var(--shell-x) * -1) 10px calc(var(--shell-left) * -1);
-  padding: var(--shell-top) var(--shell-x) 8px var(--shell-left);
+  margin: calc(var(--shell-top) * -1) calc(var(--shell-x) * -1) 6px calc(var(--shell-left) * -1);
+  padding: var(--shell-top) var(--shell-x) 4px var(--shell-left);
   background: var(--page-bg);
 }
 
@@ -84,7 +84,7 @@ body.is-playing .dock {
   display: flex;
   align-items: center;
   gap: var(--gap);
-  padding: 10px 12px;
+  padding: 6px 8px;
   margin-bottom: var(--gap);
   width: 100%;
   box-sizing: border-box;
@@ -100,7 +100,7 @@ body.is-playing .dock {
 .now-playing__row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap);
   min-width: 0;
   width: 100%;
 }
@@ -200,11 +200,11 @@ body.is-playing .dock {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
-  padding: 2px 8px;
+  min-height: 24px;
+  padding: 1px 6px;
   background: var(--panel-alt);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius);
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
@@ -293,10 +293,10 @@ body.is-playing .dock {
   min-height: var(--hit);
   text-align: left;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--text);
-  padding: 8px 10px;
+  padding: 6px 8px;
   font-weight: 500;
   cursor: pointer;
 }
@@ -374,9 +374,9 @@ body.is-playing .dock {
   justify-content: center;
   gap: 6px;
   min-height: var(--hit);
-  padding: 0 12px;
+  padding: 0 8px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--panel-alt);
   color: var(--text);
   font-weight: 600;
@@ -404,7 +404,7 @@ body.is-playing .dock {
 }
 
 .panel {
-  padding: 12px;
+  padding: 8px;
 }
 
 .panel h4 {
@@ -440,7 +440,7 @@ body.is-playing .dock {
 .settings-json-block pre,
 pre {
   margin: 0;
-  padding: 10px;
+  padding: 8px;
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -490,9 +490,9 @@ pre {
 }
 
 .queue-item {
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: transparent;
-  padding: 6px 4px;
+  padding: 4px 2px;
   font-size: 0.9rem;
 }
 
@@ -509,7 +509,7 @@ pre {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap);
   min-width: 0;
 }
 
@@ -579,7 +579,7 @@ body.is-queue-dragging .queue-drag-handle {
   height: var(--hit);
   min-height: var(--hit);
   padding: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: #071016;
   display: inline-flex;
   align-items: center;
@@ -621,7 +621,7 @@ body.is-queue-dragging .queue-drag-handle {
 
 .queue-feedback {
   margin-bottom: 8px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   font-size: 0.85rem;
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -661,7 +661,7 @@ body.is-queue-dragging .queue-drag-handle {
 }
 
 .queue-empty-state {
-  padding: 16px 4px;
+  padding: 10px 4px;
   color: var(--muted);
   font-size: 0.9rem;
 }
@@ -679,10 +679,10 @@ body.is-queue-dragging .queue-drag-handle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px 4px 10px;
+  padding: 2px 6px 2px 8px;
   background: var(--panel-alt);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius);
 }
 
 .chip-list button {
@@ -697,7 +697,7 @@ body.is-queue-dragging .queue-drag-handle {
 
 .controls {
   display: flex;
-  gap: 8px;
+  gap: var(--gap);
   flex-wrap: wrap;
   align-items: end;
   margin-bottom: 12px;
@@ -719,7 +719,7 @@ body.is-queue-dragging .queue-drag-handle {
 
 .url-row {
   display: flex;
-  gap: 8px;
+  gap: var(--gap);
   align-items: center;
   flex-wrap: wrap;
 }
@@ -750,14 +750,14 @@ input,
 select {
   font-size: 16px;
   min-height: var(--hit);
-  padding: 0 12px;
+  padding: 0 8px;
   box-sizing: border-box;
 }
 
 button {
   cursor: pointer;
   min-height: var(--hit);
-  padding: 0 12px;
+  padding: 0 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -784,12 +784,12 @@ input[type="checkbox"] {
 }
 
 input[type="file"] {
-  padding: 8px;
+  padding: 6px;
 }
 
 .twitch-log {
   margin: 4px 0 8px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -822,7 +822,7 @@ input[type="file"] {
 .seed-checkbox {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap);
   cursor: pointer;
   color: var(--text);
 }
@@ -846,7 +846,7 @@ input[type="file"] {
   justify-content: space-between;
   gap: var(--gap);
   min-width: 0;
-  padding: 6px 8px;
+  padding: 4px 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--panel-alt);
