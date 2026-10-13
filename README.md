@@ -74,7 +74,7 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | `/api/seed/*` `/cmd/jb/seed/*` | seed playlists |
 
 OBS overlay: `http://localhost:42042/overlay/`
-Admin dock: `http://localhost:42042/admin/`
+Admin dock: `http://localhost:42042/admin/` (polls queue/Twitch/seed over HTTP; hidden tabs do not poll; those GETs are omitted from the request log)
 
 ## Logo
 

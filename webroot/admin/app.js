@@ -156,10 +156,17 @@ async function runCommand() {
   }
 }
 
+function activeAdminPage() {
+  return document.querySelector('.tab.active')?.dataset.page || 'queue';
+}
+
 tabs.forEach((tab) => {
   tab.addEventListener('click', () => {
     tabs.forEach((item) => item.classList.toggle('active', item === tab));
     pages.forEach((page) => page.classList.toggle('active', page.id === `page-${tab.dataset.page}`));
+    if (tab.dataset.page === 'queue') {
+      refreshQueueFromProxy();
+    }
     if (tab.dataset.page === 'seed') {
       loadSeedPanel();
       startSeedStatusPolling();
@@ -347,6 +354,7 @@ async function saveSeedSettings(clearQueueOnRequest) {
 
 function startSeedStatusPolling() {
   stopSeedStatusPolling();
+  if (document.hidden) return;
   seedStatusTimer = window.setInterval(loadSeedPanel, 5000);
 }
 
@@ -463,7 +471,8 @@ function renderTwitchChat(messages) {
 
 function startTwitchPolling() {
   stopTwitchPolling();
-  twitchPollTimer = window.setInterval(loadTwitchLive, 1000);
+  if (document.hidden) return;
+  twitchPollTimer = window.setInterval(loadTwitchLive, 3000);
 }
 
 function stopTwitchPolling() {
@@ -761,7 +770,7 @@ let queueRefreshDebounceTimer = null;
 let pollTimer = null;
 let progressStallTimer = null;
 
-const POLL_INTERVAL_WS_MS = 5000; // queue has no WS event; song switches already refresh sooner
+const POLL_INTERVAL_WS_MS = 15000; // queue has no WS event; song switches already refresh sooner
 const POLL_INTERVAL_NO_WS_MS = 10000;
 // YTMD position ticks are often ~1s; keep headroom so we don't false-pause between ticks.
 const PROGRESS_STALL_MS = 1800;
@@ -771,6 +780,7 @@ function isNowPlayingSocketOpen() {
 }
 
 function scheduleQueueRefreshFromWS(delayMs = 800) {
+  if (document.hidden || activeAdminPage() !== 'queue') return;
   window.clearTimeout(queueRefreshDebounceTimer);
   queueRefreshDebounceTimer = window.setTimeout(() => {
     refreshQueueFromProxy();
@@ -802,18 +812,47 @@ function refreshPlaybackFromProxyIfNeeded() {
   }
 }
 
-function startPolling() {
+function stopPolling() {
   window.clearInterval(pollTimer);
+  pollTimer = null;
+}
+
+function startPolling() {
+  stopPolling();
+  if (document.hidden) return;
   const intervalMs = isNowPlayingSocketOpen() ? POLL_INTERVAL_WS_MS : POLL_INTERVAL_NO_WS_MS;
   pollTimer = window.setInterval(() => {
-    if (isNowPlayingSocketOpen()) {
-      refreshQueueFromProxy();
-    } else {
+    if (document.hidden) return;
+    if (!isNowPlayingSocketOpen()) {
       refreshNowPlayingFromProxy();
-      refreshQueueFromProxy();
       refreshShuffleFromProxy();
     }
+    if (activeAdminPage() === 'queue') {
+      refreshQueueFromProxy();
+    }
   }, intervalMs);
+}
+
+function pauseAdminPolling() {
+  stopPolling();
+  stopSeedStatusPolling();
+  stopTwitchPolling();
+}
+
+function resumeAdminPolling() {
+  refreshPlaybackFromProxyIfNeeded();
+  if (activeAdminPage() === 'queue') {
+    refreshQueueFromProxy();
+  } else if (activeAdminPage() === 'seed') {
+    loadSeedPanel();
+    startSeedStatusPolling();
+  } else if (activeAdminPage() === 'twitch') {
+    loadTwitchLive();
+    startTwitchPolling();
+  }
+  connectNowPlaying();
+  startPolling();
+  updateCurrentMetaMarquee();
 }
 
 function setAdminPaused(isPaused) {
@@ -1792,14 +1831,12 @@ connectNowPlaying();
 startPolling();
 window.addEventListener('resize', updateCurrentMetaMarquee);
 window.addEventListener('focus', () => {
-  refreshPlaybackFromProxyIfNeeded();
-  connectNowPlaying();
-  updateCurrentMetaMarquee();
+  if (!document.hidden) resumeAdminPolling();
 });
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
-    refreshPlaybackFromProxyIfNeeded();
-    connectNowPlaying();
-    updateCurrentMetaMarquee();
+  if (document.hidden) {
+    pauseAdminPolling();
+  } else {
+    resumeAdminPolling();
   }
 });

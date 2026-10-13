@@ -45,7 +45,9 @@ impl App {
         let query = parse_query(query_raw);
         let host = header_host(&request);
         let method_s = method_str(&method);
-        eprintln!("{method_s} {path}");
+        if !is_quiet_poll_get(&method_s, &path) {
+            eprintln!("{method_s} {path}");
+        }
 
         // No auth on purpose (LAN use from OBS / Streamer.bot), so block the one thing a
         // random web page can do: fire a cross-site write. Non-browser clients send no Origin.
@@ -1359,6 +1361,21 @@ fn playing_now(mut env: Envelope) -> Envelope {
     env
 }
 
+fn is_quiet_poll_get(method: &str, path: &str) -> bool {
+    method == "GET"
+        && matches!(
+            path,
+            "/api/queue"
+                | "/api/twitch"
+                | "/api/twitch/chat"
+                | "/api/seed/status"
+                | "/cmd/ytmd/song"
+                | "/cmd/ytmd/song/get"
+                | "/cmd/ytmd/shuffle"
+                | "/cmd/ytmd/shuffle/get"
+        )
+}
+
 fn method_str(m: &Method) -> String {
     match m {
         Method::Get => "GET".into(),
@@ -1442,7 +1459,19 @@ fn is_inside(root: &Path, path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::origin_allowed;
+    use super::{is_quiet_poll_get, origin_allowed};
+
+    #[test]
+    fn admin_poll_gets_are_quiet() {
+        assert!(is_quiet_poll_get("GET", "/api/queue"));
+        assert!(is_quiet_poll_get("GET", "/api/twitch"));
+        assert!(is_quiet_poll_get("GET", "/api/twitch/chat"));
+        assert!(is_quiet_poll_get("GET", "/api/seed/status"));
+        assert!(is_quiet_poll_get("GET", "/cmd/ytmd/song/get"));
+        assert!(is_quiet_poll_get("GET", "/cmd/ytmd/shuffle/get"));
+        assert!(!is_quiet_poll_get("POST", "/api/twitch/chat"));
+        assert!(!is_quiet_poll_get("GET", "/cmd/jb/songrequest"));
+    }
 
     #[test]
     fn origin_must_match_host() {
