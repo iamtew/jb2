@@ -640,7 +640,8 @@ function renderBlacklist(items) {
   items.forEach((entry) => {
     const item = document.createElement('li');
     item.dataset.entry = entry;
-    item.innerHTML = `<span>${entry}</span><button type="button" aria-label="Remove ${entry}">✕</button>`;
+    // Entries come from Import too; escape so a crafted entry cannot inject markup.
+    item.innerHTML = `<span>${escapeHtml(entry)}</span><button type="button" aria-label="Remove ${escapeHtml(entry)}">✕</button>`;
     blacklistList.appendChild(item);
   });
 

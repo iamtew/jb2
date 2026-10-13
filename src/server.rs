@@ -9,10 +9,14 @@ use crate::ytmd::{self, Client, SongLookup};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tiny_http::{Header, Method, Request, Response, StatusCode};
+
+/// Largest request body read; config imports and chat posts are a few KB.
+const MAX_BODY_BYTES: u64 = 1 << 20;
 
 pub struct App {
     pub store: Store,
@@ -39,12 +43,37 @@ impl App {
         let (path_raw, query_raw) = split_url(&url);
         let path = percent_decode(path_raw);
         let query = parse_query(query_raw);
-        let mut body = Vec::new();
-        let _ = std::io::Read::read_to_end(request.as_reader(), &mut body);
-
         let host = header_host(&request);
         let method_s = method_str(&method);
         eprintln!("{method_s} {path}");
+
+        // No auth on purpose (LAN use from OBS / Streamer.bot), so block the one thing a
+        // random web page can do: fire a cross-site write. Non-browser clients send no Origin.
+        if !matches!(method, Method::Get | Method::Head) {
+            if let Some(origin) = header_value(&request, "Origin") {
+                if !origin_allowed(&origin, &host) {
+                    eprintln!("blocked cross-origin {method_s} {path} from {origin}");
+                    respond_json(
+                        request,
+                        403,
+                        &Envelope::fail("cross-origin request blocked"),
+                    );
+                    return;
+                }
+            }
+        }
+        if request
+            .body_length()
+            .is_some_and(|n| n as u64 > MAX_BODY_BYTES)
+        {
+            respond_json(request, 413, &Envelope::fail("request body too large"));
+            return;
+        }
+        let mut body = Vec::new();
+        let _ = request
+            .as_reader()
+            .take(MAX_BODY_BYTES)
+            .read_to_end(&mut body);
 
         if path.starts_with("/cmd/ytmd") {
             self.proxy_ytmd(request, &method_s, &path, query_raw, &query, &body);
@@ -100,9 +129,10 @@ impl App {
             ("GET" | "POST", "/cmd/jb/previous") => self.alias_ytmd("POST", "/api/v1/previous"),
             ("POST", "/cmd/jb/seed/enqueue") => self.seed_enqueue(query),
             ("DELETE", "/cmd/jb/seed/queue") => self.seed_remove_from_queue(query),
-            (_, p) if p.starts_with("/cmd/jb/") => {
-                Dispatch::Json(200, Envelope::ok_only("custom jukeboks command scaffold"))
-            }
+            (_, p) if p.starts_with("/cmd/jb/") => Dispatch::Json(
+                404,
+                Envelope::fail(format!("unknown jukeboks command: {method} {path}")),
+            ),
             ("DELETE", p) if p.starts_with("/api/seed/playlists/") => {
                 let id = p.trim_start_matches("/api/seed/playlists/");
                 self.seed_delete_playlist(id)
@@ -1351,14 +1381,28 @@ fn method_str(m: &Method) -> String {
     }
 }
 
-fn header_host(request: &Request) -> String {
+fn header_value(request: &Request, name: &'static str) -> Option<String> {
     request
         .headers()
         .iter()
-        .find(|h| h.field.equiv("Host"))
+        .find(|h| h.field.equiv(name))
         .map(|h| h.value.as_str().trim().to_string())
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "localhost:42042".into())
+}
+
+fn header_host(request: &Request) -> String {
+    header_value(request, "Host").unwrap_or_else(|| "localhost:42042".into())
+}
+
+/// Same-origin check: `Origin: http://pc:42042` must name the `Host` the request was sent to.
+/// `Origin: null` (file://, sandboxed frames) never matches.
+fn origin_allowed(origin: &str, host: &str) -> bool {
+    let origin_host = origin
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or("")
+        .trim_end_matches('/');
+    !origin_host.is_empty() && origin_host.eq_ignore_ascii_case(host.trim())
 }
 
 fn twitch_redirect_uri(host: &str) -> String {
@@ -1400,4 +1444,18 @@ fn is_inside(root: &Path, path: &Path) -> bool {
         return false;
     };
     path.starts_with(root)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::origin_allowed;
+
+    #[test]
+    fn origin_must_match_host() {
+        assert!(origin_allowed("http://localhost:42042", "localhost:42042"));
+        assert!(origin_allowed("http://STREAM-PC:42042", "stream-pc:42042"));
+        assert!(!origin_allowed("https://evil.example", "localhost:42042"));
+        assert!(!origin_allowed("http://localhost:42043", "localhost:42042"));
+        assert!(!origin_allowed("null", "localhost:42042"));
+    }
 }
