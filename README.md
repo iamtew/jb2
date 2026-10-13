@@ -47,6 +47,8 @@ Connect/disconnect from Admin without restarting JB2. Chat on that tab is the li
 
 If channel+token are in `jb2.sqlite` at process start, IRC auto-connects. Disconnect lasts until Connect or the next process start.
 
+Retries back off: 10s after a network drop, 30s after a token refresh failure or a repeated IRC login failure. If Twitch rejects the refresh token (revoked app, changed secret), JB2 clears the stored login, stops reconnecting, and shows `Twitch login expired; log in again` — use **Login with Twitch**, then **Connect**.
+
 Commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`
 
 Leave channel/token empty to skip IRC.
@@ -55,7 +57,9 @@ HTTP: `GET /api/twitch`, `POST /api/twitch/connect`, `POST /api/twitch/disconnec
 
 ## HTTP
 
-Responses: `{ "exitCode": 0|1, "message"?, "data"? }`. App failures are HTTP 200 + `exitCode: 1`. YTMD hard fail is 502.
+Responses: `{ "exitCode": 0|1, "message"?, "data"? }`. App failures are HTTP 200 + `exitCode: 1`. YTMD hard fail is 502. Unknown `/api/*` and `/cmd/jb/*` routes are 404.
+
+No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Browser writes (POST/PUT/PATCH/DELETE) whose `Origin` does not match the `Host` they were sent to get 403, so a random web page cannot change config or chat as the bot. Clients that send no `Origin` (Streamer.bot, curl) are unaffected. Request bodies over 1 MiB get 413.
 
 | Path | Role |
 |---|---|
