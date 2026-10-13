@@ -1,3 +1,6 @@
 /target
 /dist
 /jb2.exe
+/jb2.sqlite
+/jb2.sqlite-wal
+/jb2.sqlite-shm

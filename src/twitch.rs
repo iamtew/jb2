@@ -77,7 +77,7 @@ impl Hub {
         s.generation = s.generation.wrapping_add(1);
     }
 
-    /// Drop the live IRC socket so the worker re-reads jb2.json.
+    /// Drop the live IRC socket so the worker re-reads config.
     pub fn bump_if_wanted(&self) {
         let mut s = self.inner.lock().expect("twitch");
         if s.wanted {
@@ -224,8 +224,10 @@ fn worker(app: Arc<App>) {
             std::thread::sleep(Duration::from_millis(500));
             continue;
         }
-        let Some((channel, oauth, nick)) = app.store.get().ok().and_then(|c| creds_from_config(&c)) else {
-            app.twitch.set_error("set join channel and log in with Twitch");
+        let Some((channel, oauth, nick)) = app.store.get().ok().and_then(|c| creds_from_config(&c))
+        else {
+            app.twitch
+                .set_error("set join channel and log in with Twitch");
             std::thread::sleep(Duration::from_millis(500));
             continue;
         };
@@ -310,7 +312,8 @@ fn set_read_timeout(ws: &Ws, timeout: Duration) -> Result<(), String> {
 }
 
 fn send(ws: &mut Ws, s: &str) -> Result<(), String> {
-    ws.send(Message::Text(s.to_string())).map_err(|e| e.to_string())
+    ws.send(Message::Text(s.to_string()))
+        .map_err(|e| e.to_string())
 }
 
 fn handle_line(
@@ -428,7 +431,10 @@ fn apply_token_payload(cfg: &mut Config, payload: &Value) -> Result<(), String> 
     {
         cfg.twitch_refresh_token = refresh.to_string();
     }
-    let expires_in = payload.get("expires_in").and_then(|v| v.as_i64()).unwrap_or(0);
+    let expires_in = payload
+        .get("expires_in")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -536,10 +542,7 @@ fn creds_from_config(cfg: &Config) -> Option<(String, String, String)> {
 }
 
 fn sanitize_privmsg(text: &str) -> String {
-    let cleaned: String = text
-        .chars()
-        .filter(|c| *c != '\r' && *c != '\n')
-        .collect();
+    let cleaned: String = text.chars().filter(|c| *c != '\r' && *c != '\n').collect();
     cleaned.trim().chars().take(MAX_PRIVMSG).collect()
 }
 
@@ -583,7 +586,8 @@ mod tests {
 
     #[test]
     fn parse_untagged_privmsg_nick() {
-        let (nick, body) = parse_privmsg(":botty!botty@botty.tmi.twitch.tv PRIVMSG #streamer :hello").unwrap();
+        let (nick, body) =
+            parse_privmsg(":botty!botty@botty.tmi.twitch.tv PRIVMSG #streamer :hello").unwrap();
         assert_eq!(nick, "botty");
         assert_eq!(body, "hello");
     }

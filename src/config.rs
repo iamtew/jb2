@@ -1,12 +1,14 @@
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::SystemTime;
 
 pub const DEFAULT_BLACKLIST_ENTRY: &str = "Rick Astley";
 pub const DEFAULT_MAX_DURATION: i32 = 600;
 const MAX_DURATION_CAP: i32 = 86400;
+const KV_CONFIG: &str = "config";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SeedPlaylist {
@@ -55,6 +57,21 @@ impl Default for Config {
             twitch_client_secret: String::new(),
             twitch_refresh_token: String::new(),
             twitch_oauth_expires_at: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImportSource {
+    Jb1,
+    Jb2,
+}
+
+impl ImportSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Jb1 => "jb1",
+            Self::Jb2 => "jb2",
         }
     }
 }
@@ -127,78 +144,244 @@ pub fn public_json(cfg: &Config) -> serde_json::Value {
     v
 }
 
-pub fn load(path: &Path) -> Result<Config, String> {
+pub fn load_json(path: &Path) -> Result<Config, String> {
     let data = fs::read_to_string(path).map_err(|e| e.to_string())?;
     if data.trim().is_empty() {
-        return Ok(normalize(Config {
-            blacklist: vec![DEFAULT_BLACKLIST_ENTRY.to_string()],
-            ..Config::default()
-        }));
+        return Ok(normalize(Config::default()));
     }
     let cfg: Config = serde_json::from_str(&data).map_err(|e| e.to_string())?;
     Ok(normalize(cfg))
 }
 
-pub fn save(path: &Path, cfg: &Config) -> Result<(), String> {
-    let cfg = normalize(cfg.clone());
+pub fn detect_import(parsed: &Value) -> Result<ImportSource, String> {
+    let obj = parsed
+        .as_object()
+        .ok_or_else(|| "import must be a JSON object".to_string())?;
+    if obj.keys().any(|k| k.starts_with("twitch")) {
+        return Ok(ImportSource::Jb2);
+    }
+    if [
+        "blacklist",
+        "maxDuration",
+        "seedPlaylists",
+        "clearQueueOnRequest",
+    ]
+    .iter()
+    .any(|k| obj.contains_key(*k))
+    {
+        return Ok(ImportSource::Jb1);
+    }
+    Err("unrecognized config file (need JB1 jukeboks.json or JB2 jb2.json)".into())
+}
+
+fn patch_secret(dst: &mut String, parsed: &Value, key: &str) {
+    let Some(s) = parsed.get(key).and_then(|v| v.as_str()) else {
+        return;
+    };
+    let token = s.trim();
+    if token.is_empty() || token == "***" {
+        return;
+    }
+    *dst = token.to_string();
+}
+
+pub fn merge_import(
+    mut existing: Config,
+    parsed: &Value,
+) -> Result<(Config, ImportSource), String> {
+    let source = detect_import(parsed)?;
+    if let Some(list) = parsed.get("blacklist").and_then(|v| v.as_array()) {
+        existing.blacklist = list
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
+    }
+    if let Some(n) = parsed.get("maxDuration").and_then(|v| v.as_i64()) {
+        existing.max_duration = n as i32;
+    }
+    if let Some(list) = parsed.get("seedPlaylists").and_then(|v| v.as_array()) {
+        existing.seed_playlists = list
+            .iter()
+            .filter_map(|v| serde_json::from_value::<SeedPlaylist>(v.clone()).ok())
+            .collect();
+    }
+    if let Some(b) = parsed.get("clearQueueOnRequest").and_then(|v| v.as_bool()) {
+        existing.clear_queue_on_request = b;
+    }
+    if let Some(s) = parsed.get("twitchChannel").and_then(|v| v.as_str()) {
+        existing.twitch_channel = s.trim().trim_start_matches('#').to_string();
+    }
+    if let Some(s) = parsed.get("twitchNick").and_then(|v| v.as_str()) {
+        existing.twitch_nick = s.trim().to_string();
+    }
+    if let Some(s) = parsed.get("twitchClientId").and_then(|v| v.as_str()) {
+        existing.twitch_client_id = s.trim().to_string();
+    }
+    patch_secret(&mut existing.twitch_oauth, parsed, "twitchOAuth");
+    patch_secret(
+        &mut existing.twitch_client_secret,
+        parsed,
+        "twitchClientSecret",
+    );
+    patch_secret(
+        &mut existing.twitch_refresh_token,
+        parsed,
+        "twitchRefreshToken",
+    );
+    if let Some(n) = parsed.get("twitchOAuthExpiresAt").and_then(|v| v.as_i64()) {
+        existing.twitch_oauth_expires_at = n;
+    }
+    Ok((normalize(existing), source))
+}
+
+fn open_db(path: &Path) -> Result<Connection, String> {
     if let Some(dir) = path.parent() {
         if !dir.as_os_str().is_empty() {
             fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
     }
-    let mut data = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?;
-    data.push('\n');
-    fs::write(path, data).map_err(|e| e.to_string())
+    let conn = Connection::open(path).map_err(|e| e.to_string())?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY NOT NULL, v TEXT NOT NULL)",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn)
 }
 
-pub fn ensure(path: &Path) -> Result<Config, String> {
-    match load(path) {
-        Ok(cfg) => Ok(cfg),
-        Err(_) if !path.exists() => {
-            let cfg = Config::default();
-            save(path, &cfg)?;
-            Ok(cfg)
-        }
-        Err(e) => Err(e),
+fn kv_get(conn: &Connection, k: &str) -> Result<Option<String>, String> {
+    let mut stmt = conn
+        .prepare("SELECT v FROM kv WHERE k = ?1")
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt.query(params![k]).map_err(|e| e.to_string())?;
+    match rows.next().map_err(|e| e.to_string())? {
+        Some(row) => Ok(Some(row.get(0).map_err(|e| e.to_string())?)),
+        None => Ok(None),
     }
+}
+
+fn kv_set(conn: &Connection, k: &str, v: &str) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO kv(k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+        params![k, v],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn persist(conn: &Connection, cfg: &Config) -> Result<Config, String> {
+    let cfg = normalize(cfg.clone());
+    let data = serde_json::to_string(&cfg).map_err(|e| e.to_string())?;
+    kv_set(conn, KV_CONFIG, &data)?;
+    Ok(cfg)
+}
+
+fn parse_stored(s: &str) -> Result<Config, String> {
+    let cfg: Config = serde_json::from_str(s).map_err(|e| e.to_string())?;
+    Ok(normalize(cfg))
+}
+
+struct Inner {
+    conn: Connection,
+    cfg: Config,
 }
 
 pub struct Store {
     path: PathBuf,
-    inner: Mutex<(Config, Option<SystemTime>)>,
+    inner: Mutex<Inner>,
 }
 
 impl Store {
     pub fn new(path: PathBuf) -> Result<Self, String> {
-        let cfg = ensure(&path)?;
-        let mtime = fs::metadata(&path).ok().and_then(|m| m.modified().ok());
+        let conn = open_db(&path)?;
+        let cfg = match kv_get(&conn, KV_CONFIG)? {
+            Some(s) if !s.trim().is_empty() => parse_stored(&s)?,
+            _ => {
+                let sibling = path.with_file_name("jb2.json");
+                let cfg = if sibling.is_file() {
+                    load_json(&sibling)
+                        .map_err(|e| format!("failed to import {}: {e}", sibling.display()))?
+                } else {
+                    Config::default()
+                };
+                persist(&conn, &cfg)?
+            }
+        };
         Ok(Self {
             path,
-            inner: Mutex::new((cfg, mtime)),
+            inner: Mutex::new(Inner { conn, cfg }),
         })
     }
 
     pub fn get(&self) -> Result<Config, String> {
-        let mut guard = self.inner.lock().expect("config lock");
-        let mtime = fs::metadata(&self.path)
-            .ok()
-            .and_then(|m| m.modified().ok());
-        if mtime != guard.1 {
-            let cfg = load(&self.path)?;
-            *guard = (cfg.clone(), mtime);
-            return Ok(cfg);
-        }
-        Ok(guard.0.clone())
+        let guard = self.inner.lock().expect("config lock");
+        Ok(guard.cfg.clone())
     }
 
     pub fn save(&self, cfg: Config) -> Result<(), String> {
         let mut guard = self.inner.lock().expect("config lock");
-        save(&self.path, &cfg)?;
-        let loaded = load(&self.path)?;
-        let mtime = fs::metadata(&self.path)
-            .ok()
-            .and_then(|m| m.modified().ok());
-        *guard = (loaded, mtime);
+        let saved =
+            persist(&guard.conn, &cfg).map_err(|e| format!("{}: {e}", self.path.display()))?;
+        guard.cfg = saved;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn import_and_sqlite_roundtrip() {
+        let mut base = Config::default();
+        base.twitch_oauth = "keep-me".into();
+        base.twitch_channel = "streamer".into();
+
+        let jb1 = json!({
+            "blacklist": ["Metallica"],
+            "maxDuration": 120,
+            "seedPlaylists": [{"id": "PL1", "name": "Mix", "trackCount": 3}],
+            "clearQueueOnRequest": true
+        });
+        let (cfg, src) = merge_import(base, &jb1).expect("jb1 merge");
+        assert_eq!(src, ImportSource::Jb1);
+        assert_eq!(cfg.blacklist, vec!["Metallica"]);
+        assert_eq!(cfg.max_duration, 120);
+        assert_eq!(cfg.seed_playlists[0].id, "PL1");
+        assert!(cfg.clear_queue_on_request);
+        assert_eq!(cfg.twitch_oauth, "keep-me");
+        assert_eq!(cfg.twitch_channel, "streamer");
+
+        let jb2 = json!({
+            "twitchChannel": "other",
+            "twitchOAuth": "***",
+            "twitchClientSecret": "",
+            "blacklist": ["Foo"]
+        });
+        let (cfg2, src2) = merge_import(cfg, &jb2).expect("jb2 merge");
+        assert_eq!(src2, ImportSource::Jb2);
+        assert_eq!(cfg2.twitch_channel, "other");
+        assert_eq!(cfg2.twitch_oauth, "keep-me");
+        assert_eq!(cfg2.blacklist, vec!["Foo"]);
+
+        let path = std::env::temp_dir().join(format!(
+            "jb2-test-{}-{}.sqlite",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = fs::remove_file(&path);
+        let store = Store::new(path.clone()).expect("open sqlite");
+        store.save(cfg2).expect("save");
+        drop(store);
+        let store2 = Store::new(path.clone()).expect("reopen sqlite");
+        let loaded = store2.get().expect("get");
+        assert_eq!(loaded.twitch_channel, "other");
+        assert_eq!(loaded.twitch_oauth, "keep-me");
+        drop(store2);
+        let _ = fs::remove_file(&path);
     }
 }

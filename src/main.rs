@@ -28,7 +28,7 @@ fn main() {
     let ytmd_port = flag(&args, "-ytmd_port").unwrap_or("26538".into());
     let bind = flag(&args, "-bind").unwrap_or("0.0.0.0".into());
     let webroot = resolve_path(flag(&args, "-webroot"), "webroot");
-    let config_path = resolve_path(flag(&args, "-config"), "jb2.json");
+    let config_path = resolve_path(flag(&args, "-config"), "jb2.sqlite");
 
     if !webroot.is_dir() {
         fatal(&format!("webroot not found at {}", webroot.display()));

@@ -34,7 +34,6 @@ package:
     cargo build --release
     Copy-Item -Path target/release/jb2.exe -Destination {{output_dir}}/{{binary}} -Force
     Copy-Item -Path webroot -Destination {{output_dir}}/webroot -Recurse -Force
-    if (Test-Path jb2.json) { Copy-Item -Path jb2.json -Destination {{output_dir}}/jb2.json -Force }
 
 verify-package:
     @just package
