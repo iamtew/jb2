@@ -2,7 +2,9 @@ use crate::config::{Config, Store};
 use crate::envelope::Envelope;
 use crate::server::App;
 use serde_json::{json, Value};
+use std::collections::hash_map::RandomState;
 use std::collections::VecDeque;
+use std::hash::BuildHasher;
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -37,7 +39,6 @@ struct Inner {
     next_id: u64,
     chat: VecDeque<ChatLine>,
     outbound: VecDeque<String>,
-    oauth_nonce: u64,
     oauth_state: Option<(String, String)>,
 }
 
@@ -62,7 +63,6 @@ impl Hub {
                 next_id: 1,
                 chat: VecDeque::new(),
                 outbound: VecDeque::new(),
-                oauth_nonce: 1,
                 oauth_state: None,
             }),
         }
@@ -157,9 +157,8 @@ impl Hub {
         if client_id.is_empty() {
             return Err("save twitch Client ID first".into());
         }
+        let state = random_state();
         let mut s = self.inner.lock().expect("twitch");
-        s.oauth_nonce = s.oauth_nonce.saturating_add(1);
-        let state = format!("{:x}-{}", now_ms(), s.oauth_nonce);
         s.oauth_state = Some((state.clone(), redirect_uri.to_string()));
         authorize_url(client_id, redirect_uri, &state)
     }
@@ -380,6 +379,11 @@ fn handle_line(
         "songinfo" | "si" => envelope_text(app.song_info().envelope()),
         _ => return Ok(()),
     };
+    // Song titles end up in replies; Twitch silently drops lines over 500 chars.
+    let reply = sanitize_privmsg(&reply);
+    if reply.is_empty() {
+        return Ok(());
+    }
     send(ws, &format!("PRIVMSG #{channel} :{reply}\r\n"))?;
     app.twitch.push_chat(bot_nick, &reply);
     Ok(())
@@ -601,6 +605,14 @@ fn sanitize_privmsg(text: &str) -> String {
     cleaned.trim().chars().take(MAX_PRIVMSG).collect()
 }
 
+/// Unguessable OAuth `state` (128 bits). Each `RandomState` is seeded from OS randomness,
+/// so this needs no extra crate.
+fn random_state() -> String {
+    let a = RandomState::new().hash_one(now_ms());
+    let b = RandomState::new().hash_one(a);
+    format!("{a:016x}{b:016x}")
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -718,6 +730,13 @@ mod tests {
         assert_eq!(cfg.twitch_oauth, "acc");
         assert_eq!(cfg.twitch_refresh_token, "ref");
         assert!(cfg.twitch_oauth_expires_at > 0);
+    }
+
+    #[test]
+    fn oauth_state_is_not_repeated() {
+        let a = random_state();
+        assert_eq!(a.len(), 32);
+        assert_ne!(a, random_state());
     }
 
     #[test]
