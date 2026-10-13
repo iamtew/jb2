@@ -131,7 +131,7 @@
   <symbol id="chevron-up" viewBox="0 0 24 24">
     <path d="M6 15l6 -6l6 6" />
   </symbol>
-  <symbol id="chevron-down" viewBox="0 0 24 24">
-    <path d="M6 9l6 6l6 -6" />
+  <symbol id="chevron-right" viewBox="0 0 24 24">
+    <path d="M9 6l6 6l-6 6" />
   </symbol>
 </svg>

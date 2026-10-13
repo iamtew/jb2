@@ -907,7 +907,7 @@ function setPreviousQueueExpanded(expanded, button = null, sublist = null) {
   previousQueueExpanded = Boolean(expanded);
   if (button) {
     const label = previousQueueExpanded ? 'Hide previous' : 'Previous';
-    button.innerHTML = `${icon(previousQueueExpanded ? 'chevron-up' : 'chevron-down')}<span>${label}</span>`;
+    button.innerHTML = `${icon(previousQueueExpanded ? 'chevron-up' : 'chevron-right')}<span>${label}</span>`;
     button.setAttribute('aria-expanded', previousQueueExpanded ? 'true' : 'false');
   }
   if (sublist) {
@@ -1307,7 +1307,7 @@ function renderQueue() {
   const previousMarkup = previousItems.length > 0
     ? `
       <div class="queue-item is-previous">
-        <button class="queue-toggle" type="button" data-toggle="previous" aria-expanded="${previousExpanded ? 'true' : 'false'}">${icon(previousExpanded ? 'chevron-up' : 'chevron-down')}<span>${previousExpanded ? 'Hide previous' : 'Previous'}</span></button>
+        <button class="queue-toggle" type="button" data-toggle="previous" aria-expanded="${previousExpanded ? 'true' : 'false'}">${icon(previousExpanded ? 'chevron-up' : 'chevron-right')}<span>${previousExpanded ? 'Hide previous' : 'Previous'}</span></button>
         <div class="queue-sublist${previousExpanded ? '' : ' is-collapsed'}" data-previous-list ${previousExpanded ? '' : 'hidden'}>
           ${previousItems.map((entry) => buildItem(entry, 'previous')).join('')}
         </div>
