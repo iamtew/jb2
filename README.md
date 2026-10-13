@@ -23,13 +23,23 @@ Config is created next to the exe (or CWD) as `jb2.json` if missing.
 
 ## Twitch
 
-Paste an IRC oauth token for the **bot** account. Join channel and bot nick are separate so the bot can sit in someone else's chat.
+Log in with Twitch OAuth as the **bot** account. Join channel and bot nick are separate so the bot can sit in someone else's chat. Access tokens expire in a few hours; JB2 stores a refresh token and renews them before connecting.
+
+### Bot login
+
+1. Have a Twitch account for the bot. Log the browser out of the streamer account first.
+2. Register a **Confidential** app at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps). OAuth Redirect URL must be exactly `http://localhost:42042/api/twitch/callback` (no trailing slash; use the same host/port you open Admin with). Create a Client Secret and copy the Client ID.
+3. In Admin → Twitch: join channel, Client ID, Client Secret, **Save**, then **Login with Twitch**. Approve as the **bot**. Bot nick is filled from that account.
+4. **Connect**. After that, reconnects refresh the access token automatically.
+
+If you change JB2’s port, update the Redirect URL in the Twitch console to match.
 
 In Admin → Twitch, or in `jb2.json`:
 
 - `twitchChannel` — channel to JOIN (without `#`)
-- `twitchNick` — bot login; defaults to the channel name if empty
-- `twitchOAuth` — `oauth:` token for that bot account
+- `twitchNick` — bot login (set by OAuth; defaults to the channel name if empty)
+- `twitchClientId` / `twitchClientSecret` — your Twitch app
+- `twitchRefreshToken` / `twitchOAuth` — filled by Login with Twitch (do not paste by hand)
 
 Connect/disconnect from Admin without restarting JB2. Chat on that tab is the live IRC log; send posts as the bot nick.
 
@@ -39,7 +49,7 @@ Commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`
 
 Leave channel/token empty to skip IRC.
 
-HTTP: `GET /api/twitch`, `POST /api/twitch/connect`, `POST /api/twitch/disconnect`, `GET|POST /api/twitch/chat`
+HTTP: `GET /api/twitch`, `POST /api/twitch/connect`, `POST /api/twitch/disconnect`, `GET|POST /api/twitch/chat`, `POST /api/twitch/oauth/start`, `GET /api/twitch/callback`
 
 ## HTTP
 
