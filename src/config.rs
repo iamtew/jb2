@@ -1,9 +1,38 @@
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+
+pub const TWITCH_COMMAND_IDS: [&str; 3] = ["sr", "q", "si"];
+const COOLDOWN_CAP_SECS: i32 = 86400;
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_twitch_commands() -> BTreeMap<String, CommandCooldown> {
+    filled_twitch_commands(BTreeMap::new())
+}
+
+fn filled_twitch_commands(
+    mut src: BTreeMap<String, CommandCooldown>,
+) -> BTreeMap<String, CommandCooldown> {
+    let mut out = BTreeMap::new();
+    for id in TWITCH_COMMAND_IDS {
+        let mut cd = src.remove(id).unwrap_or_default();
+        if cd.gcd < 0 || cd.gcd > COOLDOWN_CAP_SECS {
+            cd.gcd = 0;
+        }
+        if cd.ucd < 0 || cd.ucd > COOLDOWN_CAP_SECS {
+            cd.ucd = 0;
+        }
+        out.insert((*id).to_string(), cd);
+    }
+    out
+}
 
 pub const DEFAULT_BLACKLIST_ENTRY: &str = "Rick Astley";
 pub const DEFAULT_MAX_DURATION: i32 = 600;
@@ -16,6 +45,14 @@ pub struct SeedPlaylist {
     pub name: String,
     #[serde(rename = "trackCount")]
     pub track_count: i32,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct CommandCooldown {
+    #[serde(default)]
+    pub gcd: i32,
+    #[serde(default)]
+    pub ucd: i32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -41,6 +78,10 @@ pub struct Config {
     pub twitch_refresh_token: String,
     #[serde(rename = "twitchOAuthExpiresAt", default)]
     pub twitch_oauth_expires_at: i64,
+    #[serde(rename = "twitchCommandsEnabled", default = "default_true")]
+    pub twitch_commands_enabled: bool,
+    #[serde(rename = "twitchCommands", default = "default_twitch_commands")]
+    pub twitch_commands: BTreeMap<String, CommandCooldown>,
 }
 
 impl Default for Config {
@@ -57,6 +98,8 @@ impl Default for Config {
             twitch_client_secret: String::new(),
             twitch_refresh_token: String::new(),
             twitch_oauth_expires_at: 0,
+            twitch_commands_enabled: true,
+            twitch_commands: default_twitch_commands(),
         }
     }
 }
@@ -123,6 +166,7 @@ pub fn normalize(mut cfg: Config) -> Config {
         });
     }
     cfg.seed_playlists = seeds;
+    cfg.twitch_commands = filled_twitch_commands(cfg.twitch_commands);
     cfg
 }
 
@@ -223,14 +267,45 @@ pub fn apply_patch(cfg: &mut Config, parsed: &Value) {
     if let Some(n) = parsed.get("twitchOAuthExpiresAt").and_then(|v| v.as_i64()) {
         cfg.twitch_oauth_expires_at = n;
     }
+    if let Some(b) = parsed.get("twitchCommandsEnabled").and_then(|v| v.as_bool()) {
+        cfg.twitch_commands_enabled = b;
+    }
+    if let Some(obj) = parsed.get("twitchCommands").and_then(|v| v.as_object()) {
+        for id in TWITCH_COMMAND_IDS {
+            let Some(v) = obj.get(id) else {
+                continue;
+            };
+            let mut cd = cfg
+                .twitch_commands
+                .get(id)
+                .cloned()
+                .unwrap_or_default();
+            if let Some(n) = v.get("gcd").and_then(|x| x.as_i64()) {
+                cd.gcd = i32::try_from(n).unwrap_or(0);
+            }
+            if let Some(n) = v.get("ucd").and_then(|x| x.as_i64()) {
+                cd.ucd = i32::try_from(n).unwrap_or(0);
+            }
+            cfg.twitch_commands.insert((*id).to_string(), cd);
+        }
+    }
 }
 
-/// True when a patch touches Twitch fields, so the IRC worker should reconnect.
+/// True when a patch should bounce the IRC socket (channel / nick / tokens only).
 pub fn touches_twitch(parsed: &Value) -> bool {
-    parsed
-        .as_object()
-        .map(|o| o.keys().any(|k| k.starts_with("twitch")))
-        .unwrap_or(false)
+    parsed.as_object().map(|o| {
+        [
+            "twitchChannel",
+            "twitchOAuth",
+            "twitchNick",
+            "twitchClientId",
+            "twitchClientSecret",
+            "twitchRefreshToken",
+            "twitchOAuthExpiresAt",
+        ]
+        .iter()
+        .any(|k| o.contains_key(*k))
+    }).unwrap_or(false)
 }
 
 fn open_db(path: &Path) -> Result<Connection, String> {
@@ -419,5 +494,33 @@ mod tests {
         assert_eq!(loaded.blacklist, vec!["Admin edit"]);
         drop(store2);
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn command_fields_do_not_reconnect_irc() {
+        assert!(!touches_twitch(&json!({
+            "twitchCommandsEnabled": false,
+            "twitchCommands": {"sr": {"gcd": 5, "ucd": 10}}
+        })));
+        assert!(touches_twitch(&json!({"twitchChannel": "x"})));
+    }
+
+    #[test]
+    fn twitch_commands_normalize_and_patch() {
+        let mut cfg = Config::default();
+        assert!(cfg.twitch_commands_enabled);
+        assert_eq!(cfg.twitch_commands["sr"].gcd, 0);
+        apply_patch(
+            &mut cfg,
+            &json!({
+                "twitchCommandsEnabled": false,
+                "twitchCommands": {"sr": {"gcd": 12, "ucd": -3}, "nope": {"gcd": 9}}
+            }),
+        );
+        let cfg = normalize(cfg);
+        assert!(!cfg.twitch_commands_enabled);
+        assert_eq!(cfg.twitch_commands["sr"].gcd, 12);
+        assert_eq!(cfg.twitch_commands["sr"].ucd, 0);
+        assert!(!cfg.twitch_commands.contains_key("nope"));
     }
 }

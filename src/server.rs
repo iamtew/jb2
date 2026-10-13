@@ -118,6 +118,9 @@ impl App {
             ("POST", "/api/seed/resolve") => self.seed_resolve(query, body),
             ("POST", "/api/seed/playlists") => self.seed_add_playlist(query, body),
             ("POST", "/api/seed/settings") => self.seed_settings(body),
+            ("GET", "/cmd/jb/commands") => self.chat_commands_status(),
+            ("GET" | "POST", "/cmd/jb/commands/on") => self.chat_commands_set(true),
+            ("GET" | "POST", "/cmd/jb/commands/off") => self.chat_commands_set(false),
             ("GET", "/cmd/jb/songinfo") => self.song_info(),
             ("GET", "/cmd/jb/queueinfo") => self.queue_info(),
             ("GET", "/cmd/jb/search") => self.search(query),
@@ -443,6 +446,9 @@ impl App {
         if config::touches_twitch(&parsed) {
             self.twitch.bump_if_wanted();
         }
+        if !saved.twitch_commands_enabled {
+            self.twitch.clear_jobs();
+        }
         Dispatch::Json(
             200,
             Envelope::ok_msg("config saved", config::public_json(&saved)),
@@ -472,6 +478,9 @@ impl App {
         if config::touches_twitch(&parsed) {
             self.twitch.bump_if_wanted();
         }
+        if !saved.twitch_commands_enabled {
+            self.twitch.clear_jobs();
+        }
         let mut data = config::public_json(&saved);
         if let Some(obj) = data.as_object_mut() {
             obj.insert("source".into(), json!(source.as_str()));
@@ -480,6 +489,34 @@ impl App {
             200,
             Envelope::ok_msg(format!("imported {}", source.as_str()), data),
         )
+    }
+
+    fn chat_commands_status(&self) -> Dispatch {
+        match self.store.get() {
+            Ok(cfg) => Dispatch::Json(
+                200,
+                Envelope::ok_data(json!({"enabled": cfg.twitch_commands_enabled})),
+            ),
+            Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}"))),
+        }
+    }
+
+    fn chat_commands_set(&self, enabled: bool) -> Dispatch {
+        match self.store.update(|c| {
+            c.twitch_commands_enabled = enabled;
+            Ok(())
+        }) {
+            Ok(cfg) => {
+                if !cfg.twitch_commands_enabled {
+                    self.twitch.clear_jobs();
+                }
+                Dispatch::Json(
+                    200,
+                    Envelope::ok_data(json!({"enabled": cfg.twitch_commands_enabled})),
+                )
+            }
+            Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to save config: {e}"))),
+        }
     }
 
     fn twitch_status(&self) -> Dispatch {
@@ -1369,6 +1406,7 @@ fn is_quiet_poll_get(method: &str, path: &str) -> bool {
                 | "/api/twitch"
                 | "/api/twitch/chat"
                 | "/api/seed/status"
+                | "/cmd/jb/commands"
                 | "/cmd/ytmd/song"
                 | "/cmd/ytmd/song/get"
                 | "/cmd/ytmd/shuffle"
@@ -1467,6 +1505,8 @@ mod tests {
         assert!(is_quiet_poll_get("GET", "/api/twitch"));
         assert!(is_quiet_poll_get("GET", "/api/twitch/chat"));
         assert!(is_quiet_poll_get("GET", "/api/seed/status"));
+        assert!(is_quiet_poll_get("GET", "/cmd/jb/commands"));
+        assert!(!is_quiet_poll_get("GET", "/cmd/jb/commands/on"));
         assert!(is_quiet_poll_get("GET", "/cmd/ytmd/song/get"));
         assert!(is_quiet_poll_get("GET", "/cmd/ytmd/shuffle/get"));
         assert!(!is_quiet_poll_get("POST", "/api/twitch/chat"));

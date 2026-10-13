@@ -5,16 +5,18 @@ use native_tls::TlsConnector;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::hash_map::RandomState;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::hash::BuildHasher;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use url::Url;
 
 const CHAT_CAP: usize = 200;
 const MAX_PRIVMSG: usize = 500;
+/// ponytail: one FIFO, drop newest past this; per-user queues if a raid starves others.
+const MAX_CMD_JOBS: usize = 32;
 const OAUTH_SCOPES: &str = "chat:read chat:edit";
 /// Public Twitch app Client ID (not a secret). Console must list localhost callback URLs.
 const TWITCH_CLIENT_ID: &str = "lax4082xr34poez274g2dzmabbwlg8";
@@ -28,6 +30,7 @@ pub const LOGIN_EXPIRED: &str = "Twitch login expired; log in again";
 
 pub struct Hub {
     inner: Mutex<Inner>,
+    jobs_cv: Condvar,
 }
 
 struct Inner {
@@ -40,8 +43,17 @@ struct Inner {
     next_id: u64,
     chat: VecDeque<ChatLine>,
     outbound: VecDeque<String>,
+    jobs: VecDeque<CmdJob>,
+    last_gcd: HashMap<String, Instant>,
+    last_ucd: HashMap<(String, String), Instant>,
     /// (state, redirect_uri, pkce verifier)
     oauth_state: Option<(String, String, String)>,
+}
+
+struct CmdJob {
+    nick: String,
+    id: String,
+    args: String,
 }
 
 #[derive(Clone)]
@@ -65,8 +77,12 @@ impl Hub {
                 next_id: 1,
                 chat: VecDeque::new(),
                 outbound: VecDeque::new(),
+                jobs: VecDeque::new(),
+                last_gcd: HashMap::new(),
+                last_ucd: HashMap::new(),
                 oauth_state: None,
             }),
+            jobs_cv: Condvar::new(),
         }
     }
 
@@ -154,6 +170,54 @@ impl Hub {
         Ok(())
     }
 
+    pub fn try_enqueue_cmd(&self, cfg: &Config, nick: &str, id: &str, args: &str) -> bool {
+        if !cfg.twitch_commands_enabled {
+            return false;
+        }
+        let nick_key = nick.to_ascii_lowercase();
+        let mut s = self.inner.lock().expect("twitch");
+        if s.jobs.len() >= MAX_CMD_JOBS {
+            return false;
+        }
+        if cooldown_blocked(&s, cfg, id, &nick_key) {
+            return false;
+        }
+        s.jobs.push_back(CmdJob {
+            nick: nick_key,
+            id: id.to_string(),
+            args: args.to_string(),
+        });
+        self.jobs_cv.notify_one();
+        true
+    }
+
+    pub fn clear_jobs(&self) {
+        self.inner.lock().expect("twitch").jobs.clear();
+    }
+
+    fn wait_job(&self) -> CmdJob {
+        let mut s = self.inner.lock().expect("twitch");
+        loop {
+            if let Some(job) = s.jobs.pop_front() {
+                return job;
+            }
+            s = self.jobs_cv.wait(s).expect("twitch");
+        }
+    }
+
+    fn record_use(&self, id: &str, nick: &str) {
+        let mut s = self.inner.lock().expect("twitch");
+        let now = Instant::now();
+        s.last_gcd.insert(id.to_string(), now);
+        s.last_ucd
+            .insert((id.to_string(), nick.to_ascii_lowercase()), now);
+    }
+
+    #[cfg(test)]
+    fn pending_jobs(&self) -> usize {
+        self.inner.lock().expect("twitch").jobs.len()
+    }
+
     pub fn begin_oauth(&self, redirect_uri: &str) -> Result<String, String> {
         let state = random_state();
         let verifier = pkce_verifier();
@@ -210,8 +274,86 @@ pub fn spawn(app: Arc<App>) {
     }
     std::thread::Builder::new()
         .name("twitch".into())
-        .spawn(move || worker(app))
+        .spawn({
+            let app = Arc::clone(&app);
+            move || worker(app)
+        })
         .expect("twitch thread");
+    std::thread::Builder::new()
+        .name("twitch-cmd".into())
+        .spawn(move || cmd_worker(app))
+        .expect("twitch-cmd thread");
+}
+
+fn cmd_worker(app: Arc<App>) {
+    loop {
+        let job = app.twitch.wait_job();
+        let Ok(cfg) = app.store.get() else {
+            continue;
+        };
+        if !cfg.twitch_commands_enabled {
+            continue;
+        }
+        {
+            let s = app.twitch.inner.lock().expect("twitch");
+            if cooldown_blocked(&s, &cfg, &job.id, &job.nick) {
+                continue;
+            }
+        }
+        let reply = run_chat_command(&app, &job.id, &job.args);
+        app.twitch.record_use(&job.id, &job.nick);
+        let reply = sanitize_privmsg(&reply);
+        if !reply.is_empty() {
+            let _ = app.twitch.enqueue_send(&reply);
+        }
+    }
+}
+
+fn run_chat_command(app: &App, id: &str, args: &str) -> String {
+    match id {
+        "sr" => {
+            if args.is_empty() {
+                "usage: !sr <song>".to_string()
+            } else {
+                envelope_text(app.song_request(args, false).envelope())
+            }
+        }
+        "q" => envelope_text(app.queue_info().envelope()),
+        "si" => envelope_text(app.song_info().envelope()),
+        _ => String::new(),
+    }
+}
+
+fn cooldown_blocked(s: &Inner, cfg: &Config, id: &str, nick: &str) -> bool {
+    let Some(cd) = cfg.twitch_commands.get(id) else {
+        return false;
+    };
+    let now = Instant::now();
+    if cooldown_hit(s.last_gcd.get(id).copied(), now, cd.gcd) {
+        return true;
+    }
+    cooldown_hit(
+        s.last_ucd.get(&(id.to_string(), nick.to_string())).copied(),
+        now,
+        cd.ucd,
+    )
+}
+
+fn cooldown_hit(last: Option<Instant>, now: Instant, secs: i32) -> bool {
+    if secs <= 0 {
+        return false;
+    }
+    last.map(|t| now.saturating_duration_since(t).as_secs() < secs as u64)
+        .unwrap_or(false)
+}
+
+pub fn canonical_command(cmd: &str) -> Option<&'static str> {
+    match cmd {
+        "songrequest" | "sr" => Some("sr"),
+        "queue" | "q" => Some("q"),
+        "songinfo" | "si" => Some("si"),
+        _ => None,
+    }
 }
 
 fn worker(app: Arc<App>) {
@@ -364,8 +506,8 @@ fn send_irc(stream: &mut impl Write, s: &str) -> Result<(), String> {
 
 fn handle_line(
     app: &Arc<App>,
-    channel: &str,
-    bot_nick: &str,
+    _channel: &str,
+    _bot_nick: &str,
     line: &str,
     stream: &mut impl Write,
 ) -> Result<(), String> {
@@ -386,25 +528,13 @@ fn handle_line(
     let Some((cmd, rest)) = parse_command(&body) else {
         return Ok(());
     };
-    let reply = match cmd.as_str() {
-        "songrequest" | "sr" => {
-            if rest.is_empty() {
-                "usage: !sr <song>".to_string()
-            } else {
-                envelope_text(app.song_request(&rest, false).envelope())
-            }
-        }
-        "queue" | "q" => envelope_text(app.queue_info().envelope()),
-        "songinfo" | "si" => envelope_text(app.song_info().envelope()),
-        _ => return Ok(()),
-    };
-    // Song titles end up in replies; Twitch silently drops lines over 500 chars.
-    let reply = sanitize_privmsg(&reply);
-    if reply.is_empty() {
+    let Some(id) = canonical_command(&cmd) else {
         return Ok(());
-    }
-    send_irc(stream, &format!("PRIVMSG #{channel} :{reply}\r\n"))?;
-    app.twitch.push_chat(bot_nick, &reply);
+    };
+    let Ok(cfg) = app.store.get() else {
+        return Ok(());
+    };
+    let _ = app.twitch.try_enqueue_cmd(&cfg, &from, id, &rest);
     Ok(())
 }
 
@@ -772,6 +902,48 @@ mod tests {
         assert_eq!(sanitize_privmsg(" hi\r\nthere "), "hithere");
         assert_eq!(sanitize_privmsg(&"a".repeat(600)).len(), MAX_PRIVMSG);
         assert!(sanitize_privmsg("  \n").is_empty());
+    }
+
+    #[test]
+    fn aliases_map_to_canonical_ids() {
+        assert_eq!(canonical_command("sr"), Some("sr"));
+        assert_eq!(canonical_command("songrequest"), Some("sr"));
+        assert_eq!(canonical_command("q"), Some("q"));
+        assert_eq!(canonical_command("queue"), Some("q"));
+        assert_eq!(canonical_command("si"), Some("si"));
+        assert_eq!(canonical_command("songinfo"), Some("si"));
+        assert_eq!(canonical_command("help"), None);
+    }
+
+    #[test]
+    fn enqueue_skips_when_commands_off() {
+        let hub = Hub::new();
+        let mut cfg = Config::default();
+        cfg.twitch_commands_enabled = false;
+        assert!(!hub.try_enqueue_cmd(&cfg, "alice", "sr", "song"));
+        assert_eq!(hub.pending_jobs(), 0);
+    }
+
+    #[test]
+    fn gcd_blocks_everyone_ucd_blocks_user() {
+        let hub = Hub::new();
+        let mut cfg = Config::default();
+        cfg.twitch_commands.get_mut("sr").unwrap().gcd = 30;
+        assert!(hub.try_enqueue_cmd(&cfg, "alice", "sr", "a"));
+        hub.record_use("sr", "alice");
+        assert!(!hub.try_enqueue_cmd(&cfg, "bob", "sr", "b"));
+        hub.clear_jobs();
+        cfg.twitch_commands.get_mut("sr").unwrap().gcd = 0;
+        cfg.twitch_commands.get_mut("sr").unwrap().ucd = 30;
+        hub.record_use("sr", "alice");
+        assert!(!hub.try_enqueue_cmd(&cfg, "alice", "sr", "c"));
+        assert!(hub.try_enqueue_cmd(&cfg, "bob", "sr", "d"));
+    }
+
+    #[test]
+    fn cooldown_zero_never_blocks() {
+        assert!(!cooldown_hit(Some(Instant::now()), Instant::now(), 0));
+        assert!(!cooldown_hit(None, Instant::now(), 10));
     }
 
     #[test]
