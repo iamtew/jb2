@@ -10,58 +10,60 @@
   </head>
   <body>
     <main class="admin-shell">
-      <section class="now-playing" aria-live="polite">
-        <div class="now-playing__meta">
-          <div class="now-playing__row">
-            <div class="now-playing__state">
-              <span id="playState" class="play-state-pill">⏸</span>
-              <span class="time-pill">
-                <span id="currentTime">00:00</span>
-                <span class="time-divider">/</span>
-                <span id="totalTime">00:00</span>
-              </span>
+      <header class="dock">
+        <section class="now-playing" aria-live="polite">
+          <div class="now-playing__meta">
+            <div class="now-playing__row">
+              <div class="now-playing__state">
+                <span id="playState" class="play-state-pill" aria-label="Paused"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#player-pause"></use></svg></span>
+                <span class="time-pill">
+                  <span id="currentTime">00:00</span>
+                  <span class="time-divider">/</span>
+                  <span id="totalTime">00:00</span>
+                </span>
+              </div>
+            </div>
+            <div class="now-playing__headline"><span id="currentMeta"><span class="now-playing__headline-track">Waiting for YTMD…</span></span></div>
+            <div class="progress-row">
+              <input id="progressBar" class="progress-bar" type="range" min="0" max="100" step="1" value="0" aria-label="Seek" />
             </div>
           </div>
-          <div class="now-playing__headline"><span id="currentMeta"><span class="now-playing__headline-track">Waiting for YTMD…</span></span></div>
-          <div class="progress-row">
-            <input id="progressBar" class="progress-bar" type="range" min="0" max="100" step="1" value="0" />
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="player-controls" aria-label="Playback controls">
-        <button id="prevButton" class="control-btn" type="button">⏮</button>
-        <button id="backButton" class="control-btn" type="button">⏪</button>
-        <button id="playButton" class="control-btn primary" type="button">▶</button>
-        <button id="pauseButton" class="control-btn" type="button">⏸</button>
-        <button id="forwardButton" class="control-btn" type="button">⏩</button>
-        <button id="nextButton" class="control-btn" type="button">⏭</button>
-      </section>
-      <section class="player-toggles" aria-label="Playback modes">
-        <button id="shuffleButton" class="control-btn" type="button" aria-label="Shuffle" aria-pressed="false">Shuffle</button>
-        <form id="songRequestForm" class="player-toggles__form" action="#">
-          <div class="search-wrap">
-            <input id="songRequestInput" class="player-toggles__input" type="search" placeholder="Request song…" aria-label="Song request" autocomplete="off" aria-autocomplete="list" aria-controls="songSearchPopup" />
-            <ul id="songSearchPopup" class="search-popup" role="listbox" hidden></ul>
-          </div>
-          <button id="songRequestAdd" class="player-toggles__btn" type="submit">Add</button>
-          <button id="songRequestNow" class="player-toggles__btn" type="button">Now</button>
-        </form>
-      </section>
+        <section class="player-controls" aria-label="Playback controls">
+          <button id="prevButton" class="control-btn" type="button" aria-label="Previous"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#player-skip-back"></use></svg></button>
+          <button id="backButton" class="control-btn" type="button" aria-label="Back 10 seconds"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#rewind-backward-10"></use></svg></button>
+          <button id="playButton" class="control-btn primary" type="button" aria-label="Play"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#player-play"></use></svg></button>
+          <button id="pauseButton" class="control-btn" type="button" aria-label="Pause"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#player-pause"></use></svg></button>
+          <button id="forwardButton" class="control-btn" type="button" aria-label="Forward 10 seconds"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#rewind-forward-10"></use></svg></button>
+          <button id="nextButton" class="control-btn" type="button" aria-label="Next"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#player-skip-forward"></use></svg></button>
+        </section>
+        <section class="player-toggles" aria-label="Playback modes">
+          <button id="shuffleButton" class="control-btn" type="button" aria-label="Shuffle" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#arrows-shuffle"></use></svg></button>
+          <form id="songRequestForm" class="player-toggles__form" action="#">
+            <div class="search-wrap">
+              <input id="songRequestInput" class="player-toggles__input" type="search" placeholder="Request song…" aria-label="Song request" autocomplete="off" aria-autocomplete="list" aria-controls="songSearchPopup" />
+              <ul id="songSearchPopup" class="search-popup" role="listbox" hidden></ul>
+            </div>
+            <button id="songRequestAdd" class="player-toggles__btn" type="submit"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#plus"></use></svg>Add</button>
+            <button id="songRequestNow" class="player-toggles__btn" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#player-play"></use></svg>Now</button>
+          </form>
+        </section>
 
-      <nav class="tabs" aria-label="Admin sections">
-        <button class="tab active" data-page="queue">Queue</button>
-        <button class="tab" data-page="seed">Seed</button>
-        <button class="tab" data-page="twitch">Twitch</button>
-        <button class="tab" data-page="settings">Settings</button>
-        <button class="tab" data-page="import">Import</button>
-        <button class="tab" data-page="system">API</button>
-      </nav>
+        <nav class="tabs" aria-label="Admin sections">
+          <button class="tab active" data-page="queue" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#playlist"></use></svg><span>Queue</span></button>
+          <button class="tab" data-page="seed" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#plant"></use></svg><span>Seed</span></button>
+          <button class="tab" data-page="twitch" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#brand-twitch"></use></svg><span>Twitch</span></button>
+          <button class="tab" data-page="settings" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#settings"></use></svg><span>Settings</span></button>
+          <button class="tab" data-page="import" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#file-import"></use></svg><span>Import</span></button>
+          <button class="tab" data-page="system" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#api"></use></svg><span>API</span></button>
+        </nav>
+      </header>
 
       <section id="page-queue" class="page active">
         <div class="panel">
           <div class="queue-toolbar">
-            <button id="clearQueueButton" class="queue-toolbar-btn" type="button">Clear queue</button>
+            <button id="clearQueueButton" class="queue-toolbar-btn" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#trash"></use></svg>Clear queue</button>
           </div>
           <div id="queueList" class="queue-list"></div>
         </div>
@@ -74,7 +76,7 @@
             <label for="seedPlaylistInput">Add seed playlist</label>
             <div class="url-row">
               <input id="seedPlaylistInput" type="text" placeholder="Playlist URL or ID" />
-              <button id="addSeedPlaylistButton" type="button">Add</button>
+              <button id="addSeedPlaylistButton" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#plus"></use></svg>Add</button>
             </div>
             <p id="seedInputFeedback" class="muted"></p>
           </div>
@@ -102,11 +104,11 @@
             <input id="twitchNickInput" type="text" placeholder="filled after login" autocomplete="off" readonly />
           </div>
           <div class="settings-block">
-            <div class="url-row">
-              <button id="twitchSaveButton" type="button">Save</button>
-              <button id="twitchLoginButton" type="button">Login with Twitch</button>
-              <button id="twitchConnectButton" type="button">Connect</button>
-              <button id="twitchDisconnectButton" type="button">Disconnect</button>
+            <div class="url-row action-row">
+              <button id="twitchSaveButton" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#device-floppy"></use></svg>Save</button>
+              <button id="twitchLoginButton" type="button" aria-label="Login with Twitch"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#login"></use></svg>Login</button>
+              <button id="twitchConnectButton" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#plug"></use></svg>Connect</button>
+              <button id="twitchDisconnectButton" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#plug-off"></use></svg>Disconnect</button>
             </div>
             <p id="twitchFormFeedback" class="muted"></p>
           </div>
@@ -115,7 +117,7 @@
             <div id="twitchChatLog" class="twitch-log" aria-live="polite"></div>
             <form id="twitchChatForm" class="url-row" action="#">
               <input id="twitchChatInput" type="text" placeholder="Send as bot nick…" autocomplete="off" />
-              <button id="twitchChatSend" type="submit">Send</button>
+              <button id="twitchChatSend" type="submit"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#send"></use></svg>Send</button>
             </form>
           </div>
         </div>
@@ -127,13 +129,13 @@
             <label for="commandSelect">Command</label>
             <select id="commandSelect"></select>
             <input id="argInput" type="text" placeholder="Optional params, e.g. seconds=10" />
-            <button id="runCommand">Run</button>
+            <button id="runCommand" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#player-play"></use></svg>Run</button>
           </div>
           <div class="url-box">
             <label for="commandUrl">Manual URL</label>
             <div class="url-row">
               <input id="commandUrl" type="text" readonly value="Select a command" />
-              <button id="copyUrl" type="button">Copy</button>
+              <button id="copyUrl" type="button" aria-label="Copy"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#copy"></use></svg></button>
             </div>
           </div>
           <pre id="commandOutput">Waiting for a command…</pre>
@@ -147,7 +149,7 @@
             <label for="importFileInput">Config JSON</label>
             <div class="url-row">
               <input id="importFileInput" type="file" accept=".json,application/json" />
-              <button id="importConfigButton" type="button">Import</button>
+              <button id="importConfigButton" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#file-import"></use></svg>Import</button>
             </div>
             <p id="importFeedback" class="muted"></p>
           </div>
@@ -160,14 +162,14 @@
             <label for="maxDurationInput">maxDuration</label>
             <div class="url-row">
               <input id="maxDurationInput" type="number" min="1" step="1" value="600" />
-              <button id="saveMaxDurationButton" type="button">Save</button>
+              <button id="saveMaxDurationButton" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#device-floppy"></use></svg>Save</button>
             </div>
           </div>
           <div class="settings-block">
             <label for="blacklistInput">Add blacklist entry</label>
             <div class="url-row">
               <input id="blacklistInput" type="text" placeholder="Artist or title" />
-              <button id="addBlacklistButton" type="button">Add</button>
+              <button id="addBlacklistButton" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#plus"></use></svg>Add</button>
             </div>
           </div>
           <div class="settings-block">

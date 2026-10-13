@@ -240,7 +240,7 @@ function renderSeedPlaylists(playlists) {
     const playButton = document.createElement('button');
     playButton.type = 'button';
     playButton.className = 'queue-action-btn queue-action-btn--play';
-    playButton.textContent = '⏵';
+    playButton.innerHTML = icon('player-play');
     playButton.setAttribute('aria-label', 'Enqueue seed playlist');
     playButton.addEventListener('click', () => enqueueSeedPlaylist(playlist.id));
 
@@ -253,7 +253,7 @@ function renderSeedPlaylists(playlists) {
     const removeButton = document.createElement('button');
     removeButton.type = 'button';
     removeButton.className = 'queue-action-btn queue-action-btn--delete';
-    removeButton.textContent = 'X';
+    removeButton.innerHTML = icon('x');
     removeButton.setAttribute('aria-label', 'Remove playlist');
     removeButton.addEventListener('click', () => removeSeedPlaylist(playlist.id));
 
@@ -623,7 +623,7 @@ function renderBlacklist(items) {
     const item = document.createElement('li');
     item.dataset.entry = entry;
     // Entries come from Import too; escape so a crafted entry cannot inject markup.
-    item.innerHTML = `<span>${escapeHtml(entry)}</span><button type="button" aria-label="Remove ${escapeHtml(entry)}">✕</button>`;
+    item.innerHTML = `<span>${escapeHtml(entry)}</span><button type="button" aria-label="Remove ${escapeHtml(entry)}">${icon('x')}</button>`;
     blacklistList.appendChild(item);
   });
 
@@ -724,12 +724,15 @@ runButton.addEventListener('click', runCommand);
 copyButton.addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(urlInput.value);
-    copyButton.textContent = 'Copied';
+    copyButton.innerHTML = icon('check');
+    copyButton.setAttribute('aria-label', 'Copied');
     window.setTimeout(() => {
-      copyButton.textContent = 'Copy';
+      copyButton.innerHTML = icon('copy');
+      copyButton.setAttribute('aria-label', 'Copy');
     }, 1200);
   } catch (err) {
-    copyButton.textContent = 'Copy failed';
+    copyButton.innerHTML = icon('alert-circle');
+    copyButton.setAttribute('aria-label', 'Copy failed');
   }
 });
 let playbackState = {
@@ -773,6 +776,16 @@ function scheduleQueueRefreshFromWS(delayMs = 800) {
   }, delayMs);
 }
 
+function icon(name) {
+  return `<svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#${name}"></use></svg>`;
+}
+
+function setPlayGlyph(paused) {
+  if (!playState) return;
+  playState.innerHTML = icon(paused ? 'player-pause' : 'player-play');
+  playState.setAttribute('aria-label', paused ? 'Paused' : 'Playing');
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -806,14 +819,14 @@ function setAdminPaused(isPaused) {
   const next = Boolean(isPaused);
   if (playbackState.isPaused === next) {
     if (playbackState.hasSong) {
-      playState.textContent = next ? '⏸' : '▶';
+      setPlayGlyph(next);
     }
     updatePlaybackButtons();
     return;
   }
   playbackState.isPaused = next;
   if (playbackState.hasSong) {
-    playState.textContent = next ? '⏸' : '▶';
+    setPlayGlyph(next);
   }
   updatePlaybackButtons();
 }
@@ -835,7 +848,7 @@ function applyPositionFromWS(position) {
     setAdminPaused(false);
     notePlaybackProgress();
   } else if (playbackState.hasSong) {
-    playState.textContent = playbackState.isPaused ? '⏸' : '▶';
+    setPlayGlyph(playbackState.isPaused);
   }
   currentTime.textContent = formatTime(playbackState.position);
   updateProgressBar();
@@ -893,7 +906,8 @@ async function readCommandEnvelope(response) {
 function setPreviousQueueExpanded(expanded, button = null, sublist = null) {
   previousQueueExpanded = Boolean(expanded);
   if (button) {
-    button.textContent = previousQueueExpanded ? 'Hide previous' : 'Previous…';
+    const label = previousQueueExpanded ? 'Hide previous' : 'Previous';
+    button.innerHTML = `${icon(previousQueueExpanded ? 'chevron-up' : 'chevron-down')}<span>${label}</span>`;
     button.setAttribute('aria-expanded', previousQueueExpanded ? 'true' : 'false');
   }
   if (sublist) {
@@ -934,7 +948,7 @@ function resetQueueActionButtonState(button, action) {
   if (!button) return;
   button.classList.remove('is-pending', 'is-success', 'is-error');
   button.disabled = false;
-  button.textContent = action === 'delete' ? 'X' : '⏵';
+  button.innerHTML = icon(action === 'delete' ? 'x' : 'player-play');
 }
 
 async function handleQueueItemAction(event) {
@@ -949,7 +963,6 @@ async function handleQueueItemAction(event) {
 
   button.classList.add('is-pending');
   button.disabled = true;
-  button.textContent = '…';
 
   const path = action === 'delete'
     ? `/cmd/ytmd/queue/${queueIndex}/delete`
@@ -969,7 +982,7 @@ async function handleQueueItemAction(event) {
 
     button.classList.remove('is-pending');
     button.classList.add('is-success');
-    button.textContent = '✓';
+    button.innerHTML = icon('check');
     setQueueActionFeedback(action === 'delete' ? 'Deleted queue item' : 'Started queue item', 'success');
 
     window.setTimeout(() => {
@@ -979,7 +992,7 @@ async function handleQueueItemAction(event) {
   } catch (err) {
     button.classList.remove('is-pending');
     button.classList.add('is-error');
-    button.textContent = '!';
+    button.innerHTML = icon('alert-circle');
     setQueueActionFeedback(err?.message || (action === 'delete' ? 'Unable to delete queue item' : 'Unable to start queue item'), 'error');
     console.error('Queue action failed', err);
   } finally {
@@ -1275,7 +1288,7 @@ function renderQueue() {
       ? ` data-queue-draggable="true" data-queue-index="${queueIndex}"`
       : '';
     const dragHandle = canDrag
-      ? `<span class="queue-drag-handle" draggable="true" title="Drag to reorder" aria-label="Drag to reorder">☰</span>`
+      ? `<span class="queue-drag-handle" draggable="true" title="Drag to reorder" aria-label="Drag to reorder">${icon('grip-vertical')}</span>`
       : '';
     return `
       <div class="${classes}"${dragAttrs}>
@@ -1283,8 +1296,8 @@ function renderQueue() {
           ${dragHandle}
           <div class="queue-meta">${displayText || 'Untitled'}</div>
           <div class="queue-actions">
-            <button class="queue-action-btn queue-action-btn--play" type="button" data-queue-action="play" data-queue-index="${queueIndex}" aria-label="Play from queue"${actionsDisabled ? ' disabled' : ''}>⏵</button>
-            <button class="queue-action-btn queue-action-btn--delete" type="button" data-queue-action="delete" data-queue-index="${queueIndex}" aria-label="Delete from queue"${actionsDisabled ? ' disabled' : ''}>X</button>
+            <button class="queue-action-btn queue-action-btn--play" type="button" data-queue-action="play" data-queue-index="${queueIndex}" aria-label="Play from queue"${actionsDisabled ? ' disabled' : ''}>${icon('player-play')}</button>
+            <button class="queue-action-btn queue-action-btn--delete" type="button" data-queue-action="delete" data-queue-index="${queueIndex}" aria-label="Delete from queue"${actionsDisabled ? ' disabled' : ''}>${icon('x')}</button>
           </div>
         </div>
       </div>
@@ -1294,7 +1307,7 @@ function renderQueue() {
   const previousMarkup = previousItems.length > 0
     ? `
       <div class="queue-item is-previous">
-        <button class="queue-toggle" type="button" data-toggle="previous" aria-expanded="${previousExpanded ? 'true' : 'false'}">${previousExpanded ? 'Hide previous' : 'Previous…'}</button>
+        <button class="queue-toggle" type="button" data-toggle="previous" aria-expanded="${previousExpanded ? 'true' : 'false'}">${icon(previousExpanded ? 'chevron-up' : 'chevron-down')}<span>${previousExpanded ? 'Hide previous' : 'Previous'}</span></button>
         <div class="queue-sublist${previousExpanded ? '' : ' is-collapsed'}" data-previous-list ${previousExpanded ? '' : 'hidden'}>
           ${previousItems.map((entry) => buildItem(entry, 'previous')).join('')}
         </div>
@@ -1404,7 +1417,7 @@ function applyNowPlaying(payload) {
     setCurrentMetaText(metaText);
     updateCurrentMetaMarquee();
   }
-  playState.textContent = playbackState.isPaused ? '⏸' : '▶';
+  setPlayGlyph(playbackState.isPaused);
   currentTime.textContent = formatTime(playbackState.position);
   totalTime.textContent = formatTime(playbackState.duration);
   updatePlaybackButtons();
@@ -1433,7 +1446,7 @@ async function refreshNowPlayingFromProxy() {
     setCurrentMetaText('YTMD unavailable');
     updateCurrentMetaMarquee();
     playbackState.isPaused = true;
-    playState.textContent = '⏸';
+    setPlayGlyph(true);
     currentTime.textContent = '00:00';
     totalTime.textContent = '00:00';
     updatePlaybackButtons();
