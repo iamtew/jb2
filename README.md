@@ -30,10 +30,10 @@ Log in with Twitch OAuth as the **bot** account. Join channel and bot nick are s
 ### Bot login
 
 1. Have a Twitch account for the bot. Log the browser out of the streamer account first.
-2. Admin → Twitch: **Login with Twitch**. Approve as the **bot**. Bot nick is filled from that account; join channel defaults to the same login if you left it empty.
-3. **Connect**. After that, reconnects refresh the access token automatically.
+2. Admin → Twitch: **Login with Twitch**. Approve as the **bot**. Bot nick is filled from that account; join channel defaults to the same login if you left it empty. IRC connects after a successful login.
+3. **Connect** / **Disconnect** from Admin if you need to drop or rejoin without logging in again.
 
-The Twitch app is built in (Public client + PKCE). Redirect is always `http://localhost:<port>/api/twitch/callback` (default `42042`, plus the +9 busy-port fallbacks). Register those URLs on the app at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) if you own the Client ID.
+The Twitch app is built in (PKCE). Redirect is always `http://localhost:<port>/api/twitch/callback` (default `42042`, plus the +9 busy-port fallbacks). Register those URLs on the app at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) if you own the Client ID. A leftover `twitchClientSecret` in `jb2.sqlite` is sent on token exchange if present (Confidential apps).
 
 In Admin → Twitch, or in `jb2.sqlite`:
 
@@ -45,7 +45,7 @@ Connect/disconnect from Admin without restarting JB2. Chat on that tab is the li
 
 If channel+token are in `jb2.sqlite` at process start, IRC auto-connects. Disconnect lasts until Connect or the next process start.
 
-Retries back off: 10s after a network drop, 30s after a token refresh failure or a repeated IRC login failure. If Twitch rejects the refresh token (revoked app), JB2 clears the stored login, stops reconnecting, and shows `Twitch login expired; log in again` — use **Login with Twitch**, then **Connect**.
+Retries back off: 10s after a network drop, 30s after a token refresh failure or a repeated IRC login failure. If Twitch rejects the refresh token (revoked app), JB2 clears the stored login, stops reconnecting, and shows `Twitch login expired; log in again` — use **Login with Twitch**.
 
 Commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`
 

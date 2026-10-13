@@ -534,7 +534,7 @@ impl App {
         };
         match twitch::exchange_code(&self.store, code, &redirect, &verifier) {
             Ok(login) => {
-                self.twitch.bump_if_wanted();
+                self.twitch.connect();
                 Dispatch::Html(
                     200,
                     oauth_html(&format!(

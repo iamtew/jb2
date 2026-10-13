@@ -1,19 +1,17 @@
 use crate::config::{Config, Store};
 use crate::envelope::Envelope;
 use crate::server::App;
+use native_tls::TlsConnector;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::hash_map::RandomState;
 use std::collections::VecDeque;
 use std::hash::BuildHasher;
-use std::net::TcpStream;
+use std::io::{Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tungstenite::stream::MaybeTlsStream;
-use tungstenite::{connect, Message, WebSocket};
 use url::Url;
-
-type Ws = WebSocket<MaybeTlsStream<TcpStream>>;
 
 const CHAT_CAP: usize = 200;
 const MAX_PRIVMSG: usize = 500;
@@ -22,7 +20,7 @@ const OAUTH_SCOPES: &str = "chat:read chat:edit";
 const TWITCH_CLIENT_ID: &str = "lax4082xr34poez274g2dzmabbwlg8";
 const TOKEN_SKEW_SECS: i64 = 120;
 /// Wait between retries after a token or repeated IRC auth failure, so a bad login
-/// cannot hammer id.twitch.tv / irc-ws.chat.twitch.tv.
+/// cannot hammer id.twitch.tv / irc.chat.twitch.tv.
 const AUTH_BACKOFF_SECS: u64 = 30;
 /// Wait between retries after a network / server-closed error.
 const RECONNECT_SECS: u64 = 10;
@@ -290,56 +288,78 @@ fn run(app: &Arc<App>, channel: &str, oauth: &str, nick: &str, gen: u64) -> Resu
     } else {
         format!("oauth:{oauth}")
     };
-    let (mut ws, _) = connect("wss://irc-ws.chat.twitch.tv:443").map_err(|e| e.to_string())?;
-    set_read_timeout(&ws, Duration::from_millis(250))?;
-    send(
-        &mut ws,
+    let mut stream = connect_irc()?;
+    send_irc(
+        &mut stream,
         &format!("PASS {token}\r\nNICK {nick}\r\nJOIN #{channel}\r\n"),
     )?;
-    app.twitch.set_session(true, channel, nick);
-    eprintln!("twitch: joined #{channel} as {nick}");
+    let mut joined = false;
+    let mut leftover = String::new();
+    let mut tmp = [0u8; 8192];
     loop {
         if !app.twitch.wanted() || app.twitch.generation() != gen {
-            let _ = ws.close(None);
             return Ok(());
         }
-        for text in app.twitch.take_outbound() {
-            send(&mut ws, &format!("PRIVMSG #{channel} :{text}\r\n"))?;
-            app.twitch.push_chat(nick, &text);
+        if joined {
+            for text in app.twitch.take_outbound() {
+                send_irc(&mut stream, &format!("PRIVMSG #{channel} :{text}\r\n"))?;
+                app.twitch.push_chat(nick, &text);
+            }
         }
-        match ws.read() {
-            Ok(Message::Text(text)) => {
-                for line in text.split(['\r', '\n']) {
-                    handle_line(app, channel, nick, line, &mut ws)?;
+        match stream.read(&mut tmp) {
+            Ok(0) => return Err("server closed".into()),
+            Ok(n) => {
+                leftover.push_str(&String::from_utf8_lossy(&tmp[..n]));
+                while let Some(idx) = leftover.find('\n') {
+                    let mut line: String = leftover.drain(..=idx).collect();
+                    if line.ends_with('\n') {
+                        line.pop();
+                    }
+                    if line.ends_with('\r') {
+                        line.pop();
+                    }
+                    if !joined && is_welcome(&line) {
+                        joined = true;
+                        app.twitch.set_session(true, channel, nick);
+                        eprintln!("twitch: joined #{channel} as {nick}");
+                    }
+                    handle_line(app, channel, nick, &line, &mut stream)?;
                 }
             }
-            Ok(Message::Ping(p)) => {
-                let _ = ws.send(Message::Pong(p));
-            }
-            Ok(Message::Close(_)) => return Err("server closed".into()),
-            Ok(_) => {}
-            Err(tungstenite::Error::Io(e))
+            Err(e)
                 if e.kind() == std::io::ErrorKind::WouldBlock
-                    || e.kind() == std::io::ErrorKind::TimedOut => {}
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                std::thread::sleep(Duration::from_millis(200));
+            }
             Err(e) => return Err(e.to_string()),
         }
     }
 }
 
-fn set_read_timeout(ws: &Ws, timeout: Duration) -> Result<(), String> {
-    match ws.get_ref() {
-        MaybeTlsStream::NativeTls(t) => t
-            .get_ref()
-            .set_read_timeout(Some(timeout))
-            .map_err(|e| e.to_string()),
-        MaybeTlsStream::Plain(t) => t.set_read_timeout(Some(timeout)).map_err(|e| e.to_string()),
-        _ => Ok(()),
-    }
+fn connect_irc() -> Result<native_tls::TlsStream<TcpStream>, String> {
+    let addr = "irc.chat.twitch.tv:6697"
+        .to_socket_addrs()
+        .map_err(|e| e.to_string())?
+        .next()
+        .ok_or_else(|| "irc.chat.twitch.tv: no address".to_string())?;
+    let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(15)).map_err(|e| e.to_string())?;
+    let _ = tcp.set_nodelay(true);
+    let tls = TlsConnector::new()
+        .map_err(|e| e.to_string())?
+        .connect("irc.chat.twitch.tv", tcp)
+        .map_err(|e| e.to_string())?;
+    tls.get_ref()
+        .set_nonblocking(true)
+        .map_err(|e| e.to_string())?;
+    Ok(tls)
 }
 
-fn send(ws: &mut Ws, s: &str) -> Result<(), String> {
-    ws.send(Message::Text(s.to_string()))
-        .map_err(|e| e.to_string())
+fn send_irc(stream: &mut impl Write, s: &str) -> Result<(), String> {
+    stream
+        .write_all(s.as_bytes())
+        .map_err(|e| format!("irc write: {e}"))?;
+    stream.flush().map_err(|e| format!("irc write: {e}"))
 }
 
 fn handle_line(
@@ -347,14 +367,14 @@ fn handle_line(
     channel: &str,
     bot_nick: &str,
     line: &str,
-    ws: &mut Ws,
+    stream: &mut impl Write,
 ) -> Result<(), String> {
     let line = line.trim();
     if line.is_empty() {
         return Ok(());
     }
     if line.starts_with("PING") {
-        return send(ws, &format!("{}\r\n", line.replacen("PING", "PONG", 1)));
+        return send_irc(stream, &format!("{}\r\n", line.replacen("PING", "PONG", 1)));
     }
     if is_auth_fail(line) {
         return Err(line.to_string());
@@ -383,7 +403,7 @@ fn handle_line(
     if reply.is_empty() {
         return Ok(());
     }
-    send(ws, &format!("PRIVMSG #{channel} :{reply}\r\n"))?;
+    send_irc(stream, &format!("PRIVMSG #{channel} :{reply}\r\n"))?;
     app.twitch.push_chat(bot_nick, &reply);
     Ok(())
 }
@@ -402,6 +422,10 @@ fn can_auto_connect(cfg: &Config) -> bool {
     let channel = cfg.twitch_channel.trim();
     !channel.is_empty()
         && (!cfg.twitch_oauth.trim().is_empty() || !cfg.twitch_refresh_token.trim().is_empty())
+}
+
+fn is_welcome(line: &str) -> bool {
+    line.contains(" 001 ")
 }
 
 fn is_auth_fail(msg: &str) -> bool {
@@ -466,6 +490,17 @@ fn base64url_no_pad(bytes: &[u8]) -> String {
         }
     }
     out
+}
+
+fn token_fields<'a>(extra: &[(&'a str, &'a str)], secret: &'a str) -> Vec<(&'a str, &'a str)> {
+    let mut fields = Vec::with_capacity(extra.len() + 2);
+    fields.push(("client_id", TWITCH_CLIENT_ID));
+    fields.extend_from_slice(extra);
+    let secret = secret.trim();
+    if !secret.is_empty() {
+        fields.push(("client_secret", secret));
+    }
+    fields
 }
 
 fn twitch_form(url: &str, fields: &[(&str, &str)]) -> Result<Value, String> {
@@ -536,16 +571,18 @@ pub fn exchange_code(
     verifier: &str,
 ) -> Result<String, String> {
     let cfg = store.get()?;
-    let payload = twitch_form(
-        "https://id.twitch.tv/oauth2/token",
+    let code = code.trim().to_string();
+    let secret = cfg.twitch_client_secret.clone();
+    let fields = token_fields(
         &[
-            ("client_id", TWITCH_CLIENT_ID),
-            ("code", code.trim()),
+            ("code", code.as_str()),
             ("grant_type", "authorization_code"),
             ("redirect_uri", redirect_uri),
             ("code_verifier", verifier),
         ],
-    )?;
+        &secret,
+    );
+    let payload = twitch_form("https://id.twitch.tv/oauth2/token", &fields)?;
     // Validate on a scratch copy (network), then write only token fields to the live config.
     let mut scratch = cfg;
     apply_token_payload(&mut scratch, &payload)?;
@@ -579,14 +616,16 @@ pub fn ensure_access_token(store: &Store, force: bool) -> Result<Config, String>
     if still_good {
         return Ok(cfg);
     }
-    let payload = match twitch_form(
-        "https://id.twitch.tv/oauth2/token",
+    let refresh = cfg.twitch_refresh_token.trim().to_string();
+    let secret = cfg.twitch_client_secret.clone();
+    let fields = token_fields(
         &[
-            ("client_id", TWITCH_CLIENT_ID),
             ("grant_type", "refresh_token"),
-            ("refresh_token", cfg.twitch_refresh_token.trim()),
+            ("refresh_token", refresh.as_str()),
         ],
-    ) {
+        &secret,
+    );
+    let payload = match twitch_form("https://id.twitch.tv/oauth2/token", &fields) {
         Ok(p) => p,
         Err(e)
             if e.starts_with("twitch oauth HTTP 400") || e.starts_with("twitch oauth HTTP 401") =>
@@ -818,5 +857,33 @@ mod tests {
         assert!(!can_auto_connect(&cfg));
         cfg.twitch_refresh_token = "r".into();
         assert!(can_auto_connect(&cfg));
+    }
+
+    #[test]
+    fn token_fields_omit_empty_secret() {
+        let fields = token_fields(&[("grant_type", "refresh_token")], "  ");
+        assert!(fields.iter().any(|(k, v)| *k == "client_id" && *v == TWITCH_CLIENT_ID));
+        assert!(fields.iter().any(|(k, v)| *k == "grant_type" && *v == "refresh_token"));
+        assert!(!fields.iter().any(|(k, _)| *k == "client_secret"));
+    }
+
+    #[test]
+    fn token_fields_include_secret_when_set() {
+        let fields = token_fields(&[("code", "abc")], "s3cret");
+        assert_eq!(
+            fields
+                .iter()
+                .find(|(k, _)| *k == "client_secret")
+                .map(|(_, v)| *v),
+            Some("s3cret")
+        );
+        assert_eq!(fields[0], ("client_id", TWITCH_CLIENT_ID));
+    }
+
+    #[test]
+    fn welcome_line_is_numeric_001() {
+        assert!(is_welcome(":tmi.twitch.tv 001 botty :Welcome, GLHF!"));
+        assert!(!is_welcome(":tmi.twitch.tv 002 botty :your host"));
+        assert!(!is_welcome("PING :tmi.twitch.tv"));
     }
 }
