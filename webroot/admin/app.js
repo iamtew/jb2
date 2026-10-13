@@ -33,6 +33,7 @@ const tabs = document.querySelectorAll('.tab');
 const pages = document.querySelectorAll('.page');
 const queueList = document.getElementById('queueList');
 const clearQueueButton = document.getElementById('clearQueueButton');
+const previousToggle = document.getElementById('previousToggle');
 const blacklistInput = document.getElementById('blacklistInput');
 const addBlacklistButton = document.getElementById('addBlacklistButton');
 const blacklistList = document.getElementById('blacklistList');
@@ -917,10 +918,17 @@ function setPreviousQueueExpanded(expanded, button = null, sublist = null) {
   }
 }
 
+function syncPreviousToggle(hasPrevious) {
+  if (!previousToggle) return;
+  previousToggle.hidden = !hasPrevious;
+  if (!hasPrevious) return;
+  setPreviousQueueExpanded(previousQueueExpanded, previousToggle, null);
+}
+
 function handleQueueToggle(event) {
   const button = event.target.closest('[data-toggle="previous"]');
   if (!button) return;
-  const sublist = button.parentElement?.querySelector('[data-previous-list]');
+  const sublist = queueList?.querySelector('[data-previous-list]');
   if (!sublist) return;
   event.preventDefault();
   setPreviousQueueExpanded(sublist.hidden, button, sublist);
@@ -1152,11 +1160,13 @@ if (queueList) {
   queueList.addEventListener('click', (event) => {
     if (shouldHandleQueueAction(event)) {
       handleQueueItemAction(event);
-      return;
     }
-    handleQueueToggle(event);
   });
   bindQueueDragDrop();
+}
+
+if (previousToggle) {
+  previousToggle.addEventListener('click', handleQueueToggle);
 }
 
 if (clearQueueButton) {
@@ -1255,16 +1265,19 @@ function renderQueue() {
     : '';
 
   if (playbackState.queueStatus === 'unavailable') {
+    syncPreviousToggle(false);
     queueList.innerHTML = `${feedbackMarkup}<div class="queue-empty-state">YTMD queue unavailable. Check that the player is reachable.</div>`;
     return;
   }
 
   if (playbackState.queueStatus === 'error') {
+    syncPreviousToggle(false);
     queueList.innerHTML = `${feedbackMarkup}<div class="queue-empty-state">Unable to load queue. Retrying…</div>`;
     return;
   }
 
   if (!playbackState.queue?.length || playbackState.queueStatus === 'empty') {
+    syncPreviousToggle(false);
     queueList.innerHTML = `${feedbackMarkup}<div class="queue-empty-state">Queue is empty.</div>`;
     return;
   }
@@ -1304,14 +1317,12 @@ function renderQueue() {
     `;
   };
 
+  syncPreviousToggle(previousItems.length > 0);
   const previousMarkup = previousItems.length > 0
     ? `
-      <div class="queue-item is-previous">
-        <button class="queue-toggle" type="button" data-toggle="previous" aria-expanded="${previousExpanded ? 'true' : 'false'}">${icon(previousExpanded ? 'chevron-up' : 'chevron-right')}<span>${previousExpanded ? 'Hide previous' : 'Previous'}</span></button>
         <div class="queue-sublist${previousExpanded ? '' : ' is-collapsed'}" data-previous-list ${previousExpanded ? '' : 'hidden'}>
           ${previousItems.map((entry) => buildItem(entry, 'previous')).join('')}
         </div>
-      </div>
     `
     : '';
   previousQueueRendered = previousItems.length > 0;

@@ -459,6 +459,14 @@ pre {
   margin-bottom: var(--gap);
 }
 
+.queue-toolbar .queue-toggle {
+  margin-right: auto;
+}
+
+.queue-toggle[hidden] {
+  display: none;
+}
+
 .queue-toolbar-btn {
   background: transparent;
   color: var(--muted);
