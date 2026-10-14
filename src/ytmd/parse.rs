@@ -873,7 +873,56 @@ fn collect_queue_entries_for_command(payload: &Value) -> Vec<QueueEntrySummary> 
         }
         return collected;
     }
-    Vec::new()
+    // Innertube browse: root `contents` is an object, not a queue array.
+    collect_queue_entries_walk(payload)
+}
+
+fn collect_queue_entries_walk(payload: &Value) -> Vec<QueueEntrySummary> {
+    let mut collected = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    walk_queue_entry_nodes(payload, &mut collected, &mut seen);
+    collected
+}
+
+fn walk_queue_entry_nodes(
+    value: &Value,
+    collected: &mut Vec<QueueEntrySummary>,
+    seen: &mut std::collections::HashSet<String>,
+) {
+    match value {
+        Value::Array(arr) => {
+            for item in arr {
+                walk_queue_entry_nodes(item, collected, seen);
+            }
+        }
+        Value::Object(obj) => {
+            if is_queue_entry_like(value) {
+                let entry = summarize_queue_entry(value);
+                if !(entry.title.is_empty() && entry.artist.is_empty() && entry.video_id.is_empty())
+                {
+                    let key = entry.video_id.trim().to_lowercase();
+                    if !key.is_empty() && seen.insert(key) {
+                        collected.push(entry);
+                    }
+                }
+            }
+            for key in ["items", "entries", "contents", "content", "queue"] {
+                if let Some(nested) = obj.get(key) {
+                    walk_queue_entry_nodes(nested, collected, seen);
+                }
+            }
+            for (key, nested) in obj {
+                if matches!(
+                    key.as_str(),
+                    "items" | "entries" | "contents" | "content" | "queue"
+                ) {
+                    continue;
+                }
+                walk_queue_entry_nodes(nested, collected, seen);
+            }
+        }
+        _ => {}
+    }
 }
 
 pub fn ordered_queue_items_array(payload: &Value) -> Option<&Vec<Value>> {
@@ -1386,5 +1435,76 @@ fn walk_values(value: &Value, f: &mut dyn FnMut(&Value)) {
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn list_item(id: &str, title: &str, artist: &str) -> Value {
+        json!({
+            "musicResponsiveListItemRenderer": {
+                "videoId": id,
+                "title": { "runs": [{ "text": title }] },
+                "longBylineText": { "runs": [{ "text": artist }] }
+            }
+        })
+    }
+
+    #[test]
+    fn parse_playlist_from_innertube_shelf() {
+        let payload = json!({
+            "header": {
+                "musicDetailHeaderRenderer": {
+                    "title": { "runs": [{ "text": "Mix" }] }
+                }
+            },
+            "contents": {
+                "twoColumnBrowseResultsRenderer": {
+                    "secondaryContents": {
+                        "sectionListRenderer": {
+                            "contents": [{
+                                "musicPlaylistShelfRenderer": {
+                                    "contents": [
+                                        list_item("vidA", "Track A", "Artist A"),
+                                        list_item("vidB", "Track B", "Artist B")
+                                    ]
+                                }
+                            }]
+                        }
+                    }
+                }
+            }
+        });
+        let lookup = parse_playlist_payload("PL1", &payload).expect("tracks");
+        assert_eq!(lookup.name, "Mix");
+        assert_eq!(
+            lookup
+                .tracks
+                .iter()
+                .map(|t| t.video_id.as_str())
+                .collect::<Vec<_>>(),
+            ["vidA", "vidB"]
+        );
+    }
+
+    #[test]
+    fn parse_playlist_from_queue_items_array() {
+        let payload = json!({
+            "items": [
+                { "videoId": "q1", "title": "One", "artist": "A" },
+                { "videoId": "q2", "title": "Two", "artist": "B" }
+            ]
+        });
+        let lookup = parse_playlist_payload("PL1", &payload).expect("tracks");
+        assert_eq!(
+            lookup
+                .tracks
+                .iter()
+                .map(|t| t.video_id.as_str())
+                .collect::<Vec<_>>(),
+            ["q1", "q2"]
+        );
     }
 }
