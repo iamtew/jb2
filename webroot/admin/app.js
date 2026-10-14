@@ -94,6 +94,7 @@ const cmdFeedback = document.getElementById('cmdFeedback');
 const importFileInput = document.getElementById('importFileInput');
 const importConfigButton = document.getElementById('importConfigButton');
 const importFeedback = document.getElementById('importFeedback');
+const aboutVersion = document.getElementById('aboutVersion');
 
 let adminEvents = null;
 let twitchStickBottom = true;
@@ -193,6 +194,9 @@ function showAdminPage(page) {
   }
   if (page === 'commands') {
     loadCommandsPanel();
+  }
+  if (page === 'about') {
+    loadAboutPanel();
   }
 }
 
@@ -843,6 +847,18 @@ async function importConfigFile() {
 
 if (importConfigButton) {
   importConfigButton.addEventListener('click', importConfigFile);
+}
+
+async function loadAboutPanel() {
+  if (!aboutVersion) return;
+  try {
+    const response = await fetch('/health');
+    const payload = await response.json();
+    const ver = payload.data?.version;
+    aboutVersion.textContent = ver ? `version ${ver}` : 'version unknown';
+  } catch (err) {
+    aboutVersion.textContent = `version unavailable (${err.message})`;
+  }
 }
 
 addBlacklistButton.addEventListener('click', addBlacklistEntry);

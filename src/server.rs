@@ -166,9 +166,13 @@ Transfer-Encoding: chunked\r\n\
     ) -> Dispatch {
         let p = path.trim_end_matches('/');
         match (method, p) {
-            ("GET", "/health") => {
-                Dispatch::Json(200, Envelope::ok_msg("ok", json!({"features": ["seed"]})))
-            }
+            ("GET", "/health") => Dispatch::Json(
+                200,
+                Envelope::ok_msg(
+                    "ok",
+                    json!({"features": ["seed"], "version": crate::version()}),
+                ),
+            ),
             ("GET", "/api/config") => self.config_get(),
             ("POST" | "PUT", "/api/config") => self.config_save(body),
             ("POST", "/api/config/import") => self.config_import(body),
@@ -1650,10 +1654,7 @@ mod tests {
 
     #[test]
     fn dir_urls_gain_a_slash() {
-        assert_eq!(
-            dir_slash_location("/overlay", ""),
-            Some("/overlay/".into())
-        );
+        assert_eq!(dir_slash_location("/overlay", ""), Some("/overlay/".into()));
         assert_eq!(
             dir_slash_location("/overlay", "dev=true"),
             Some("/overlay/?dev=true".into())

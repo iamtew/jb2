@@ -167,20 +167,6 @@
         </div>
       </section>
 
-      <section id="page-import" class="page">
-        <div class="panel">
-          <div class="settings-block">
-            <p class="muted">Import a JB1 <code>jukeboks.json</code> or JB2 <code>jb2.json</code>. Present fields overwrite; empty and <code>***</code> secrets are left as-is. JB1 files do not touch Twitch.</p>
-            <label for="importFileInput">Config JSON</label>
-            <div class="url-row">
-              <input id="importFileInput" type="file" accept=".json,application/json" />
-              <button id="importConfigButton" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#file-import"></use></svg>Import</button>
-            </div>
-            <p id="importFeedback" class="muted"></p>
-          </div>
-        </div>
-      </section>
-
       <section id="page-settings" class="page">
         <div class="panel">
           <div class="settings-block">
@@ -201,9 +187,28 @@
             <h4>Blacklist</h4>
             <ul id="blacklistList" class="chip-list"></ul>
           </div>
+          <div class="settings-block">
+            <p class="muted">Import a JB1 <code>jukeboks.json</code> or JB2 <code>jb2.json</code>. Present fields overwrite; empty and <code>***</code> secrets are left as-is. JB1 files do not touch Twitch.</p>
+            <label for="importFileInput">Config JSON</label>
+            <div class="url-row">
+              <input id="importFileInput" type="file" accept=".json,application/json" />
+              <button id="importConfigButton" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#file-import"></use></svg>Import</button>
+            </div>
+            <p id="importFeedback" class="muted"></p>
+          </div>
           <div class="settings-block settings-json-block">
             <h4>Settings JSON</h4>
             <pre id="settingsOutput">Loading settings…</pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-about" class="page">
+        <div class="panel">
+          <div class="settings-block">
+            <h4>Jukeboks 2</h4>
+            <p>running</p>
+            <p id="aboutVersion" class="muted">version …</p>
           </div>
         </div>
       </section>
@@ -215,8 +220,8 @@
         <button class="tab" data-page="commands" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#terminal-2"></use></svg><span>Commands</span></button>
         <button class="tab" data-page="twitch" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#brand-twitch"></use></svg><span>Twitch</span></button>
         <button class="tab" data-page="settings" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#settings"></use></svg><span>Settings</span></button>
-        <button class="tab" data-page="import" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#file-import"></use></svg><span>Import</span></button>
         <button class="tab" data-page="system" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#api"></use></svg><span>API</span></button>
+        <button class="tab" data-page="about" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#alert-circle"></use></svg><span>About</span></button>
       </nav>
     </main>
 

@@ -21,7 +21,7 @@ Flags: `-port`, `-bind`, `-ytmd_host`, `-ytmd_port`, `-webroot`, `-config`.
 
 Config is created next to the exe (or CWD) as `jb2.sqlite` if missing. If a sibling `jb2.json` exists and the database is empty, it is imported once (the JSON file is left in place).
 
-Admin → Import accepts old JB1 `jukeboks.json` and JB2 `jb2.json` files. Present fields overwrite current settings; empty and `***` secrets are skipped so a JB1 dump cannot wipe Twitch.
+Admin → Settings accepts old JB1 `jukeboks.json` and JB2 `jb2.json` files. Present fields overwrite current settings; empty and `***` secrets are skipped so a JB1 dump cannot wipe Twitch.
 
 ## Twitch
 
@@ -63,7 +63,7 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 
 | Path | Role |
 |---|---|
-| `GET /health` | liveness |
+| `GET /health` | liveness (`data.version` is `{git tag}-{git hash short}`, plus `-dirty` if the build tree was dirty) |
 | `GET /cmd/jb/songinfo` | now playing |
 | `GET /cmd/jb/queueinfo` | upcoming queue (fails if paused) |
 | `GET /cmd/jb/songrequest?input=` | search/queue (`now=1` plays immediately) |
@@ -85,7 +85,7 @@ Admin dock: `http://localhost:42420/admin/` (`GET /api/events` SSE for Twitch/ch
 
 ## Logo
 
-`webroot/img/jukeboks.png` is the app logo (favicon, landing, tray/exe icon after `just icon`).
+`webroot/img/jukeboks.png` is the app logo (favicon, landing, tray/exe icon after `just icon`). Admin → About and the tray **About** item show the build version from `/health`.
 
 ## License
 

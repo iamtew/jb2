@@ -20,6 +20,10 @@ use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+pub fn version() -> &'static str {
+    env!("JB2_VERSION")
+}
+
 fn main() {
     attach_parent_console();
 

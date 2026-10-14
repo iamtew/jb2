@@ -143,10 +143,8 @@ impl Hub {
         let changed = {
             let mut s = self.inner.lock().expect("twitch");
             let clear_err = connected && !s.last_error.is_empty();
-            let changed = s.connected != connected
-                || s.channel != channel
-                || s.nick != nick
-                || clear_err;
+            let changed =
+                s.connected != connected || s.channel != channel || s.nick != nick || clear_err;
             s.connected = connected;
             s.channel = channel.to_string();
             s.nick = nick.to_string();
@@ -500,9 +498,7 @@ fn run(app: &Arc<App>, channel: &str, oauth: &str, nick: &str, gen: u64) -> Resu
     let mut stream = connect_irc()?;
     send_irc(
         &mut stream,
-        &format!(
-            "PASS {token}\r\nNICK {nick}\r\nCAP REQ :twitch.tv/tags\r\nJOIN #{channel}\r\n"
-        ),
+        &format!("PASS {token}\r\nNICK {nick}\r\nCAP REQ :twitch.tv/tags\r\nJOIN #{channel}\r\n"),
     )?;
     let mut joined = false;
     let mut leftover = String::new();
@@ -557,7 +553,8 @@ fn connect_irc() -> Result<native_tls::TlsStream<TcpStream>, String> {
         .map_err(|e| e.to_string())?
         .next()
         .ok_or_else(|| "irc.chat.twitch.tv: no address".to_string())?;
-    let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(15)).map_err(|e| e.to_string())?;
+    let tcp =
+        TcpStream::connect_timeout(&addr, Duration::from_secs(15)).map_err(|e| e.to_string())?;
     let _ = tcp.set_nodelay(true);
     let tls = TlsConnector::new()
         .map_err(|e| e.to_string())?
@@ -1185,8 +1182,12 @@ mod tests {
     #[test]
     fn token_fields_omit_empty_secret() {
         let fields = token_fields(&[("grant_type", "refresh_token")], "  ");
-        assert!(fields.iter().any(|(k, v)| *k == "client_id" && *v == TWITCH_CLIENT_ID));
-        assert!(fields.iter().any(|(k, v)| *k == "grant_type" && *v == "refresh_token"));
+        assert!(fields
+            .iter()
+            .any(|(k, v)| *k == "client_id" && *v == TWITCH_CLIENT_ID));
+        assert!(fields
+            .iter()
+            .any(|(k, v)| *k == "grant_type" && *v == "refresh_token"));
         assert!(!fields.iter().any(|(k, _)| *k == "client_secret"));
     }
 

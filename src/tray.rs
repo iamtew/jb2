@@ -23,8 +23,9 @@ const WM_TRAY: u32 = WM_APP + 1;
 const ID_OPEN_HOME: usize = 1001;
 const ID_OPEN_ADMIN: usize = 1002;
 const ID_OPEN_OVERLAY: usize = 1003;
-const ID_RESTART: usize = 1004;
-const ID_QUIT: usize = 1005;
+const ID_ABOUT: usize = 1004;
+const ID_RESTART: usize = 1005;
+const ID_QUIT: usize = 1006;
 
 pub fn wait_for_quit() {
     unsafe {
@@ -119,6 +120,8 @@ fn show_menu(hwnd: HWND) {
         let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_ADMIN, w!("Open Admin"));
         let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_OVERLAY, w!("Open Overlay"));
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
+        let _ = AppendMenuW(menu, MF_STRING, ID_ABOUT, w!("About"));
+        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         let _ = AppendMenuW(menu, MF_STRING, ID_RESTART, w!("Restart"));
         let _ = AppendMenuW(menu, MF_STRING, ID_QUIT, w!("Quit"));
         let mut pt = windows::Win32::Foundation::POINT::default();
@@ -139,6 +142,7 @@ fn show_menu(hwnd: HWND) {
             ID_OPEN_HOME => open_url(&httpctl::serving_url("/")),
             ID_OPEN_ADMIN => open_url(&httpctl::serving_url("/admin/")),
             ID_OPEN_OVERLAY => open_url(&httpctl::serving_url("/overlay/")),
+            ID_ABOUT => show_about(hwnd),
             ID_RESTART => httpctl::restart(),
             ID_QUIT => PostQuitMessage(0),
             _ => {}
@@ -172,6 +176,20 @@ fn load_app_icon() -> HICON {
             }
         }
         LoadIconW(None, IDI_APPLICATION).unwrap_or_default()
+    }
+}
+
+fn show_about(hwnd: HWND) {
+    unsafe {
+        use windows::core::HSTRING;
+        use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
+        let body = format!("Jukeboks 2\nrunning\n{}", crate::version());
+        let _ = MessageBoxW(
+            hwnd,
+            &HSTRING::from(body),
+            &HSTRING::from("About"),
+            MB_OK | MB_ICONINFORMATION,
+        );
     }
 }
 

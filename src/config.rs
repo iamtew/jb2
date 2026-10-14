@@ -267,7 +267,10 @@ pub fn apply_patch(cfg: &mut Config, parsed: &Value) {
     if let Some(n) = parsed.get("twitchOAuthExpiresAt").and_then(|v| v.as_i64()) {
         cfg.twitch_oauth_expires_at = n;
     }
-    if let Some(b) = parsed.get("twitchCommandsEnabled").and_then(|v| v.as_bool()) {
+    if let Some(b) = parsed
+        .get("twitchCommandsEnabled")
+        .and_then(|v| v.as_bool())
+    {
         cfg.twitch_commands_enabled = b;
     }
     if let Some(obj) = parsed.get("twitchCommands").and_then(|v| v.as_object()) {
@@ -275,11 +278,7 @@ pub fn apply_patch(cfg: &mut Config, parsed: &Value) {
             let Some(v) = obj.get(id) else {
                 continue;
             };
-            let mut cd = cfg
-                .twitch_commands
-                .get(id)
-                .cloned()
-                .unwrap_or_default();
+            let mut cd = cfg.twitch_commands.get(id).cloned().unwrap_or_default();
             if let Some(n) = v.get("gcd").and_then(|x| x.as_i64()) {
                 cd.gcd = i32::try_from(n).unwrap_or(0);
             }
@@ -293,19 +292,22 @@ pub fn apply_patch(cfg: &mut Config, parsed: &Value) {
 
 /// True when a patch should bounce the IRC socket (channel / nick / tokens only).
 pub fn touches_twitch(parsed: &Value) -> bool {
-    parsed.as_object().map(|o| {
-        [
-            "twitchChannel",
-            "twitchOAuth",
-            "twitchNick",
-            "twitchClientId",
-            "twitchClientSecret",
-            "twitchRefreshToken",
-            "twitchOAuthExpiresAt",
-        ]
-        .iter()
-        .any(|k| o.contains_key(*k))
-    }).unwrap_or(false)
+    parsed
+        .as_object()
+        .map(|o| {
+            [
+                "twitchChannel",
+                "twitchOAuth",
+                "twitchNick",
+                "twitchClientId",
+                "twitchClientSecret",
+                "twitchRefreshToken",
+                "twitchOAuthExpiresAt",
+            ]
+            .iter()
+            .any(|k| o.contains_key(*k))
+        })
+        .unwrap_or(false)
 }
 
 fn open_db(path: &Path) -> Result<Connection, String> {

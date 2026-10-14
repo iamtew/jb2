@@ -12,9 +12,15 @@
   color-scheme: dark;
 }
 
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--page-bg);
@@ -51,8 +57,8 @@ body.is-playing {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
   width: 100%;
   max-width: 100%;
