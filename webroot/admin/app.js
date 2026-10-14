@@ -103,8 +103,11 @@ let twitchLastChatKey = null;
 function updateSelection(selected) {
   if (!selected) return;
 
+  // YTMD proxy encodes method as a path suffix; /cmd/jb/* is exact-match.
   const defaultMethod = selected.methods[0]?.toLowerCase() || 'get';
-  const methodPath = `${selected.path}/${defaultMethod}`;
+  const methodPath = selected.path.startsWith('/cmd/ytmd')
+    ? `${selected.path}/${defaultMethod}`
+    : selected.path;
   const fullUrl = `${window.location.origin}${methodPath}`;
   urlInput.value = fullUrl;
   output.textContent = `${selected.methods.join(', ')} ${methodPath}\n\n${selected.description}`;
