@@ -359,6 +359,74 @@ body {
   scrollbar-width: none;
 }
 
+.dock-compact-controls {
+  display: none;
+  align-items: center;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dock-compact-controls .control-btn {
+  flex: 0 0 auto;
+  width: var(--hit);
+}
+
+.dock-fold {
+  flex: 0 0 auto;
+  width: var(--hit);
+  min-width: var(--hit);
+  padding: 0;
+  margin-left: 0;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--muted);
+}
+
+.dock-fold .icon {
+  transition: transform 0.15s ease;
+}
+
+.dock--folded .dock-fold .icon {
+  transform: rotate(180deg);
+}
+
+.dock--folded .now-playing__row {
+  position: relative;
+}
+
+.dock--folded .dock-compact-controls {
+  display: flex;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.dock--folded .now-playing__headline,
+.dock--folded .player-controls,
+.dock--folded .player-toggles {
+  display: none;
+}
+
+.cmd-pill__icon {
+  display: none;
+}
+
+.dock--folded .cmd-pill {
+  width: var(--hit);
+  min-width: var(--hit);
+  padding: 0;
+}
+
+.dock--folded .cmd-pill__icon {
+  display: block;
+}
+
+.dock--folded .cmd-pill__label {
+  display: none;
+}
+
 .cmd-pill {
   flex: 0 0 auto;
   margin-left: auto;

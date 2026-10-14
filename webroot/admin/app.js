@@ -65,6 +65,12 @@ const playerButtons = {
   next: document.getElementById('nextButton'),
   shuffle: document.getElementById('shuffleButton'),
 };
+const dockEl = document.querySelector('.dock');
+const dockFold = document.getElementById('dockFold');
+const compactPrev = document.getElementById('compactPrev');
+const compactPlay = document.getElementById('compactPlay');
+const compactNext = document.getElementById('compactNext');
+const DOCK_FOLD_KEY = 'jb2-admin-dock-folded';
 const songRequestInput = document.getElementById('songRequestInput');
 const songRequestForm = document.getElementById('songRequestForm');
 const songRequestNow = document.getElementById('songRequestNow');
@@ -584,7 +590,10 @@ if (twitchDisconnectButton) {
 function setChatCmdsUi(enabled) {
   const on = Boolean(enabled);
   if (chatCmdsPill) {
-    chatCmdsPill.textContent = on ? 'Chat cmds ON' : 'Chat cmds OFF';
+    const label = chatCmdsPill.querySelector('.cmd-pill__label');
+    if (label) {
+      label.textContent = on ? 'Chat cmds ON' : 'Chat cmds OFF';
+    }
     chatCmdsPill.classList.toggle('is-on', on);
     chatCmdsPill.classList.toggle('is-off', !on);
     chatCmdsPill.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -1480,6 +1489,10 @@ function updatePlaybackButtons() {
     playerButtons.play.classList.toggle('is-active', playbackState.hasSong && playbackState.isPaused);
     playerButtons.pause.classList.toggle('is-active', isPlayingNow);
   }
+  if (compactPlay) {
+    compactPlay.innerHTML = icon(isPlayingNow ? 'player-pause' : 'player-play');
+    compactPlay.setAttribute('aria-label', isPlayingNow ? 'Pause' : 'Play');
+  }
   document.body.classList.toggle('is-playing', isPlayingNow);
   setToggleButtonState(playerButtons.shuffle, playbackState.shuffle);
 }
@@ -1913,6 +1926,55 @@ async function seekToPosition(seconds) {
   const path = `/cmd/ytmd/seek-to/post?seconds=${targetSeconds}`;
   await sendPlayerCommand(path);
 }
+
+function setDockFolded(folded) {
+  if (!dockEl) return;
+  dockEl.classList.toggle('dock--folded', folded);
+  if (dockFold) {
+    dockFold.setAttribute('aria-expanded', folded ? 'false' : 'true');
+    dockFold.setAttribute('aria-label', folded ? 'Unfold player' : 'Fold player');
+  }
+  try {
+    localStorage.setItem(DOCK_FOLD_KEY, folded ? '1' : '0');
+  } catch (_) {
+    /* OBS / private mode */
+  }
+}
+
+function initDockFold() {
+  let folded = false;
+  try {
+    folded = localStorage.getItem(DOCK_FOLD_KEY) === '1';
+  } catch (_) {
+    folded = false;
+  }
+  setDockFolded(folded);
+}
+
+if (dockFold) {
+  dockFold.addEventListener('click', () => {
+    setDockFolded(!dockEl?.classList.contains('dock--folded'));
+  });
+}
+
+if (compactPrev) {
+  compactPrev.addEventListener('click', () => playerButtons.prev?.click());
+}
+if (compactNext) {
+  compactNext.addEventListener('click', () => playerButtons.next?.click());
+}
+if (compactPlay) {
+  compactPlay.addEventListener('click', () => {
+    const isPlayingNow = playbackState.hasSong && !playbackState.isPaused;
+    if (isPlayingNow) {
+      playerButtons.pause?.click();
+    } else {
+      playerButtons.play?.click();
+    }
+  });
+}
+
+initDockFold();
 
 Object.entries(playerButtons).forEach(([key, button]) => {
   if (!button) return;

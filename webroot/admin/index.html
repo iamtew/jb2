@@ -21,7 +21,13 @@
                   <span id="totalTime">00:00</span>
                 </span>
               </div>
-              <button id="chatCmdsPill" class="cmd-pill is-on" type="button" aria-pressed="true" aria-label="Twitch chat commands">Chat cmds ON</button>
+              <div class="dock-compact-controls" aria-label="Playback controls">
+                <button id="compactPrev" class="control-btn" type="button" aria-label="Previous"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#player-skip-back"></use></svg></button>
+                <button id="compactPlay" class="control-btn primary" type="button" aria-label="Play"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#player-play"></use></svg></button>
+                <button id="compactNext" class="control-btn" type="button" aria-label="Next"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#player-skip-forward"></use></svg></button>
+              </div>
+              <button id="chatCmdsPill" class="cmd-pill is-on" type="button" aria-pressed="true" aria-label="Twitch chat commands"><svg class="icon cmd-pill__icon" aria-hidden="true"><use href="/admin/icons.svg#message-circle"></use></svg><span class="cmd-pill__label">Chat cmds ON</span></button>
+              <button id="dockFold" class="dock-fold" type="button" aria-expanded="true" aria-label="Fold player"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#chevron-down"></use></svg></button>
             </div>
             <div class="now-playing__headline"><span id="currentMeta"><span class="now-playing__headline-track">Waiting for YTMD…</span></span></div>
             <div class="progress-row">
