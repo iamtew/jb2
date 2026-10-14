@@ -15,6 +15,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use url::Url;
 
 const CHAT_CAP: usize = 200;
+const HISTORY_CAP: usize = 50;
+/// ponytail: ring of Twitch `id` tags so a duplicate PRIVMSG cannot run a command twice.
+const SEEN_PRIVMSG_CAP: usize = 64;
 const MAX_PRIVMSG: usize = 500;
 /// ponytail: one FIFO, drop newest past this; per-user queues if a raid starves others.
 const MAX_CMD_JOBS: usize = 32;
@@ -41,13 +44,21 @@ struct Inner {
     generation: u64,
     channel: String,
     nick: String,
+    /// Twitch `display-name` for the bot, from USERSTATE. Empty until IRC tags arrive.
+    display_nick: String,
     last_error: String,
     next_id: u64,
     chat: VecDeque<ChatLine>,
+    history: VecDeque<CmdHistory>,
     outbound: VecDeque<String>,
     jobs: VecDeque<CmdJob>,
     last_gcd: HashMap<String, Instant>,
     last_ucd: HashMap<(String, String), Instant>,
+    seen_privmsg: VecDeque<String>,
+    /// Last accepted chat command; used to drop Twitch delivering the same PRIVMSG twice.
+    last_cmd: Option<(String, String, String, Instant)>,
+    /// Last PRIVMSG that actually went out. Drops a second identical send/echo.
+    last_privmsg: Option<(String, Instant)>,
     /// (state, redirect_uri, pkce verifier)
     oauth_state: Option<(String, String, String)>,
 }
@@ -55,6 +66,17 @@ struct Inner {
 struct CmdJob {
     id: String,
     args: String,
+    nick: String,
+}
+
+struct CmdHistory {
+    id: u64,
+    ts: u64,
+    nick: String,
+    cmd: String,
+    args: String,
+    reply: String,
+    preview: Option<Value>,
 }
 
 #[derive(Clone)]
@@ -76,13 +98,18 @@ impl Hub {
                 generation: 0,
                 channel: String::new(),
                 nick: String::new(),
+                display_nick: String::new(),
                 last_error: String::new(),
                 next_id: 1,
                 chat: VecDeque::new(),
+                history: VecDeque::new(),
                 outbound: VecDeque::new(),
                 jobs: VecDeque::new(),
                 last_gcd: HashMap::new(),
                 last_ucd: HashMap::new(),
+                seen_privmsg: VecDeque::new(),
+                last_cmd: None,
+                last_privmsg: None,
                 oauth_state: None,
             }),
             jobs_cv: Condvar::new(),
@@ -150,11 +177,65 @@ impl Hub {
             s.nick = nick.to_string();
             if connected {
                 s.last_error.clear();
+            } else {
+                s.display_nick.clear();
             }
             changed
         };
         if changed {
             self.emit_twitch();
+        }
+    }
+
+    fn set_display_nick(&self, name: &str) {
+        let name = name.trim();
+        if name.is_empty() {
+            return;
+        }
+        let changed = {
+            let mut s = self.inner.lock().expect("twitch");
+            if s.display_nick == name {
+                false
+            } else {
+                s.display_nick = name.to_string();
+                true
+            }
+        };
+        if changed {
+            self.emit_twitch();
+        }
+    }
+
+    fn echo_nick(&self, fallback: &str) -> String {
+        let s = self.inner.lock().expect("twitch");
+        if s.display_nick.is_empty() {
+            fallback.to_string()
+        } else {
+            s.display_nick.clone()
+        }
+    }
+
+    /// True if this Twitch `id` was already handled.
+    fn already_saw_privmsg(&self, id: &str) -> bool {
+        if id.is_empty() {
+            return false;
+        }
+        let mut s = self.inner.lock().expect("twitch");
+        if s.seen_privmsg.iter().any(|x| x == id) {
+            return true;
+        }
+        s.seen_privmsg.push_back(id.to_string());
+        while s.seen_privmsg.len() > SEEN_PRIVMSG_CAP {
+            s.seen_privmsg.pop_front();
+        }
+        false
+    }
+
+    fn session_nick(s: &Inner) -> &str {
+        if s.display_nick.is_empty() {
+            &s.nick
+        } else {
+            &s.display_nick
         }
     }
 
@@ -201,7 +282,7 @@ impl Hub {
                 "connected": s.connected,
                 "wanted": s.wanted,
                 "channel": s.channel,
-                "nick": s.nick,
+                "nick": Self::session_nick(&s),
                 "lastError": s.last_error,
             })
         };
@@ -213,7 +294,29 @@ impl Hub {
     }
 
     fn pop_outbound(&self) -> Option<String> {
-        self.inner.lock().expect("twitch").outbound.pop_front()
+        let mut s = self.inner.lock().expect("twitch");
+        loop {
+            let text = s.outbound.pop_front()?;
+            if let Some((prev, at)) = &s.last_privmsg {
+                if prev == &text && at.elapsed() < Duration::from_secs(2) {
+                    continue;
+                }
+            }
+            return Some(text);
+        }
+    }
+
+    fn note_sent(&self, text: &str) {
+        let mut s = self.inner.lock().expect("twitch");
+        s.last_privmsg = Some((text.to_string(), Instant::now()));
+    }
+
+    fn is_recent_outbound(&self, text: &str) -> bool {
+        let s = self.inner.lock().expect("twitch");
+        match &s.last_privmsg {
+            Some((prev, at)) => prev == text && at.elapsed() < Duration::from_secs(2),
+            None => false,
+        }
     }
 
     fn prepend_outbound(&self, text: String) {
@@ -246,13 +349,29 @@ impl Hub {
         if s.jobs.len() >= MAX_CMD_JOBS {
             return false;
         }
+        if let Some((n, cmd, args_prev, at)) = &s.last_cmd {
+            if n == &nick_key
+                && cmd == id
+                && args_prev == args
+                && at.elapsed() < Duration::from_millis(1500)
+            {
+                return false;
+            }
+        }
         if cooldown_blocked(&s, cfg, id, &nick_key) {
             return false;
         }
         stamp_use(&mut s, id, &nick_key);
+        s.last_cmd = Some((
+            nick_key.clone(),
+            id.to_string(),
+            args.to_string(),
+            Instant::now(),
+        ));
         s.jobs.push_back(CmdJob {
             id: id.to_string(),
             args: args.to_string(),
+            nick: nick.to_string(),
         });
         self.jobs_cv.notify_one();
         true
@@ -305,7 +424,7 @@ impl Hub {
             "connected": s.connected,
             "wanted": s.wanted,
             "channel": s.channel,
-            "nick": s.nick,
+            "nick": Self::session_nick(&s),
             "lastError": s.last_error,
             "oauthSet": !cfg.twitch_oauth.trim().is_empty(),
             "refreshSet": !cfg.twitch_refresh_token.trim().is_empty(),
@@ -328,6 +447,55 @@ impl Hub {
             })
             .collect();
         json!({ "messages": messages })
+    }
+
+    pub fn history_json(&self) -> Value {
+        let s = self.inner.lock().expect("twitch");
+        let entries: Vec<Value> = s
+            .history
+            .iter()
+            .rev()
+            .map(|e| {
+                let mut row = json!({
+                    "id": e.id,
+                    "ts": e.ts,
+                    "nick": e.nick,
+                    "cmd": e.cmd,
+                    "args": e.args,
+                    "reply": e.reply,
+                });
+                if let Some(preview) = &e.preview {
+                    row["preview"] = preview.clone();
+                }
+                row
+            })
+            .collect();
+        json!({ "entries": entries })
+    }
+
+    fn push_history(&self, nick: &str, cmd: &str, args: &str, reply: &str, preview: Option<Value>) {
+        {
+            let mut s = self.inner.lock().expect("twitch");
+            let id = s.next_id;
+            s.next_id = s.next_id.saturating_add(1);
+            s.history.push_back(CmdHistory {
+                id,
+                ts: now_ms(),
+                nick: nick.to_string(),
+                cmd: cmd.to_string(),
+                args: args.to_string(),
+                reply: reply.to_string(),
+                preview,
+            });
+            while s.history.len() > HISTORY_CAP {
+                s.history.pop_front();
+            }
+        }
+        self.emit_history();
+    }
+
+    fn emit_history(&self) {
+        self.events.emit("cmdHistory", &self.history_json());
     }
 }
 
@@ -359,27 +527,75 @@ fn cmd_worker(app: Arc<App>) {
         if !cfg.twitch_commands_enabled {
             continue;
         }
-        let reply = run_chat_command(&app, &job.id, &job.args);
+        let (reply, preview) = run_chat_command(&app, &job.id, &job.args);
         let reply = sanitize_privmsg(&reply);
+        app.twitch
+            .push_history(&job.nick, &job.id, &job.args, &reply, preview);
         if !reply.is_empty() {
             let _ = app.twitch.enqueue_send(&reply);
         }
     }
 }
 
-fn run_chat_command(app: &App, id: &str, args: &str) -> String {
+fn run_chat_command(app: &App, id: &str, args: &str) -> (String, Option<Value>) {
     match id {
         "sr" => {
             if args.is_empty() {
-                "usage: !sr <song>".to_string()
+                ("usage: !sr <song>".to_string(), None)
             } else {
-                envelope_text(app.song_request(args, false).envelope())
+                let env = app.song_request(args, false).envelope();
+                let preview = sr_preview(args, &env);
+                (envelope_text(env), preview)
             }
         }
-        "q" => envelope_text(app.queue_info().envelope()),
-        "si" => envelope_text(app.song_info().envelope()),
-        _ => String::new(),
+        "q" => (envelope_text(app.queue_info().envelope()), None),
+        "si" => (envelope_text(app.song_info().envelope()), None),
+        _ => (String::new(), None),
     }
+}
+
+fn sr_preview(args: &str, env: &Envelope) -> Option<Value> {
+    let data = env.data.as_ref()?;
+    let title = data
+        .get("linkTitle")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .or_else(|| data.get("title").and_then(|v| v.as_str()))
+        .unwrap_or("")
+        .to_string();
+    let artist = data
+        .get("linkArtist")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .or_else(|| data.get("artist").and_then(|v| v.as_str()))
+        .unwrap_or("")
+        .to_string();
+    let mut thumb = data
+        .get("thumbnail")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let mut url = String::new();
+    if let Some(sp) = crate::videoid::canonical_spotify_track_url(args) {
+        url = sp;
+    } else {
+        let (vid, url_like) = crate::videoid::classify_song_request_input(args);
+        if url_like && !vid.is_empty() {
+            url = args.trim().to_string();
+            if thumb.is_empty() {
+                thumb = format!("https://i.ytimg.com/vi/{vid}/mqdefault.jpg");
+            }
+        }
+    }
+    if title.is_empty() && artist.is_empty() && thumb.is_empty() {
+        return None;
+    }
+    Some(json!({
+        "title": title,
+        "artist": artist,
+        "thumb": thumb,
+        "url": url,
+    }))
 }
 
 fn stamp_use(s: &mut Inner, id: &str, nick: &str) {
@@ -513,7 +729,9 @@ fn run(app: &Arc<App>, channel: &str, oauth: &str, nick: &str, gen: u64) -> Resu
                     app.twitch.prepend_outbound(text);
                     return Err(e);
                 }
-                app.twitch.push_chat(nick, &text, "");
+                app.twitch.note_sent(&text);
+                let echo = app.twitch.echo_nick(nick);
+                app.twitch.push_chat(&echo, &text, "");
             }
         }
         match stream.read(&mut tmp) {
@@ -567,16 +785,47 @@ fn connect_irc() -> Result<native_tls::TlsStream<TcpStream>, String> {
 }
 
 fn send_irc(stream: &mut impl Write, s: &str) -> Result<(), String> {
-    stream
-        .write_all(s.as_bytes())
-        .map_err(|e| format!("irc write: {e}"))?;
-    stream.flush().map_err(|e| format!("irc write: {e}"))
+    // Socket is nonblocking for reads. write_all/flush on WouldBlock used to
+    // reconnect and PRIVMSG again — the first write often already hit Twitch.
+    let mut bytes = s.as_bytes();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !bytes.is_empty() {
+        match stream.write(bytes) {
+            Ok(0) => return Err("irc write: eof".into()),
+            Ok(n) => bytes = &bytes[n..],
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                if Instant::now() >= deadline {
+                    return Err("irc write: timeout".into());
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(e) => return Err(format!("irc write: {e}")),
+        }
+    }
+    loop {
+        match stream.flush() {
+            Ok(()) => return Ok(()),
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                if Instant::now() >= deadline {
+                    return Err("irc write: timeout".into());
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(e) => return Err(format!("irc write: {e}")),
+        }
+    }
 }
 
 fn handle_line(
     app: &Arc<App>,
     _channel: &str,
-    _bot_nick: &str,
+    bot_nick: &str,
     line: &str,
     stream: &mut impl Write,
 ) -> Result<(), String> {
@@ -590,11 +839,33 @@ fn handle_line(
     if is_auth_fail(line) {
         return Err(line.to_string());
     }
-    let Some((from, body)) = parse_privmsg(line) else {
+    if is_userstate_line(line) {
+        if let Some(name) = display_name_from_line(line) {
+            app.twitch.set_display_nick(&name);
+        }
+        return Ok(());
+    }
+    let Some(msg) = parse_privmsg(line) else {
         return Ok(());
     };
-    app.twitch.push_chat(&from, &body, &privmsg_color(line));
-    let Some((cmd, rest)) = parse_command(&body) else {
+    // Own PRIVMSG is already local-echoed on send. Match login, display-name,
+    // or the exact text we just wrote — Twitch echo nicks are not always the login.
+    if is_own_privmsg(&msg, bot_nick, &app.twitch.echo_nick(bot_nick))
+        || app.twitch.is_recent_outbound(&msg.body)
+    {
+        return Ok(());
+    }
+    if is_shared_chat_copy(line) {
+        return Ok(());
+    }
+    if let Some(id) = irc_tag_value(line, "id") {
+        if app.twitch.already_saw_privmsg(id) {
+            return Ok(());
+        }
+    }
+    app.twitch
+        .push_chat(&msg.display, &msg.body, &privmsg_color(line));
+    let Some((cmd, rest)) = parse_command(&msg.body) else {
         return Ok(());
     };
     let Some(id) = canonical_command(&cmd) else {
@@ -603,7 +874,7 @@ fn handle_line(
     let Ok(cfg) = app.store.get() else {
         return Ok(());
     };
-    let _ = app.twitch.try_enqueue_cmd(&cfg, &from, id, &rest);
+    let _ = app.twitch.try_enqueue_cmd(&cfg, &msg.display, id, &rest);
     Ok(())
 }
 
@@ -905,6 +1176,58 @@ fn irc_tag_value<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     None
 }
 
+fn unescape_irc_tag(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('s') => out.push(' '),
+            Some(':') => out.push(';'),
+            Some('\\') => out.push('\\'),
+            Some('r') => out.push('\r'),
+            Some('n') => out.push('\n'),
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+fn display_name_from_line(line: &str) -> Option<String> {
+    let raw = irc_tag_value(line, "display-name")?;
+    let name = unescape_irc_tag(raw);
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
+}
+
+fn irc_verb(line: &str) -> &str {
+    let rest = if line.starts_with('@') {
+        line.split_once(' ').map(|(_, r)| r).unwrap_or(line)
+    } else {
+        line
+    };
+    let after_prefix = if let Some(rest) = rest.strip_prefix(':') {
+        rest.split_once(' ').map(|(_, c)| c).unwrap_or(rest)
+    } else {
+        rest
+    };
+    after_prefix.split_whitespace().next().unwrap_or("")
+}
+
+fn is_userstate_line(line: &str) -> bool {
+    matches!(irc_verb(line), "GLOBALUSERSTATE" | "USERSTATE")
+}
+
 fn is_hex_color(s: &str) -> bool {
     let b = s.as_bytes();
     b.len() == 7 && b[0] == b'#' && b[1..].iter().all(u8::is_ascii_hexdigit)
@@ -918,7 +1241,20 @@ fn privmsg_color(line: &str) -> String {
     }
 }
 
-fn parse_privmsg(line: &str) -> Option<(String, String)> {
+struct Privmsg {
+    login: String,
+    display: String,
+    body: String,
+}
+
+fn is_own_privmsg(msg: &Privmsg, bot_nick: &str, display_nick: &str) -> bool {
+    msg.login.eq_ignore_ascii_case(bot_nick)
+        || msg.display.eq_ignore_ascii_case(bot_nick)
+        || (!display_nick.is_empty() && msg.display.eq_ignore_ascii_case(display_nick))
+        || (!display_nick.is_empty() && msg.login.eq_ignore_ascii_case(display_nick))
+}
+
+fn parse_privmsg(line: &str) -> Option<Privmsg> {
     let without_tags = if line.starts_with('@') {
         line.split_once(' ')?.1
     } else {
@@ -929,12 +1265,28 @@ fn parse_privmsg(line: &str) -> Option<(String, String)> {
     if !after_prefix.to_ascii_uppercase().starts_with("PRIVMSG ") {
         return None;
     }
-    let nick = prefix.split('!').next()?.to_string();
-    if nick.is_empty() {
+    let login = prefix.split('!').next()?.to_string();
+    if login.is_empty() {
         return None;
     }
+    let display = display_name_from_line(line).unwrap_or_else(|| login.clone());
     let (_, body) = after_prefix.split_once(" :")?;
-    Some((nick, body.to_string()))
+    Some(Privmsg {
+        login,
+        display,
+        body: body.to_string(),
+    })
+}
+
+/// Shared Chat relay of a message that did not originate in this room.
+fn is_shared_chat_copy(line: &str) -> bool {
+    let Some(src) = irc_tag_value(line, "source-room-id").filter(|s| !s.is_empty()) else {
+        return false;
+    };
+    let Some(room) = irc_tag_value(line, "room-id").filter(|s| !s.is_empty()) else {
+        return false;
+    };
+    src != room
 }
 
 fn parse_command(body: &str) -> Option<(String, String)> {
@@ -951,27 +1303,94 @@ mod tests {
 
     #[test]
     fn parse_untagged_privmsg_nick() {
-        let (nick, body) =
+        let msg =
             parse_privmsg(":botty!botty@botty.tmi.twitch.tv PRIVMSG #streamer :hello").unwrap();
-        assert_eq!(nick, "botty");
-        assert_eq!(body, "hello");
+        assert_eq!(msg.login, "botty");
+        assert_eq!(msg.display, "botty");
+        assert_eq!(msg.body, "hello");
     }
 
     #[test]
     fn parse_tagged_privmsg_nick() {
         let line = "@badge-info= :alice!alice@alice.tmi.twitch.tv PRIVMSG #bob :!sr never gonna";
-        let (nick, body) = parse_privmsg(line).unwrap();
-        assert_eq!(nick, "alice");
-        assert_eq!(body, "!sr never gonna");
+        let msg = parse_privmsg(line).unwrap();
+        assert_eq!(msg.login, "alice");
+        assert_eq!(msg.display, "alice");
+        assert_eq!(msg.body, "!sr never gonna");
     }
 
     #[test]
     fn parse_tagged_privmsg_color() {
         let line = "@badge-info=;color=#FF69B4;display-name=Alice :alice!alice@alice.tmi.twitch.tv PRIVMSG #bob :hi";
         assert_eq!(privmsg_color(line), "#FF69B4");
-        let (nick, body) = parse_privmsg(line).unwrap();
-        assert_eq!(nick, "alice");
-        assert_eq!(body, "hi");
+        let msg = parse_privmsg(line).unwrap();
+        assert_eq!(msg.login, "alice");
+        assert_eq!(msg.display, "Alice");
+        assert_eq!(msg.body, "hi");
+    }
+
+    #[test]
+    fn display_name_unescapes_irc_tag() {
+        assert_eq!(unescape_irc_tag(r"Cool\:Bot"), "Cool;Bot");
+        let line = r"@display-name=Cool\sBot :coolbot!coolbot@coolbot.tmi.twitch.tv PRIVMSG #c :hi";
+        let msg = parse_privmsg(line).unwrap();
+        assert_eq!(msg.display, "Cool Bot");
+        assert_eq!(msg.login, "coolbot");
+    }
+
+    #[test]
+    fn shared_chat_copy_is_skipped() {
+        let copy = "@room-id=1;source-room-id=2;id=aaa :a!a@a.tmi.twitch.tv PRIVMSG #c :!q";
+        assert!(is_shared_chat_copy(copy));
+        let native = "@room-id=1;source-room-id=1;id=bbb :a!a@a.tmi.twitch.tv PRIVMSG #c :!q";
+        assert!(!is_shared_chat_copy(native));
+        let old = "@id=ccc :a!a@a.tmi.twitch.tv PRIVMSG #c :!q";
+        assert!(!is_shared_chat_copy(old));
+    }
+
+    #[test]
+    fn duplicate_privmsg_id_is_remembered() {
+        let hub = Hub::with_events(EventBus::new());
+        assert!(!hub.already_saw_privmsg("msg-1"));
+        assert!(hub.already_saw_privmsg("msg-1"));
+        assert!(!hub.already_saw_privmsg("msg-2"));
+    }
+
+    #[test]
+    fn history_json_newest_first_with_preview() {
+        let hub = Hub::with_events(EventBus::new());
+        hub.push_history("Alice", "sr", "never gonna", "Added to queue: x.", None);
+        hub.push_history(
+            "Bob",
+            "sr",
+            "https://youtu.be/dQw4w9WgXcQ",
+            "Added to queue: Rick — Astley.",
+            Some(json!({
+                "title": "Rick",
+                "artist": "Astley",
+                "thumb": "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
+                "url": "https://youtu.be/dQw4w9WgXcQ"
+            })),
+        );
+        let payload = hub.history_json();
+        let entries = payload["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0]["nick"], "Bob");
+        assert_eq!(entries[0]["cmd"], "sr");
+        assert_eq!(entries[0]["preview"]["title"], "Rick");
+        assert_eq!(entries[1]["nick"], "Alice");
+        assert!(entries[1].get("preview").is_none());
+    }
+
+    #[test]
+    fn sr_preview_youtube_url_gets_thumb() {
+        let env = Envelope::ok_msg(
+            "Added to queue: Song — Artist.",
+            json!({"videoId": "dQw4w9WgXcQ", "title": "Song", "artist": "Artist"}),
+        );
+        let p = sr_preview("https://youtu.be/dQw4w9WgXcQ", &env).unwrap();
+        assert_eq!(p["thumb"], "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg");
+        assert_eq!(p["title"], "Song");
     }
 
     #[test]
@@ -1058,7 +1477,9 @@ mod tests {
         assert!(hub.try_enqueue_cmd(&cfg, "alice", "sr", "a"));
         assert!(hub.try_enqueue_cmd(&cfg, "bob", "q", ""));
         assert!(hub.try_enqueue_cmd(&cfg, "carol", "si", ""));
-        assert_eq!(hub.pop_job().unwrap().id, "sr");
+        let first = hub.pop_job().unwrap();
+        assert_eq!(first.id, "sr");
+        assert_eq!(first.nick, "alice");
         assert_eq!(hub.pop_job().unwrap().id, "q");
         assert_eq!(hub.pop_job().unwrap().id, "si");
         assert!(hub.pop_job().is_none());
@@ -1086,6 +1507,48 @@ mod tests {
         assert!(hub.try_enqueue_cmd(&cfg, "alice", "sr", "a"));
         assert!(!hub.try_enqueue_cmd(&cfg, "bob", "sr", "b"));
         assert_eq!(hub.pending_jobs(), 1);
+    }
+
+    #[test]
+    fn duplicate_command_from_same_user_is_dropped() {
+        let hub = Hub::with_events(EventBus::new());
+        let cfg = Config::default();
+        assert!(hub.try_enqueue_cmd(&cfg, "Alice", "q", ""));
+        assert!(!hub.try_enqueue_cmd(&cfg, "alice", "q", ""));
+        assert_eq!(hub.pending_jobs(), 1);
+        assert!(hub.try_enqueue_cmd(&cfg, "bob", "q", ""));
+        assert_eq!(hub.pending_jobs(), 2);
+    }
+
+    #[test]
+    fn identical_outbound_is_dropped_after_a_successful_send() {
+        let hub = Hub::with_events(EventBus::new());
+        {
+            let mut s = hub.inner.lock().unwrap();
+            s.connected = true;
+        }
+        hub.enqueue_send("Added to queue: x.").unwrap();
+        hub.enqueue_send("Added to queue: x.").unwrap();
+        let first = hub.pop_outbound().unwrap();
+        hub.note_sent(&first);
+        assert!(hub.pop_outbound().is_none());
+        assert!(hub.is_recent_outbound("Added to queue: x."));
+    }
+
+    #[test]
+    fn own_privmsg_matches_display_name() {
+        let msg = Privmsg {
+            login: "tmi.twitch.tv".into(),
+            display: "MyBot".into(),
+            body: "ok".into(),
+        };
+        assert!(is_own_privmsg(&msg, "mybot", "MyBot"));
+        let other = Privmsg {
+            login: "alice".into(),
+            display: "Alice".into(),
+            body: "!q".into(),
+        };
+        assert!(!is_own_privmsg(&other, "mybot", "MyBot"));
     }
 
     #[test]
@@ -1209,5 +1672,18 @@ mod tests {
         assert!(is_welcome(":tmi.twitch.tv 001 botty :Welcome, GLHF!"));
         assert!(!is_welcome(":tmi.twitch.tv 002 botty :your host"));
         assert!(!is_welcome("PING :tmi.twitch.tv"));
+    }
+
+    #[test]
+    fn userstate_is_not_a_privmsg() {
+        assert!(is_userstate_line(
+            "@display-name=MyBot :tmi.twitch.tv GLOBALUSERSTATE"
+        ));
+        assert!(is_userstate_line(
+            "@display-name=MyBot :tmi.twitch.tv USERSTATE #streamer"
+        ));
+        assert!(!is_userstate_line(
+            "@display-name=Alice :alice!alice@alice.tmi.twitch.tv PRIVMSG #c :look at USERSTATE"
+        ));
     }
 }

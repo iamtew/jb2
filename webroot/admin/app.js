@@ -98,6 +98,7 @@ const chatCmdsEnabled = document.getElementById('chatCmdsEnabled');
 const cmdCooldownRows = document.getElementById('cmdCooldownRows');
 const saveCmdCooldowns = document.getElementById('saveCmdCooldowns');
 const cmdFeedback = document.getElementById('cmdFeedback');
+const cmdHistoryLog = document.getElementById('cmdHistoryLog');
 const importFileInput = document.getElementById('importFileInput');
 const importConfigButton = document.getElementById('importConfigButton');
 const importFeedback = document.getElementById('importFeedback');
@@ -487,7 +488,8 @@ function renderTwitchChat(messages) {
     const color = typeof m.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(m.color)
       ? ` style="color: ${m.color}"`
       : '';
-    return `<div class="twitch-log__line"><span class="twitch-log__nick"${color}>${escapeHtml(m.nick)}</span>${escapeHtml(m.text)}</div>`;
+    const cmdClass = isChatCommandText(m.text) ? ' twitch-log__line--cmd' : '';
+    return `<div class="twitch-log__line${cmdClass}"><span class="twitch-log__nick"${color}>${escapeHtml(m.nick)}</span>${escapeHtml(m.text)}</div>`;
   }).join('');
   if (twitchStickBottom) {
     twitchChatLog.scrollTop = twitchChatLog.scrollHeight;
@@ -630,6 +632,49 @@ function setCmdFeedback(text) {
   }
 }
 
+function isChatCommandText(text) {
+  return /^(?:!sr|!songrequest|!q|!queue|!si|!songinfo)(?:\s|$)/i.test(String(text || '').trim());
+}
+
+function safeHttpsUrl(value) {
+  return typeof value === 'string' && /^https:\/\/[a-z0-9.-]+/i.test(value) ? value : '';
+}
+
+function renderCmdHistory(entries) {
+  if (!cmdHistoryLog) return;
+  if (!entries.length) {
+    cmdHistoryLog.innerHTML = '<div class="muted">No commands yet.</div>';
+    return;
+  }
+  cmdHistoryLog.innerHTML = entries.map((e) => {
+    const nick = escapeHtml(e.nick || '');
+    const cmd = escapeHtml(e.cmd || '');
+    const args = e.args ? ` ${escapeHtml(e.args)}` : '';
+    const reply = e.reply ? `<div class="cmd-history__reply">${escapeHtml(e.reply)}</div>` : '';
+    const p = e.preview || null;
+    let card = '';
+    if (p && (p.title || p.artist || p.thumb)) {
+      const title = escapeHtml(p.title || '');
+      const artist = escapeHtml(p.artist || '');
+      const meta = [title, artist].filter(Boolean).join(' — ');
+      const thumb = safeHttpsUrl(p.thumb);
+      const img = thumb
+        ? `<img class="cmd-history__thumb" src="${escapeHtml(thumb)}" alt="">`
+        : '';
+      const inner = `${img}<span class="cmd-history__meta">${meta}</span>`;
+      const url = safeHttpsUrl(p.url);
+      card = url
+        ? `<a class="cmd-history__card" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
+        : `<div class="cmd-history__card">${inner}</div>`;
+    }
+    return `<div class="cmd-history__row">
+      <div class="cmd-history__head"><span class="cmd-history__nick">${nick}</span>!${cmd}${args}</div>
+      ${card}
+      ${reply}
+    </div>`;
+  }).join('');
+}
+
 function fillCmdCooldownRows(map) {
   if (!cmdCooldownRows) return;
   const src = map || {};
@@ -647,9 +692,10 @@ function fillCmdCooldownRows(map) {
 
 async function loadCommandsPanel() {
   try {
-    const [cfgRes, enRes] = await Promise.all([
+    const [cfgRes, enRes, histRes] = await Promise.all([
       fetch('/api/config'),
       fetch('/cmd/jb/commands'),
+      fetch('/api/twitch/history'),
     ]);
     const cfg = await cfgRes.json();
     const en = await enRes.json();
@@ -661,6 +707,12 @@ async function loadCommandsPanel() {
       setChatCmdsUi(!!en.data?.enabled);
     } else {
       setChatCmdsUi(!!cfg.data?.twitchCommandsEnabled);
+    }
+    if (histRes.ok) {
+      const hist = await histRes.json();
+      if (hist.exitCode === 0) {
+        renderCmdHistory(hist.data?.entries || []);
+      }
     }
   } catch (err) {
     setCmdFeedback(err.message);
@@ -1045,6 +1097,10 @@ function startAdminEvents() {
       refreshChatCmdsPill();
     }
     if (activeAdminPage() === 'commands') loadCommandsPanel();
+  });
+  onAdminEvent('cmdHistory', (data) => {
+    if (activeAdminPage() !== 'commands') return;
+    renderCmdHistory(data.entries || []);
   });
   onAdminEvent('queue', () => {
     scheduleQueueRefreshFromWS();

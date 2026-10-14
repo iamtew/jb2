@@ -180,6 +180,7 @@ Transfer-Encoding: chunked\r\n\
             ("POST", "/api/twitch/connect") => self.twitch_connect(),
             ("POST", "/api/twitch/disconnect") => self.twitch_disconnect(),
             ("GET", "/api/twitch/chat") => self.twitch_chat_get(),
+            ("GET", "/api/twitch/history") => self.twitch_history_get(),
             ("POST", "/api/twitch/chat") => self.twitch_chat_send(body),
             ("POST", "/api/twitch/oauth/start") => self.twitch_oauth_start(),
             ("GET", "/api/twitch/callback") => self.twitch_oauth_callback(query),
@@ -292,13 +293,27 @@ Transfer-Encoding: chunked\r\n\
             return Dispatch::Json(200, Envelope::fail("input too long"));
         }
 
+        let mut link_thumb = String::new();
+        let mut link_title = String::new();
+        let mut link_artist = String::new();
         let (video_id, lookup) = if let Some(track_url) =
             videoid::canonical_spotify_track_url(input)
         {
-            match ytmd::lookup_spotify_track_query(&track_url)
-                .and_then(|q| ytmd::lookup_song_by_query(&self.ytmd, &q))
-            {
-                Ok(v) => v,
+            match ytmd::lookup_spotify_track_query(&track_url) {
+                Ok(sp) => {
+                    link_thumb = sp.thumbnail;
+                    link_title = sp.title;
+                    link_artist = sp.artist;
+                    match ytmd::lookup_song_by_query(&self.ytmd, &sp.query) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            return Dispatch::Json(
+                                200,
+                                Envelope::fail(format!("failed to look up song metadata: {e}")),
+                            )
+                        }
+                    }
+                }
                 Err(e) => {
                     return Dispatch::Json(
                         200,
@@ -309,6 +324,9 @@ Transfer-Encoding: chunked\r\n\
         } else {
             let (video_id, url_like) = videoid::classify_song_request_input(input);
             if !video_id.is_empty() {
+                if url_like {
+                    link_thumb = format!("https://i.ytimg.com/vi/{video_id}/mqdefault.jpg");
+                }
                 match ytmd::lookup_song_by_video_id(&self.ytmd, &video_id) {
                     Ok(lookup) => (video_id, lookup),
                     Err(e) => {
@@ -372,7 +390,10 @@ Transfer-Encoding: chunked\r\n\
                 Ok(env) => {
                     self.emit_queue();
                     self.emit_seed();
-                    Dispatch::Json(200, env)
+                    Dispatch::Json(
+                        200,
+                        attach_link_preview(env, &link_thumb, &link_title, &link_artist),
+                    )
                 }
                 Err(e) => Dispatch::Json(200, Envelope::fail(e)),
             };
@@ -381,7 +402,15 @@ Transfer-Encoding: chunked\r\n\
         if ytmd::queue_contains_video_id(&queue_payload, &video_id)
             || current_video_id.eq_ignore_ascii_case(&video_id)
         {
-            return Dispatch::Json(200, duplicate_song(&video_id, &lookup));
+            return Dispatch::Json(
+                200,
+                attach_link_preview(
+                    duplicate_song(&video_id, &lookup),
+                    &link_thumb,
+                    &link_title,
+                    &link_artist,
+                ),
+            );
         }
 
         if self.seed.is_active() {
@@ -444,7 +473,10 @@ Transfer-Encoding: chunked\r\n\
         }
         self.emit_queue();
         self.emit_seed();
-        Dispatch::Json(200, env)
+        Dispatch::Json(
+            200,
+            attach_link_preview(env, &link_thumb, &link_title, &link_artist),
+        )
     }
 
     fn play_song_now(
@@ -677,6 +709,10 @@ Transfer-Encoding: chunked\r\n\
 
     fn twitch_chat_get(&self) -> Dispatch {
         Dispatch::Json(200, Envelope::ok_data(self.twitch.chat_json()))
+    }
+
+    fn twitch_history_get(&self) -> Dispatch {
+        Dispatch::Json(200, Envelope::ok_data(self.twitch.history_json()))
     }
 
     fn twitch_chat_send(&self, body: &[u8]) -> Dispatch {
@@ -1470,6 +1506,31 @@ fn seed_input(query: &[(String, String)], body: &[u8]) -> Result<String, String>
     Err("missing input".into())
 }
 
+fn attach_link_preview(
+    mut env: Envelope,
+    thumb: &str,
+    link_title: &str,
+    link_artist: &str,
+) -> Envelope {
+    if thumb.is_empty() && link_title.is_empty() && link_artist.is_empty() {
+        return env;
+    }
+    let mut data = env.data.take().unwrap_or(json!({}));
+    if let Some(obj) = data.as_object_mut() {
+        if !thumb.is_empty() {
+            obj.insert("thumbnail".into(), json!(thumb));
+        }
+        if !link_title.is_empty() {
+            obj.insert("linkTitle".into(), json!(link_title));
+        }
+        if !link_artist.is_empty() {
+            obj.insert("linkArtist".into(), json!(link_artist));
+        }
+    }
+    env.data = Some(data);
+    env
+}
+
 fn duplicate_song(video_id: &str, lookup: &SongLookup) -> Envelope {
     let message = if !lookup.title.is_empty() && !lookup.artist.is_empty() {
         format!(
@@ -1516,6 +1577,7 @@ fn is_quiet_poll_get(method: &str, path: &str) -> bool {
             "/api/queue"
                 | "/api/twitch"
                 | "/api/twitch/chat"
+                | "/api/twitch/history"
                 | "/api/seed/status"
                 | "/cmd/jb/commands"
                 | "/cmd/ytmd/song"
@@ -1634,6 +1696,7 @@ mod tests {
         assert!(is_quiet_poll_get("GET", "/api/queue"));
         assert!(is_quiet_poll_get("GET", "/api/twitch"));
         assert!(is_quiet_poll_get("GET", "/api/twitch/chat"));
+        assert!(is_quiet_poll_get("GET", "/api/twitch/history"));
         assert!(is_quiet_poll_get("GET", "/api/seed/status"));
         assert!(is_quiet_poll_get("GET", "/cmd/jb/commands"));
         assert!(!is_quiet_poll_get("GET", "/cmd/jb/commands/on"));

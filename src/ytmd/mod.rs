@@ -261,7 +261,15 @@ pub fn build_upstream_body(
     Some(Value::Object(payload).to_string().into_bytes())
 }
 
-pub fn lookup_spotify_track_query(track_url: &str) -> Result<String, String> {
+#[derive(Clone, Debug, Default)]
+pub struct SpotifyOembed {
+    pub query: String,
+    pub title: String,
+    pub artist: String,
+    pub thumbnail: String,
+}
+
+pub fn lookup_spotify_track_query(track_url: &str) -> Result<SpotifyOembed, String> {
     let oembed = format!(
         "https://open.spotify.com/oembed?url={}",
         url::form_urlencoded::byte_serialize(track_url.as_bytes()).collect::<String>()
@@ -280,11 +288,17 @@ pub fn lookup_spotify_track_query(track_url: &str) -> Result<String, String> {
         .map_err(|e| format!("spotify oEmbed: {e}"))?;
     let title = as_string(payload.get("title").unwrap_or(&Value::Null));
     let author = as_string(payload.get("author_name").unwrap_or(&Value::Null));
+    let thumbnail = as_string(payload.get("thumbnail_url").unwrap_or(&Value::Null));
     let query = format!("{title} {author}").trim().to_string();
     if query.is_empty() {
         return Err("spotify oEmbed: empty title and artist".into());
     }
-    Ok(query)
+    Ok(SpotifyOembed {
+        query,
+        title,
+        artist: author,
+        thumbnail,
+    })
 }
 
 fn innertube_client_version() -> String {

@@ -41,19 +41,19 @@ In Admin → Twitch, or in `jb2.sqlite`:
 - `twitchNick` — bot login (set by OAuth; defaults to the channel name if empty)
 - `twitchRefreshToken` / `twitchOAuth` — filled by Login with Twitch (do not paste by hand)
 
-Connect/disconnect from Admin without restarting JB2. Admin → Chat is the live IRC window (send as the bot nick). Admin → Twitch is login/connect only. The dock pill **Chat cmds ON/OFF** toggles the global chat-command switch.
+Connect/disconnect from Admin without restarting JB2. Admin → Chat is the live IRC window (send as the bot nick; nicks follow Twitch `display-name` casing). Admin → Twitch is login/connect only. The dock pill **Chat cmds ON/OFF** toggles the global chat-command switch. Admin → Commands lists accepted chat commands for this process (YouTube/Spotify link cards) until restart.
 
 If channel+token are in `jb2.sqlite` at process start, IRC auto-connects. Disconnect lasts until Connect or the next process start.
 
 Retries back off: 10s after a network drop, 30s after a token refresh failure or a repeated IRC login failure. If Twitch rejects the refresh token (revoked app), JB2 clears the stored login, stops reconnecting, and shows `Twitch login expired; log in again` — use **Login with Twitch**.
 
-Chat commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`. They run on a serial FIFO (cap 32, drop newest) so a busy chat cannot stall IRC. Admin → Commands sets per-command GCD/UCD seconds (default 0, counted from accept) and a global on/off (`twitchCommandsEnabled`, default on). Off still logs chat; HTTP `/cmd/jb/songrequest` and Admin Add/Now stay live.
+Chat commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`. They run on a serial FIFO (cap 32, drop newest) so a busy chat cannot stall IRC. Admin → Commands sets per-command GCD/UCD seconds (default 0, counted from accept) and a global on/off (`twitchCommandsEnabled`, default on). Off still logs chat; HTTP `/cmd/jb/songrequest` and Admin Add/Now stay live. Accepted commands this process (with YouTube/Spotify link cards) sit under the cooldown table until restart.
 
 Streamer.bot: `GET /cmd/jb/commands`, `GET /cmd/jb/commands/on`, `GET /cmd/jb/commands/off`
 
 Leave channel/token empty to skip IRC.
 
-HTTP: `GET /api/twitch`, `POST /api/twitch/connect`, `POST /api/twitch/disconnect`, `GET|POST /api/twitch/chat`, `POST /api/twitch/oauth/start`, `GET /api/twitch/callback`
+HTTP: `GET /api/twitch`, `POST /api/twitch/connect`, `POST /api/twitch/disconnect`, `GET|POST /api/twitch/chat`, `GET /api/twitch/history`, `POST /api/twitch/oauth/start`, `GET /api/twitch/callback`
 
 ## HTTP
 
@@ -72,14 +72,14 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | `GET /cmd/jb/commands/on` `off` | enable/disable Twitch chat commands |
 | `GET /cmd/jb/play` `pause` `next` `previous` | transport aliases |
 | `/cmd/ytmd/*` | YTMD proxy (method suffix or `?_method=`) |
-| `GET /api/events` | Admin SSE (`twitch` / `chat` / `seed` / `commands` / `queue`) |
+| `GET /api/events` | Admin SSE (`twitch` / `chat` / `seed` / `commands` / `cmdHistory` / `queue`) |
 | `GET /api/queue` | admin queue rows |
 | `/api/config` | blacklist / maxDuration / twitch / command cooldowns |
 | `POST /api/config/import` | merge JB1/JB2 JSON dump |
 | `/api/seed/*` `/cmd/jb/seed/*` | seed playlists |
 
 OBS overlay: `http://localhost:42420/overlay/`
-Admin dock: `http://localhost:42420/admin/` (`GET /api/events` SSE for Twitch/chat/seed/commands/queue; playback still uses the YTMD WebSocket. Hidden tabs close the stream. One-shot GETs on open/focus; leftover poll GETs are omitted from the request log)
+Admin dock: `http://localhost:42420/admin/` (`GET /api/events` SSE for Twitch/chat/seed/commands/cmdHistory/queue; playback still uses the YTMD WebSocket. Hidden tabs close the stream. One-shot GETs on open/focus; leftover poll GETs are omitted from the request log)
 
 `/overlay` and `/admin` without a trailing slash 301 to the slash form so relative assets resolve.
 
