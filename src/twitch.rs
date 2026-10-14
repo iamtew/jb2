@@ -62,6 +62,8 @@ struct ChatLine {
     ts: u64,
     nick: String,
     text: String,
+    /// Twitch IRCv3 `color` tag (`#RRGGBB`), empty if unset or invalid.
+    color: String,
 }
 
 impl Hub {
@@ -137,7 +139,7 @@ impl Hub {
         s.last_error = err.to_string();
     }
 
-    fn push_chat(&self, nick: &str, text: &str) {
+    fn push_chat(&self, nick: &str, text: &str, color: &str) {
         let mut s = self.inner.lock().expect("twitch");
         let id = s.next_id;
         s.next_id = s.next_id.saturating_add(1);
@@ -146,6 +148,11 @@ impl Hub {
             ts: now_ms(),
             nick: nick.to_string(),
             text: text.to_string(),
+            color: if is_hex_color(color) {
+                color.to_string()
+            } else {
+                String::new()
+            },
         });
         while s.chat.len() > CHAT_CAP {
             s.chat.pop_front();
@@ -259,6 +266,7 @@ impl Hub {
                     "ts": m.ts,
                     "nick": m.nick,
                     "text": m.text,
+                    "color": m.color,
                 })
             })
             .collect();
@@ -433,7 +441,9 @@ fn run(app: &Arc<App>, channel: &str, oauth: &str, nick: &str, gen: u64) -> Resu
     let mut stream = connect_irc()?;
     send_irc(
         &mut stream,
-        &format!("PASS {token}\r\nNICK {nick}\r\nJOIN #{channel}\r\n"),
+        &format!(
+            "PASS {token}\r\nNICK {nick}\r\nCAP REQ :twitch.tv/tags\r\nJOIN #{channel}\r\n"
+        ),
     )?;
     let mut joined = false;
     let mut leftover = String::new();
@@ -445,7 +455,7 @@ fn run(app: &Arc<App>, channel: &str, oauth: &str, nick: &str, gen: u64) -> Resu
         if joined {
             for text in app.twitch.take_outbound() {
                 send_irc(&mut stream, &format!("PRIVMSG #{channel} :{text}\r\n"))?;
-                app.twitch.push_chat(nick, &text);
+                app.twitch.push_chat(nick, &text, "");
             }
         }
         match stream.read(&mut tmp) {
@@ -524,7 +534,7 @@ fn handle_line(
     let Some((from, body)) = parse_privmsg(line) else {
         return Ok(());
     };
-    app.twitch.push_chat(&from, &body);
+    app.twitch.push_chat(&from, &body, &privmsg_color(line));
     let Some((cmd, rest)) = parse_command(&body) else {
         return Ok(());
     };
@@ -824,6 +834,31 @@ fn now_ms() -> u64 {
         .as_millis() as u64
 }
 
+fn irc_tag_value<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    let tags = line.strip_prefix('@')?.split_once(' ')?.0;
+    for pair in tags.split(';') {
+        if let Some((k, v)) = pair.split_once('=') {
+            if k == key {
+                return Some(v);
+            }
+        }
+    }
+    None
+}
+
+fn is_hex_color(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 7 && b[0] == b'#' && b[1..].iter().all(u8::is_ascii_hexdigit)
+}
+
+/// Twitch `color` tag; empty when missing, blank, or not `#RRGGBB`.
+fn privmsg_color(line: &str) -> String {
+    match irc_tag_value(line, "color") {
+        Some(raw) if is_hex_color(raw) => raw.to_string(),
+        _ => String::new(),
+    }
+}
+
 fn parse_privmsg(line: &str) -> Option<(String, String)> {
     let without_tags = if line.starts_with('@') {
         line.split_once(' ')?.1
@@ -869,6 +904,25 @@ mod tests {
         let (nick, body) = parse_privmsg(line).unwrap();
         assert_eq!(nick, "alice");
         assert_eq!(body, "!sr never gonna");
+    }
+
+    #[test]
+    fn parse_tagged_privmsg_color() {
+        let line = "@badge-info=;color=#FF69B4;display-name=Alice :alice!alice@alice.tmi.twitch.tv PRIVMSG #bob :hi";
+        assert_eq!(privmsg_color(line), "#FF69B4");
+        let (nick, body) = parse_privmsg(line).unwrap();
+        assert_eq!(nick, "alice");
+        assert_eq!(body, "hi");
+    }
+
+    #[test]
+    fn parse_empty_and_junk_color_is_blank() {
+        let empty = "@color=;display-name=Bob :bob!bob@bob.tmi.twitch.tv PRIVMSG #c :yo";
+        assert_eq!(privmsg_color(empty), "");
+        let junk = "@color=red :bob!bob@bob.tmi.twitch.tv PRIVMSG #c :yo";
+        assert_eq!(privmsg_color(junk), "");
+        let untagged = ":bob!bob@bob.tmi.twitch.tv PRIVMSG #c :yo";
+        assert_eq!(privmsg_color(untagged), "");
     }
 
     #[test]

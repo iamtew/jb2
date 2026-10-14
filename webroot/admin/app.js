@@ -490,9 +490,12 @@ function renderTwitchChat(messages) {
     twitchChatLog.innerHTML = '<div class="muted">No chat yet.</div>';
     return;
   }
-  twitchChatLog.innerHTML = messages.map((m) => (
-    `<div class="twitch-log__line"><span class="twitch-log__nick">${escapeHtml(m.nick)}</span>${escapeHtml(m.text)}</div>`
-  )).join('');
+  twitchChatLog.innerHTML = messages.map((m) => {
+    const color = typeof m.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(m.color)
+      ? ` style="color: ${m.color}"`
+      : '';
+    return `<div class="twitch-log__line"><span class="twitch-log__nick"${color}>${escapeHtml(m.nick)}</span>${escapeHtml(m.text)}</div>`;
+  }).join('');
   if (twitchStickBottom) {
     twitchChatLog.scrollTop = twitchChatLog.scrollHeight;
   }
