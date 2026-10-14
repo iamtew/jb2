@@ -881,7 +881,7 @@ saveMaxDurationButton.addEventListener('click', async () => {
 runButton.addEventListener('click', runCommand);
 copyButton.addEventListener('click', async () => {
   try {
-    await navigator.clipboard.writeText(urlInput.value);
+    await copyText(urlInput.value, urlInput);
     copyButton.innerHTML = icon('check');
     copyButton.setAttribute('aria-label', 'Copied');
     window.setTimeout(() => {
@@ -934,6 +934,26 @@ function scheduleQueueRefreshFromWS(delayMs = 800) {
 
 function icon(name) {
   return `<svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#${name}"></use></svg>`;
+}
+
+// Copy in the click itself: clipboard.writeText() is async and loses the
+// user gesture, and it throws if the document is not focused (OBS dock).
+async function copyText(text, input) {
+  if (input) {
+    try {
+      input.focus();
+      input.select();
+      if (document.execCommand('copy')) return;
+    } catch (_) {
+      /* fall through */
+    }
+  }
+  window.focus();
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  throw new Error('copy failed');
 }
 
 function setPlayGlyph(paused) {
