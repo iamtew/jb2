@@ -72,13 +72,14 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | `GET /cmd/jb/commands/on` `off` | enable/disable Twitch chat commands |
 | `GET /cmd/jb/play` `pause` `next` `previous` | transport aliases |
 | `/cmd/ytmd/*` | YTMD proxy (method suffix or `?_method=`) |
+| `GET /api/events` | Admin SSE (`twitch` / `chat` / `seed` / `commands` / `queue`) |
 | `GET /api/queue` | admin queue rows |
 | `/api/config` | blacklist / maxDuration / twitch / command cooldowns |
 | `POST /api/config/import` | merge JB1/JB2 JSON dump |
 | `/api/seed/*` `/cmd/jb/seed/*` | seed playlists |
 
 OBS overlay: `http://localhost:42042/overlay/`
-Admin dock: `http://localhost:42042/admin/` (polls queue/Twitch/seed/chat-commands over HTTP; hidden tabs do not poll; those GETs are omitted from the request log)
+Admin dock: `http://localhost:42042/admin/` (`GET /api/events` SSE for Twitch/chat/seed/commands/queue; playback still uses the YTMD WebSocket. Hidden tabs close the stream. One-shot GETs on open/focus; leftover poll GETs are omitted from the request log)
 
 ## Logo
 
