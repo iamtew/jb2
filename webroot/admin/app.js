@@ -95,8 +95,7 @@ const importFileInput = document.getElementById('importFileInput');
 const importConfigButton = document.getElementById('importConfigButton');
 const importFeedback = document.getElementById('importFeedback');
 
-let seedStatusTimer = null;
-let twitchPollTimer = null;
+let adminEvents = null;
 let twitchStickBottom = true;
 let twitchLastChatKey = null;
 
@@ -186,18 +185,11 @@ function showAdminPage(page) {
   }
   if (page === 'seed') {
     loadSeedPanel();
-    startSeedStatusPolling();
-  } else {
-    stopSeedStatusPolling();
   }
   if (page === 'twitch') {
     loadTwitchPanel();
-    startTwitchPolling();
   } else if (page === 'chat') {
     loadTwitchLive();
-    startTwitchPolling();
-  } else {
-    stopTwitchPolling();
   }
   if (page === 'commands') {
     loadCommandsPanel();
@@ -380,19 +372,6 @@ async function saveSeedSettings(clearQueueOnRequest) {
   }
 }
 
-function startSeedStatusPolling() {
-  stopSeedStatusPolling();
-  if (document.hidden) return;
-  seedStatusTimer = window.setInterval(loadSeedPanel, 5000);
-}
-
-function stopSeedStatusPolling() {
-  if (seedStatusTimer) {
-    window.clearInterval(seedStatusTimer);
-    seedStatusTimer = null;
-  }
-}
-
 if (addSeedPlaylistButton) {
   addSeedPlaylistButton.addEventListener('click', addSeedPlaylist);
 }
@@ -501,19 +480,6 @@ function renderTwitchChat(messages) {
   }).join('');
   if (twitchStickBottom) {
     twitchChatLog.scrollTop = twitchChatLog.scrollHeight;
-  }
-}
-
-function startTwitchPolling() {
-  stopTwitchPolling();
-  if (document.hidden) return;
-  twitchPollTimer = window.setInterval(loadTwitchLive, 3000);
-}
-
-function stopTwitchPolling() {
-  if (twitchPollTimer) {
-    window.clearInterval(twitchPollTimer);
-    twitchPollTimer = null;
   }
 }
 
@@ -933,11 +899,8 @@ let queueDragActive = false;
 let queueDragFromIndex = null;
 let queueMoveInFlight = false;
 let queueRefreshDebounceTimer = null;
-let pollTimer = null;
 let progressStallTimer = null;
 
-const POLL_INTERVAL_WS_MS = 15000; // queue has no WS event; song switches already refresh sooner
-const POLL_INTERVAL_NO_WS_MS = 10000;
 // YTMD position ticks are often ~1s; keep headroom so we don't false-pause between ticks.
 const PROGRESS_STALL_MS = 1800;
 
@@ -978,53 +941,78 @@ function refreshPlaybackFromProxyIfNeeded() {
   }
 }
 
-function stopPolling() {
-  window.clearInterval(pollTimer);
-  pollTimer = null;
+function stopAdminEvents() {
+  if (adminEvents) {
+    adminEvents.close();
+    adminEvents = null;
+  }
 }
 
-function startPolling() {
-  stopPolling();
-  if (document.hidden) return;
-  const intervalMs = isNowPlayingSocketOpen() ? POLL_INTERVAL_WS_MS : POLL_INTERVAL_NO_WS_MS;
-  pollTimer = window.setInterval(() => {
-    if (document.hidden) return;
-    if (!isNowPlayingSocketOpen()) {
-      refreshNowPlayingFromProxy();
-      refreshShuffleFromProxy();
-    }
-    if (activeAdminPage() === 'queue') {
-      refreshQueueFromProxy();
-    }
-    refreshChatCmdsPill();
-  }, intervalMs);
-}
-
-function pauseAdminPolling() {
-  stopPolling();
-  stopSeedStatusPolling();
-  stopTwitchPolling();
-}
-
-function resumeAdminPolling() {
+function snapshotAdminLive() {
   refreshPlaybackFromProxyIfNeeded();
   if (activeAdminPage() === 'queue') {
     refreshQueueFromProxy();
   } else if (activeAdminPage() === 'seed') {
     loadSeedPanel();
-    startSeedStatusPolling();
   } else if (activeAdminPage() === 'twitch') {
     loadTwitchLive();
-    startTwitchPolling();
   } else if (activeAdminPage() === 'chat') {
     loadTwitchLive();
-    startTwitchPolling();
   } else if (activeAdminPage() === 'commands') {
     loadCommandsPanel();
   }
   refreshChatCmdsPill();
+}
+
+function onAdminEvent(kind, handler) {
+  if (!adminEvents) return;
+  adminEvents.addEventListener(kind, (event) => {
+    try {
+      handler(JSON.parse(event.data || '{}'));
+    } catch (err) {
+      console.error(`Failed to parse ${kind} event`, err);
+    }
+  });
+}
+
+function startAdminEvents() {
+  stopAdminEvents();
+  if (document.hidden) return;
+  adminEvents = new EventSource('/api/events');
+  adminEvents.onopen = () => {
+    snapshotAdminLive();
+  };
+  onAdminEvent('twitch', (data) => {
+    renderTwitchStatus(data);
+  });
+  onAdminEvent('chat', (data) => {
+    if (activeAdminPage() !== 'chat') return;
+    renderTwitchChat(data.messages || []);
+  });
+  onAdminEvent('seed', () => {
+    if (activeAdminPage() === 'seed') loadSeedPanel();
+  });
+  onAdminEvent('commands', (data) => {
+    if (typeof data.enabled === 'boolean') {
+      setChatCmdsUi(data.enabled);
+    } else {
+      refreshChatCmdsPill();
+    }
+    if (activeAdminPage() === 'commands') loadCommandsPanel();
+  });
+  onAdminEvent('queue', () => {
+    scheduleQueueRefreshFromWS();
+  });
+}
+
+function pauseAdminLive() {
+  stopAdminEvents();
+}
+
+function resumeAdminLive() {
+  snapshotAdminLive();
   connectNowPlaying();
-  startPolling();
+  startAdminEvents();
   updateCurrentMetaMarquee();
 }
 
@@ -1690,7 +1678,6 @@ function connectNowPlaying() {
   socket.onopen = () => {
     setCurrentMetaText('Listening for YTMD…');
     currentMeta.classList.remove('is-marquee');
-    startPolling();
   };
   socket.onmessage = (event) => {
     try {
@@ -1733,7 +1720,6 @@ function connectNowPlaying() {
     setCurrentMetaText('YTMD socket unavailable');
   };
   socket.onclose = () => {
-    startPolling();
     window.setTimeout(connectNowPlaying, 2000);
   };
   window.__jukeboksSocket = socket;
@@ -2003,7 +1989,7 @@ refreshNowPlayingFromProxy();
 refreshQueueFromProxy();
 refreshShuffleFromProxy();
 connectNowPlaying();
-startPolling();
+startAdminEvents();
 window.addEventListener('resize', updateCurrentMetaMarquee);
 
 const tabNav = document.querySelector('.tabs');
@@ -2023,12 +2009,12 @@ if (tabNav && typeof ResizeObserver !== 'undefined') {
   fitAdminTabs();
 }
 window.addEventListener('focus', () => {
-  if (!document.hidden) resumeAdminPolling();
+  if (!document.hidden) resumeAdminLive();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    pauseAdminPolling();
+    pauseAdminLive();
   } else {
-    resumeAdminPolling();
+    resumeAdminLive();
   }
 });
