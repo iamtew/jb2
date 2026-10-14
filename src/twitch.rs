@@ -1100,7 +1100,7 @@ mod tests {
     #[test]
     fn authorize_url_includes_scopes_state_and_pkce() {
         let url = authorize_url(
-            "http://localhost:42042/api/twitch/callback",
+            "http://localhost:42420/api/twitch/callback",
             "st-1",
             "challenge-abc",
         )
@@ -1125,7 +1125,7 @@ mod tests {
     #[test]
     fn oauth_start_roundtrip_keeps_verifier() {
         let hub = Hub::with_events(EventBus::new());
-        let redirect = "http://localhost:42042/api/twitch/callback";
+        let redirect = "http://localhost:42420/api/twitch/callback";
         let url = hub.begin_oauth(redirect).unwrap();
         let parsed = Url::parse(&url).unwrap();
         let state = parsed

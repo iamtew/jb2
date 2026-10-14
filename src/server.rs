@@ -1539,10 +1539,10 @@ fn header_value(request: &Request, name: &'static str) -> Option<String> {
 }
 
 fn header_host(request: &Request) -> String {
-    header_value(request, "Host").unwrap_or_else(|| "localhost:42042".into())
+    header_value(request, "Host").unwrap_or_else(|| "localhost:42420".into())
 }
 
-/// Same-origin check: `Origin: http://pc:42042` must name the `Host` the request was sent to.
+/// Same-origin check: `Origin: http://pc:42420` must name the `Host` the request was sent to.
 /// `Origin: null` (file://, sandboxed frames) never matches.
 fn origin_allowed(origin: &str, host: &str) -> bool {
     let origin_host = origin
@@ -1617,10 +1617,10 @@ mod tests {
 
     #[test]
     fn origin_must_match_host() {
-        assert!(origin_allowed("http://localhost:42042", "localhost:42042"));
-        assert!(origin_allowed("http://STREAM-PC:42042", "stream-pc:42042"));
-        assert!(!origin_allowed("https://evil.example", "localhost:42042"));
-        assert!(!origin_allowed("http://localhost:42043", "localhost:42042"));
-        assert!(!origin_allowed("null", "localhost:42042"));
+        assert!(origin_allowed("http://localhost:42420", "localhost:42420"));
+        assert!(origin_allowed("http://STREAM-PC:42420", "stream-pc:42420"));
+        assert!(!origin_allowed("https://evil.example", "localhost:42420"));
+        assert!(!origin_allowed("http://localhost:42421", "localhost:42420"));
+        assert!(!origin_allowed("null", "localhost:42420"));
     }
 }

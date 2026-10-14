@@ -4,7 +4,7 @@ Rust rewrite of Jukeboks. Local HTTP control plane for [YouTube Music Desktop (p
 
 No app auth. One process, one `jb2.sqlite`, one `webroot/`.
 
-**Default base URL:** `http://localhost:42042` (binds `0.0.0.0:42042`, falls back through +9 if busy)
+**Default base URL:** `http://localhost:42420` (binds `0.0.0.0:42420`; exits if the port is busy)
 
 YTMD companion API: `http://localhost:26538` (open local API / authStrategy NONE). Overlay WebSocket talks to YTMD directly.
 
@@ -33,7 +33,7 @@ Log in with Twitch OAuth as the **bot** account. Join channel and bot nick are s
 2. Admin → Twitch: **Login with Twitch**. Approve as the **bot**. Bot nick is filled from that account; join channel defaults to the same login if you left it empty. IRC connects after a successful login.
 3. **Connect** / **Disconnect** from Admin if you need to drop or rejoin without logging in again.
 
-The Twitch app is built in (PKCE). Redirect is always `http://localhost:<port>/api/twitch/callback` (default `42042`, plus the +9 busy-port fallbacks). Register those URLs on the app at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) if you own the Client ID. A leftover `twitchClientSecret` in `jb2.sqlite` is sent on token exchange if present (Confidential apps).
+The Twitch app is built in (PKCE). Redirect is always `http://localhost:<port>/api/twitch/callback` (default `42420`). Register that URL on the app at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) if you own the Client ID. A leftover `twitchClientSecret` in `jb2.sqlite` is sent on token exchange if present (Confidential apps).
 
 In Admin → Twitch, or in `jb2.sqlite`:
 
@@ -78,8 +78,8 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | `POST /api/config/import` | merge JB1/JB2 JSON dump |
 | `/api/seed/*` `/cmd/jb/seed/*` | seed playlists |
 
-OBS overlay: `http://localhost:42042/overlay/`
-Admin dock: `http://localhost:42042/admin/` (`GET /api/events` SSE for Twitch/chat/seed/commands/queue; playback still uses the YTMD WebSocket. Hidden tabs close the stream. One-shot GETs on open/focus; leftover poll GETs are omitted from the request log)
+OBS overlay: `http://localhost:42420/overlay/`
+Admin dock: `http://localhost:42420/admin/` (`GET /api/events` SSE for Twitch/chat/seed/commands/queue; playback still uses the YTMD WebSocket. Hidden tabs close the stream. One-shot GETs on open/focus; leftover poll GETs are omitted from the request log)
 
 ## Logo
 

@@ -11,8 +11,8 @@ struct Runtime {
 
 static STATE: Mutex<Option<Runtime>> = Mutex::new(None);
 static APP: Mutex<Option<Arc<App>>> = Mutex::new(None);
-static PREFERRED_PORT: Mutex<u16> = Mutex::new(42042);
-static ACTUAL_PORT: Mutex<u16> = Mutex::new(42042);
+static PREFERRED_PORT: Mutex<u16> = Mutex::new(42420);
+static ACTUAL_PORT: Mutex<u16> = Mutex::new(42420);
 static BIND: Mutex<String> = Mutex::new(String::new());
 
 pub fn init(app: Arc<App>, bind: String, port: u16) {
@@ -28,7 +28,7 @@ pub fn start() -> Result<(), String> {
     }
     let preferred = *PREFERRED_PORT.lock().expect("port");
     let bind = BIND.lock().expect("bind").clone();
-    let (listener, port) = listen_with_fallback(&bind, preferred)?;
+    let (listener, port) = listen(&bind, preferred)?;
     *ACTUAL_PORT.lock().expect("port") = port;
     let server = Arc::new(Server::from_listener(listener, None).map_err(|e| e.to_string())?);
     let app = APP
@@ -77,20 +77,8 @@ pub fn listen_port() -> u16 {
     *ACTUAL_PORT.lock().expect("port")
 }
 
-fn listen_with_fallback(bind: &str, base: u16) -> Result<(TcpListener, u16), String> {
-    for attempt in 0..10u16 {
-        let port = base + attempt;
-        match TcpListener::bind(format!("{bind}:{port}")) {
-            Ok(l) => {
-                if port != base {
-                    eprintln!("port {base} was busy, using {port} instead");
-                }
-                return Ok((l, port));
-            }
-            Err(_) => continue,
-        }
-    }
-    Err(format!(
-        "unable to bind to port {base} or any fallback ports"
-    ))
+fn listen(bind: &str, port: u16) -> Result<(TcpListener, u16), String> {
+    TcpListener::bind(format!("{bind}:{port}"))
+        .map(|l| (l, port))
+        .map_err(|_| format!("port {port} is already in use"))
 }

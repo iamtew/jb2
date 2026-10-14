@@ -24,7 +24,7 @@ fn main() {
     attach_parent_console();
 
     let args: Vec<String> = env::args().collect();
-    let port = flag(&args, "-port").unwrap_or("42042".into());
+    let port = flag(&args, "-port").unwrap_or("42420".into());
     let ytmd_host = flag(&args, "-ytmd_host").unwrap_or("localhost".into());
     let ytmd_port = flag(&args, "-ytmd_port").unwrap_or("26538".into());
     let bind = flag(&args, "-bind").unwrap_or("0.0.0.0".into());
