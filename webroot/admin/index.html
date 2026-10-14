@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JB2 Admin</title>
     <link rel="icon" href="/img/jukeboks.png" />
-    <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="/admin/style.css" />
   </head>
   <body>
@@ -56,8 +55,9 @@
       <section id="page-queue" class="page active">
         <div class="panel">
           <div class="queue-toolbar">
+            <h2 class="queue-title">Queue <span id="queueCount">(0)</span></h2>
             <button id="previousToggle" class="queue-toggle" type="button" data-toggle="previous" hidden aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#chevron-right"></use></svg><span>Previous</span></button>
-            <button id="clearQueueButton" class="queue-toolbar-btn" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#trash"></use></svg>Clear queue</button>
+            <button id="clearQueueButton" class="queue-toolbar-btn" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#trash"></use></svg>Clear</button>
           </div>
           <div id="queueList" class="queue-list"></div>
         </div>

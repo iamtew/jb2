@@ -41,6 +41,7 @@ const copyButton = document.getElementById('copyUrl');
 const tabs = document.querySelectorAll('.tab');
 const pages = document.querySelectorAll('.page');
 const queueList = document.getElementById('queueList');
+const queueCount = document.getElementById('queueCount');
 const clearQueueButton = document.getElementById('clearQueueButton');
 const previousToggle = document.getElementById('previousToggle');
 const blacklistInput = document.getElementById('blacklistInput');
@@ -1485,10 +1486,18 @@ function updatePlaybackButtons() {
 
 function updateProgressBar() {
   const maxDuration = Math.max(1, playbackState.duration || 100);
+  const position = Math.min(maxDuration, playbackState.position || 0);
   progressBar.max = String(maxDuration);
-  progressBar.value = String(Math.min(maxDuration, playbackState.position || 0));
+  progressBar.value = String(position);
+  // Range value cannot paint a partial fill. The track gradient reads --seek.
+  progressBar.style.setProperty('--seek', `${(position / maxDuration) * 100}%`);
   currentTime.textContent = formatTime(playbackState.position);
   totalTime.textContent = formatTime(playbackState.duration);
+}
+
+function setQueueCount(count) {
+  if (!queueCount) return;
+  queueCount.textContent = `(${count})`;
 }
 
 
@@ -1502,18 +1511,21 @@ function renderQueue() {
 
   if (playbackState.queueStatus === 'unavailable') {
     syncPreviousToggle(false);
+    setQueueCount(0);
     queueList.innerHTML = `${feedbackMarkup}<div class="queue-empty-state">YTMD queue unavailable. Check that the player is reachable.</div>`;
     return;
   }
 
   if (playbackState.queueStatus === 'error') {
     syncPreviousToggle(false);
+    setQueueCount(0);
     queueList.innerHTML = `${feedbackMarkup}<div class="queue-empty-state">Unable to load queue. Retrying…</div>`;
     return;
   }
 
   if (!playbackState.queue?.length || playbackState.queueStatus === 'empty') {
     syncPreviousToggle(false);
+    setQueueCount(0);
     queueList.innerHTML = `${feedbackMarkup}<div class="queue-empty-state">Queue is empty.</div>`;
     return;
   }
@@ -1553,6 +1565,8 @@ function renderQueue() {
     `;
   };
 
+  // Rows on screen: current plus upcoming. Previous stays behind its toggle.
+  setQueueCount((currentItem ? 1 : 0) + nextItems.length);
   syncPreviousToggle(previousItems.length > 0);
   const previousMarkup = previousItems.length > 0
     ? `
