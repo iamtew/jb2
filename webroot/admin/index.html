@@ -22,7 +22,7 @@
                   <span id="totalTime">00:00</span>
                 </span>
               </div>
-              <button id="chatCmdsPill" class="cmd-pill is-on" type="button" aria-label="Twitch chat commands">Chat cmds ON</button>
+              <button id="chatCmdsPill" class="cmd-pill is-on" type="button" aria-pressed="true" aria-label="Twitch chat commands">Chat cmds ON</button>
             </div>
             <div class="now-playing__headline"><span id="currentMeta"><span class="now-playing__headline-track">Waiting for YTMD…</span></span></div>
             <div class="progress-row">
@@ -51,16 +51,6 @@
           </form>
         </section>
 
-        <nav class="tabs" aria-label="Admin sections">
-          <button class="tab active" data-page="queue" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#playlist"></use></svg><span>Queue</span></button>
-          <button class="tab" data-page="seed" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#plant"></use></svg><span>Seed</span></button>
-          <button class="tab" data-page="chat" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#message-circle"></use></svg><span>Chat</span></button>
-          <button class="tab" data-page="commands" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#terminal-2"></use></svg><span>Commands</span></button>
-          <button class="tab" data-page="twitch" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#brand-twitch"></use></svg><span>Twitch</span></button>
-          <button class="tab" data-page="settings" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#settings"></use></svg><span>Settings</span></button>
-          <button class="tab" data-page="import" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#file-import"></use></svg><span>Import</span></button>
-          <button class="tab" data-page="system" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#api"></use></svg><span>API</span></button>
-        </nav>
       </header>
 
       <section id="page-queue" class="page active">
@@ -217,6 +207,17 @@
           </div>
         </div>
       </section>
+
+      <nav class="tabs" aria-label="Admin sections">
+        <button class="tab active" data-page="queue" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#playlist"></use></svg><span>Queue</span></button>
+        <button class="tab" data-page="seed" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#plant"></use></svg><span>Seed</span></button>
+        <button class="tab" data-page="chat" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#message-circle"></use></svg><span>Chat</span></button>
+        <button class="tab" data-page="commands" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#terminal-2"></use></svg><span>Commands</span></button>
+        <button class="tab" data-page="twitch" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#brand-twitch"></use></svg><span>Twitch</span></button>
+        <button class="tab" data-page="settings" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#settings"></use></svg><span>Settings</span></button>
+        <button class="tab" data-page="import" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#file-import"></use></svg><span>Import</span></button>
+        <button class="tab" data-page="system" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#api"></use></svg><span>API</span></button>
+      </nav>
     </main>
 
     <script src="/admin/app.js"></script>

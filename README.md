@@ -41,7 +41,7 @@ In Admin → Twitch, or in `jb2.sqlite`:
 - `twitchNick` — bot login (set by OAuth; defaults to the channel name if empty)
 - `twitchRefreshToken` / `twitchOAuth` — filled by Login with Twitch (do not paste by hand)
 
-Connect/disconnect from Admin without restarting JB2. Admin → Chat is the live IRC window (send as the bot nick). Admin → Twitch is login/connect only. The dock pill **Chat cmds ON/OFF** follows the global chat-command switch.
+Connect/disconnect from Admin without restarting JB2. Admin → Chat is the live IRC window (send as the bot nick). Admin → Twitch is login/connect only. The dock pill **Chat cmds ON/OFF** toggles the global chat-command switch.
 
 If channel+token are in `jb2.sqlite` at process start, IRC auto-connects. Disconnect lasts until Connect or the next process start.
 

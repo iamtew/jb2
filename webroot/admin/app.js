@@ -610,6 +610,7 @@ function setChatCmdsUi(enabled) {
     chatCmdsPill.textContent = on ? 'Chat cmds ON' : 'Chat cmds OFF';
     chatCmdsPill.classList.toggle('is-on', on);
     chatCmdsPill.classList.toggle('is-off', !on);
+    chatCmdsPill.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
   if (chatCmdsEnabled) {
     chatCmdsEnabled.checked = on;
@@ -681,8 +682,13 @@ async function loadCommandsPanel() {
 }
 
 if (chatCmdsPill) {
-  chatCmdsPill.addEventListener('click', () => {
-    showAdminPage('commands');
+  chatCmdsPill.addEventListener('click', async () => {
+    const next = !chatCmdsPill.classList.contains('is-on');
+    try {
+      await setChatCmdsEnabled(next);
+    } catch (_) {
+      /* keep previous pill state */
+    }
   });
 }
 
@@ -1995,7 +2001,6 @@ startPolling();
 window.addEventListener('resize', updateCurrentMetaMarquee);
 
 const tabNav = document.querySelector('.tabs');
-const dock = document.querySelector('.dock');
 function fitAdminTabs() {
   if (!tabNav) return;
   tabNav.classList.remove('tabs--compact');
@@ -2005,8 +2010,8 @@ function fitAdminTabs() {
     tab.title = compact ? (tab.querySelector('span')?.textContent || '') : '';
   });
 }
-if (dock && typeof ResizeObserver !== 'undefined') {
-  new ResizeObserver(fitAdminTabs).observe(dock);
+if (tabNav && typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(fitAdminTabs).observe(tabNav);
 } else {
   window.addEventListener('resize', fitAdminTabs);
   fitAdminTabs();
