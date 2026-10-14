@@ -81,6 +81,8 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 OBS overlay: `http://localhost:42420/overlay/`
 Admin dock: `http://localhost:42420/admin/` (`GET /api/events` SSE for Twitch/chat/seed/commands/queue; playback still uses the YTMD WebSocket. Hidden tabs close the stream. One-shot GETs on open/focus; leftover poll GETs are omitted from the request log)
 
+`/overlay` and `/admin` without a trailing slash 301 to the slash form so relative assets resolve.
+
 ## Logo
 
 `webroot/img/jukeboks.png` is the app logo (favicon, landing, tray/exe icon after `just icon`).

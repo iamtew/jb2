@@ -96,7 +96,7 @@ impl App {
         match env {
             Dispatch::Json(status, envelope) => respond_json(request, status, &envelope),
             Dispatch::Html(status, body) => respond_html(request, status, &body),
-            Dispatch::Static => self.serve_static(request, &path),
+            Dispatch::Static => self.serve_static(request, &path, query_raw),
         }
     }
 
@@ -1103,14 +1103,19 @@ Transfer-Encoding: chunked\r\n\
         }
     }
 
-    fn serve_static(&self, request: Request, path: &str) {
+    fn serve_static(&self, request: Request, path: &str, query_raw: &str) {
         let rel = path.trim_start_matches('/');
         let mut candidate = if rel.is_empty() {
             self.webroot.join("index.html")
         } else {
             self.webroot.join(rel)
         };
+        // /overlay without a slash resolves relative CSS/JS against `/`, not `/overlay/`.
         if candidate.is_dir() {
+            if let Some(loc) = dir_slash_location(path, query_raw) {
+                respond_redirect(request, 301, &loc);
+                return;
+            }
             candidate = candidate.join("index.html");
         }
         if path == "/favicon.ico" {
@@ -1570,6 +1575,25 @@ fn oauth_html(message: &str) -> String {
     )
 }
 
+fn dir_slash_location(path: &str, query_raw: &str) -> Option<String> {
+    if path.is_empty() || path.ends_with('/') {
+        return None;
+    }
+    if query_raw.is_empty() {
+        Some(format!("{path}/"))
+    } else {
+        Some(format!("{path}/?{query_raw}"))
+    }
+}
+
+fn respond_redirect(request: Request, status: u16, location: &str) {
+    let mut resp = Response::empty(StatusCode(status));
+    if let Ok(h) = Header::from_bytes(&b"Location"[..], location.as_bytes()) {
+        resp = resp.with_header(h);
+    }
+    let _ = request.respond(resp);
+}
+
 fn respond_html(request: Request, status: u16, body: &str) {
     let mut resp = Response::from_string(body.to_string()).with_status_code(StatusCode(status));
     if let Ok(h) = Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..]) {
@@ -1599,7 +1623,7 @@ fn is_inside(root: &Path, path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_quiet_poll_get, origin_allowed};
+    use super::{dir_slash_location, is_quiet_poll_get, origin_allowed};
 
     #[test]
     fn admin_poll_gets_are_quiet() {
@@ -1622,5 +1646,20 @@ mod tests {
         assert!(!origin_allowed("https://evil.example", "localhost:42420"));
         assert!(!origin_allowed("http://localhost:42421", "localhost:42420"));
         assert!(!origin_allowed("null", "localhost:42420"));
+    }
+
+    #[test]
+    fn dir_urls_gain_a_slash() {
+        assert_eq!(
+            dir_slash_location("/overlay", ""),
+            Some("/overlay/".into())
+        );
+        assert_eq!(
+            dir_slash_location("/overlay", "dev=true"),
+            Some("/overlay/?dev=true".into())
+        );
+        assert_eq!(dir_slash_location("/overlay/", ""), None);
+        assert_eq!(dir_slash_location("/overlay/", "dev=true"), None);
+        assert_eq!(dir_slash_location("/admin", ""), Some("/admin/".into()));
     }
 }
