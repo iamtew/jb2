@@ -1,5 +1,6 @@
 use crate::config::{Config, Store};
 use crate::envelope::Envelope;
+use crate::events::EventBus;
 use crate::server::App;
 use native_tls::TlsConnector;
 use serde_json::{json, Value};
@@ -31,6 +32,7 @@ pub const LOGIN_EXPIRED: &str = "Twitch login expired; log in again";
 pub struct Hub {
     inner: Mutex<Inner>,
     jobs_cv: Condvar,
+    events: EventBus,
 }
 
 struct Inner {
@@ -66,7 +68,7 @@ struct ChatLine {
 }
 
 impl Hub {
-    pub fn new() -> Self {
+    pub fn with_events(events: EventBus) -> Self {
         Self {
             inner: Mutex::new(Inner {
                 wanted: false,
@@ -84,29 +86,44 @@ impl Hub {
                 oauth_state: None,
             }),
             jobs_cv: Condvar::new(),
+            events,
         }
     }
 
     pub fn connect(&self) {
-        let mut s = self.inner.lock().expect("twitch");
-        s.wanted = true;
-        s.last_error.clear();
-        s.generation = s.generation.wrapping_add(1);
+        {
+            let mut s = self.inner.lock().expect("twitch");
+            s.wanted = true;
+            s.last_error.clear();
+            s.generation = s.generation.wrapping_add(1);
+        }
+        self.emit_twitch();
     }
 
     pub fn disconnect(&self) {
-        let mut s = self.inner.lock().expect("twitch");
-        s.wanted = false;
-        s.connected = false;
-        s.outbound.clear();
-        s.generation = s.generation.wrapping_add(1);
+        {
+            let mut s = self.inner.lock().expect("twitch");
+            s.wanted = false;
+            s.connected = false;
+            s.outbound.clear();
+            s.generation = s.generation.wrapping_add(1);
+        }
+        self.emit_twitch();
     }
 
     /// Drop the live IRC socket so the worker re-reads config.
     pub fn bump_if_wanted(&self) {
-        let mut s = self.inner.lock().expect("twitch");
-        if s.wanted {
-            s.generation = s.generation.wrapping_add(1);
+        let emit = {
+            let mut s = self.inner.lock().expect("twitch");
+            if s.wanted {
+                s.generation = s.generation.wrapping_add(1);
+                true
+            } else {
+                false
+            }
+        };
+        if emit {
+            self.emit_twitch();
         }
     }
 
@@ -123,39 +140,78 @@ impl Hub {
     }
 
     fn set_session(&self, connected: bool, channel: &str, nick: &str) {
-        let mut s = self.inner.lock().expect("twitch");
-        s.connected = connected;
-        s.channel = channel.to_string();
-        s.nick = nick.to_string();
-        if connected {
-            s.last_error.clear();
+        let changed = {
+            let mut s = self.inner.lock().expect("twitch");
+            let clear_err = connected && !s.last_error.is_empty();
+            let changed = s.connected != connected
+                || s.channel != channel
+                || s.nick != nick
+                || clear_err;
+            s.connected = connected;
+            s.channel = channel.to_string();
+            s.nick = nick.to_string();
+            if connected {
+                s.last_error.clear();
+            }
+            changed
+        };
+        if changed {
+            self.emit_twitch();
         }
     }
 
     fn set_error(&self, err: &str) {
-        let mut s = self.inner.lock().expect("twitch");
-        s.connected = false;
-        s.last_error = err.to_string();
+        let changed = {
+            let mut s = self.inner.lock().expect("twitch");
+            let changed = s.connected || s.last_error != err;
+            s.connected = false;
+            s.last_error = err.to_string();
+            changed
+        };
+        if changed {
+            self.emit_twitch();
+        }
     }
 
     fn push_chat(&self, nick: &str, text: &str, color: &str) {
-        let mut s = self.inner.lock().expect("twitch");
-        let id = s.next_id;
-        s.next_id = s.next_id.saturating_add(1);
-        s.chat.push_back(ChatLine {
-            id,
-            ts: now_ms(),
-            nick: nick.to_string(),
-            text: text.to_string(),
-            color: if is_hex_color(color) {
-                color.to_string()
-            } else {
-                String::new()
-            },
-        });
-        while s.chat.len() > CHAT_CAP {
-            s.chat.pop_front();
+        {
+            let mut s = self.inner.lock().expect("twitch");
+            let id = s.next_id;
+            s.next_id = s.next_id.saturating_add(1);
+            s.chat.push_back(ChatLine {
+                id,
+                ts: now_ms(),
+                nick: nick.to_string(),
+                text: text.to_string(),
+                color: if is_hex_color(color) {
+                    color.to_string()
+                } else {
+                    String::new()
+                },
+            });
+            while s.chat.len() > CHAT_CAP {
+                s.chat.pop_front();
+            }
         }
+        self.emit_chat();
+    }
+
+    fn emit_twitch(&self) {
+        let data = {
+            let s = self.inner.lock().expect("twitch");
+            json!({
+                "connected": s.connected,
+                "wanted": s.wanted,
+                "channel": s.channel,
+                "nick": s.nick,
+                "lastError": s.last_error,
+            })
+        };
+        self.events.emit("twitch", &data);
+    }
+
+    fn emit_chat(&self) {
+        self.events.emit("chat", &self.chat_json());
     }
 
     fn pop_outbound(&self) -> Option<String> {
@@ -977,7 +1033,7 @@ mod tests {
 
     #[test]
     fn enqueue_skips_when_commands_off() {
-        let hub = Hub::new();
+        let hub = Hub::with_events(EventBus::new());
         let mut cfg = Config::default();
         cfg.twitch_commands_enabled = false;
         assert!(!hub.try_enqueue_cmd(&cfg, "alice", "sr", "song"));
@@ -986,7 +1042,7 @@ mod tests {
 
     #[test]
     fn gcd_blocks_everyone_ucd_blocks_user() {
-        let hub = Hub::new();
+        let hub = Hub::with_events(EventBus::new());
         let mut cfg = Config::default();
         cfg.twitch_commands.get_mut("sr").unwrap().gcd = 30;
         assert!(hub.try_enqueue_cmd(&cfg, "alice", "sr", "a"));
@@ -1000,7 +1056,7 @@ mod tests {
 
     #[test]
     fn cmd_jobs_are_fifo() {
-        let hub = Hub::new();
+        let hub = Hub::with_events(EventBus::new());
         let cfg = Config::default();
         assert!(hub.try_enqueue_cmd(&cfg, "alice", "sr", "a"));
         assert!(hub.try_enqueue_cmd(&cfg, "bob", "q", ""));
@@ -1013,7 +1069,7 @@ mod tests {
 
     #[test]
     fn cmd_queue_drops_newest_at_cap() {
-        let hub = Hub::new();
+        let hub = Hub::with_events(EventBus::new());
         let cfg = Config::default();
         for i in 0..MAX_CMD_JOBS {
             assert!(hub.try_enqueue_cmd(&cfg, "alice", "sr", &i.to_string()));
@@ -1027,7 +1083,7 @@ mod tests {
 
     #[test]
     fn gcd_stamps_on_accept() {
-        let hub = Hub::new();
+        let hub = Hub::with_events(EventBus::new());
         let mut cfg = Config::default();
         cfg.twitch_commands.get_mut("sr").unwrap().gcd = 30;
         assert!(hub.try_enqueue_cmd(&cfg, "alice", "sr", "a"));
@@ -1068,7 +1124,7 @@ mod tests {
 
     #[test]
     fn oauth_start_roundtrip_keeps_verifier() {
-        let hub = Hub::new();
+        let hub = Hub::with_events(EventBus::new());
         let redirect = "http://localhost:42042/api/twitch/callback";
         let url = hub.begin_oauth(redirect).unwrap();
         let parsed = Url::parse(&url).unwrap();

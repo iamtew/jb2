@@ -2,6 +2,7 @@
 
 mod config;
 mod envelope;
+mod events;
 mod httpctl;
 mod jsonutil;
 mod policy;

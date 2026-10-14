@@ -1,5 +1,6 @@
 use crate::config::{self, Config, SeedPlaylist, Store};
 use crate::envelope::Envelope;
+use crate::events::EventBus;
 use crate::jsonutil::{mime_for, parse_query, percent_decode, query_get, split_url};
 use crate::policy;
 use crate::seed::State;
@@ -9,8 +10,9 @@ use crate::ytmd::{self, Client, SongLookup};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::fs;
-use std::io::Read;
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::RecvTimeoutError;
 use std::sync::Arc;
 use std::time::Duration;
 use tiny_http::{Header, Method, Request, Response, StatusCode};
@@ -24,16 +26,19 @@ pub struct App {
     pub webroot: PathBuf,
     pub seed: State,
     pub twitch: twitch::Hub,
+    pub events: EventBus,
 }
 
 impl App {
     pub fn new(store: Store, ytmd: Client, webroot: PathBuf) -> Arc<Self> {
+        let events = EventBus::new();
         Arc::new(Self {
             store,
             ytmd,
             webroot,
             seed: State::new(),
-            twitch: twitch::Hub::new(),
+            twitch: twitch::Hub::with_events(events.clone()),
+            events,
         })
     }
 
@@ -77,6 +82,11 @@ impl App {
             .take(MAX_BODY_BYTES)
             .read_to_end(&mut body);
 
+        if method_s == "GET" && path.trim_end_matches('/') == "/api/events" {
+            self.serve_events(request);
+            return;
+        }
+
         if path.starts_with("/cmd/ytmd") {
             self.proxy_ytmd(request, &method_s, &path, query_raw, &query, &body);
             return;
@@ -88,6 +98,62 @@ impl App {
             Dispatch::Html(status, body) => respond_html(request, status, &body),
             Dispatch::Static => self.serve_static(request, &path),
         }
+    }
+
+    fn serve_events(&self, request: Request) {
+        let Some(rx) = self.events.subscribe() else {
+            respond_json(request, 503, &Envelope::fail("too many event listeners"));
+            return;
+        };
+        let mut writer = request.into_writer();
+        let ok = writer
+            .write_all(
+                b"HTTP/1.1 200 OK\r\n\
+Content-Type: text/event-stream\r\n\
+Cache-Control: no-cache\r\n\
+Connection: keep-alive\r\n\
+Transfer-Encoding: chunked\r\n\
+\r\n",
+            )
+            .and_then(|_| sse_chunk(&mut writer, b": connected\n\n"));
+        if ok.is_err() {
+            return;
+        }
+        loop {
+            match rx.recv_timeout(Duration::from_secs(15)) {
+                Ok(frame) => {
+                    if sse_chunk(&mut writer, frame.as_bytes()).is_err() {
+                        break;
+                    }
+                }
+                Err(RecvTimeoutError::Timeout) => {
+                    if sse_chunk(&mut writer, b": ping\n\n").is_err() {
+                        break;
+                    }
+                }
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        }
+    }
+
+    fn emit(&self, kind: &str, data: Value) {
+        self.events.emit(kind, &data);
+    }
+
+    fn emit_queue(&self) {
+        self.emit("queue", json!({}));
+    }
+
+    fn emit_seed(&self) {
+        self.emit("seed", json!({}));
+    }
+
+    fn emit_commands_enabled(&self, enabled: bool) {
+        self.emit("commands", json!({"enabled": enabled}));
+    }
+
+    fn emit_twitch_status(&self, cfg: &Config) {
+        self.emit("twitch", self.twitch.status_json(cfg));
     }
 
     fn dispatch(
@@ -299,7 +365,11 @@ impl App {
 
         if play_now {
             return match self.play_song_now(&video_id, &current_video_id, queue_payload, &lookup) {
-                Ok(env) => Dispatch::Json(200, env),
+                Ok(env) => {
+                    self.emit_queue();
+                    self.emit_seed();
+                    Dispatch::Json(200, env)
+                }
                 Err(e) => Dispatch::Json(200, Envelope::fail(e)),
             };
         }
@@ -368,6 +438,8 @@ impl App {
                 *msg = msg.replacen("Added to queue:", "Playing now:", 1);
             }
         }
+        self.emit_queue();
+        self.emit_seed();
         Dispatch::Json(200, env)
     }
 
@@ -445,9 +517,14 @@ impl App {
         };
         if config::touches_twitch(&parsed) {
             self.twitch.bump_if_wanted();
+            self.emit_twitch_status(&saved);
         }
         if !saved.twitch_commands_enabled {
             self.twitch.clear_jobs();
+        }
+        self.emit_commands_enabled(saved.twitch_commands_enabled);
+        if parsed.get("clearQueueOnRequest").is_some() || parsed.get("seedPlaylists").is_some() {
+            self.emit_seed();
         }
         Dispatch::Json(
             200,
@@ -477,10 +554,13 @@ impl App {
         };
         if config::touches_twitch(&parsed) {
             self.twitch.bump_if_wanted();
+            self.emit_twitch_status(&saved);
         }
         if !saved.twitch_commands_enabled {
             self.twitch.clear_jobs();
         }
+        self.emit_commands_enabled(saved.twitch_commands_enabled);
+        self.emit_seed();
         let mut data = config::public_json(&saved);
         if let Some(obj) = data.as_object_mut() {
             obj.insert("source".into(), json!(source.as_str()));
@@ -510,6 +590,7 @@ impl App {
                 if !cfg.twitch_commands_enabled {
                     self.twitch.clear_jobs();
                 }
+                self.emit_commands_enabled(cfg.twitch_commands_enabled);
                 Dispatch::Json(
                     200,
                     Envelope::ok_data(json!({"enabled": cfg.twitch_commands_enabled})),
@@ -740,6 +821,7 @@ impl App {
         if let Err(e) = self.update_seed_playlist(&playlist) {
             return Dispatch::Json(200, Envelope::fail(format!("failed to save playlist: {e}")));
         }
+        self.emit_seed();
         Dispatch::Json(
             200,
             Envelope::ok_msg(
@@ -760,6 +842,7 @@ impl App {
                 Envelope::fail(format!("failed to remove playlist: {e}")),
             );
         }
+        self.emit_seed();
         Dispatch::Json(200, Envelope::ok_only("Seed playlist removed"))
     }
 
@@ -785,6 +868,7 @@ impl App {
                 return Dispatch::Json(200, Envelope::fail(format!("failed to save settings: {e}")))
             }
         };
+        self.emit_seed();
         Dispatch::Json(
             200,
             Envelope::ok_msg(
@@ -860,6 +944,8 @@ impl App {
             name: lookup.name.clone(),
             track_count: lookup.tracks.len() as i32,
         });
+        self.emit_queue();
+        self.emit_seed();
         Dispatch::Json(
             200,
             Envelope::ok_msg(
@@ -924,6 +1010,8 @@ impl App {
             .unwrap_or(Value::Null);
         self.seed
             .sync_from_queue(&queue, &ytmd::current_song_video_id(&song));
+        self.emit_queue();
+        self.emit_seed();
         Dispatch::Json(
             200,
             Envelope::ok_msg(
@@ -990,6 +1078,9 @@ impl App {
                 } else {
                     Envelope::ok_data(Value::String(String::from_utf8_lossy(&bytes).into_owned()))
                 };
+                if queue_mutating(&method, &upstream_path) {
+                    self.emit_queue();
+                }
                 respond_json(request, 200, &decoded);
             }
             Ok((status, bytes)) => {
@@ -1396,6 +1487,17 @@ fn playing_now(mut env: Envelope) -> Envelope {
         *msg = msg.replacen("Added to queue:", "Playing now:", 1);
     }
     env
+}
+
+fn sse_chunk(writer: &mut dyn Write, data: &[u8]) -> io::Result<()> {
+    write!(writer, "{:x}\r\n", data.len())?;
+    writer.write_all(data)?;
+    writer.write_all(b"\r\n")?;
+    writer.flush()
+}
+
+fn queue_mutating(method: &str, path: &str) -> bool {
+    !method.eq_ignore_ascii_case("GET") && path.contains("queue")
 }
 
 fn is_quiet_poll_get(method: &str, path: &str) -> bool {
