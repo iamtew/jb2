@@ -84,3 +84,7 @@ Admin dock: `http://localhost:42042/admin/` (`GET /api/events` SSE for Twitch/ch
 ## Logo
 
 `webroot/img/jukeboks.png` is the app logo (favicon, landing, tray/exe icon after `just icon`).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
