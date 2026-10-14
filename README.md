@@ -47,7 +47,7 @@ If channel+token are in `jb2.sqlite` at process start, IRC auto-connects. Discon
 
 Retries back off: 10s after a network drop, 30s after a token refresh failure or a repeated IRC login failure. If Twitch rejects the refresh token (revoked app), JB2 clears the stored login, stops reconnecting, and shows `Twitch login expired; log in again` — use **Login with Twitch**.
 
-Chat commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`. They run on a serial queue so a busy chat cannot stall IRC. Admin → Commands sets per-command GCD/UCD seconds (default 0) and a global on/off (`twitchCommandsEnabled`, default on). Off still logs chat; HTTP `/cmd/jb/songrequest` and Admin Add/Now stay live.
+Chat commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`. They run on a serial FIFO (cap 32, drop newest) so a busy chat cannot stall IRC. Admin → Commands sets per-command GCD/UCD seconds (default 0, counted from accept) and a global on/off (`twitchCommandsEnabled`, default on). Off still logs chat; HTTP `/cmd/jb/songrequest` and Admin Add/Now stay live.
 
 Streamer.bot: `GET /cmd/jb/commands`, `GET /cmd/jb/commands/on`, `GET /cmd/jb/commands/off`
 

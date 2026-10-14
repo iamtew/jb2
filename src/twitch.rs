@@ -51,7 +51,6 @@ struct Inner {
 }
 
 struct CmdJob {
-    nick: String,
     id: String,
     args: String,
 }
@@ -159,9 +158,12 @@ impl Hub {
         }
     }
 
-    fn take_outbound(&self) -> Vec<String> {
-        let mut s = self.inner.lock().expect("twitch");
-        s.outbound.drain(..).collect()
+    fn pop_outbound(&self) -> Option<String> {
+        self.inner.lock().expect("twitch").outbound.pop_front()
+    }
+
+    fn prepend_outbound(&self, text: String) {
+        self.inner.lock().expect("twitch").outbound.push_front(text);
     }
 
     pub fn enqueue_send(&self, text: &str) -> Result<(), String> {
@@ -172,6 +174,10 @@ impl Hub {
         let mut s = self.inner.lock().expect("twitch");
         if !s.connected {
             return Err("not connected".into());
+        }
+        // Same cap as cmd jobs: drop newest so a stuck IRC write cannot grow forever.
+        if s.outbound.len() >= MAX_CMD_JOBS {
+            return Err("outbound full".into());
         }
         s.outbound.push_back(text);
         Ok(())
@@ -189,8 +195,8 @@ impl Hub {
         if cooldown_blocked(&s, cfg, id, &nick_key) {
             return false;
         }
+        stamp_use(&mut s, id, &nick_key);
         s.jobs.push_back(CmdJob {
-            nick: nick_key,
             id: id.to_string(),
             args: args.to_string(),
         });
@@ -212,17 +218,14 @@ impl Hub {
         }
     }
 
-    fn record_use(&self, id: &str, nick: &str) {
-        let mut s = self.inner.lock().expect("twitch");
-        let now = Instant::now();
-        s.last_gcd.insert(id.to_string(), now);
-        s.last_ucd
-            .insert((id.to_string(), nick.to_ascii_lowercase()), now);
-    }
-
     #[cfg(test)]
     fn pending_jobs(&self) -> usize {
         self.inner.lock().expect("twitch").jobs.len()
+    }
+
+    #[cfg(test)]
+    fn pop_job(&self) -> Option<CmdJob> {
+        self.inner.lock().expect("twitch").jobs.pop_front()
     }
 
     pub fn begin_oauth(&self, redirect_uri: &str) -> Result<String, String> {
@@ -302,14 +305,7 @@ fn cmd_worker(app: Arc<App>) {
         if !cfg.twitch_commands_enabled {
             continue;
         }
-        {
-            let s = app.twitch.inner.lock().expect("twitch");
-            if cooldown_blocked(&s, &cfg, &job.id, &job.nick) {
-                continue;
-            }
-        }
         let reply = run_chat_command(&app, &job.id, &job.args);
-        app.twitch.record_use(&job.id, &job.nick);
         let reply = sanitize_privmsg(&reply);
         if !reply.is_empty() {
             let _ = app.twitch.enqueue_send(&reply);
@@ -330,6 +326,13 @@ fn run_chat_command(app: &App, id: &str, args: &str) -> String {
         "si" => envelope_text(app.song_info().envelope()),
         _ => String::new(),
     }
+}
+
+fn stamp_use(s: &mut Inner, id: &str, nick: &str) {
+    let now = Instant::now();
+    s.last_gcd.insert(id.to_string(), now);
+    s.last_ucd
+        .insert((id.to_string(), nick.to_ascii_lowercase()), now);
 }
 
 fn cooldown_blocked(s: &Inner, cfg: &Config, id: &str, nick: &str) -> bool {
@@ -453,8 +456,11 @@ fn run(app: &Arc<App>, channel: &str, oauth: &str, nick: &str, gen: u64) -> Resu
             return Ok(());
         }
         if joined {
-            for text in app.twitch.take_outbound() {
-                send_irc(&mut stream, &format!("PRIVMSG #{channel} :{text}\r\n"))?;
+            while let Some(text) = app.twitch.pop_outbound() {
+                if let Err(e) = send_irc(&mut stream, &format!("PRIVMSG #{channel} :{text}\r\n")) {
+                    app.twitch.prepend_outbound(text);
+                    return Err(e);
+                }
                 app.twitch.push_chat(nick, &text, "");
             }
         }
@@ -984,14 +990,49 @@ mod tests {
         let mut cfg = Config::default();
         cfg.twitch_commands.get_mut("sr").unwrap().gcd = 30;
         assert!(hub.try_enqueue_cmd(&cfg, "alice", "sr", "a"));
-        hub.record_use("sr", "alice");
         assert!(!hub.try_enqueue_cmd(&cfg, "bob", "sr", "b"));
         hub.clear_jobs();
         cfg.twitch_commands.get_mut("sr").unwrap().gcd = 0;
         cfg.twitch_commands.get_mut("sr").unwrap().ucd = 30;
-        hub.record_use("sr", "alice");
         assert!(!hub.try_enqueue_cmd(&cfg, "alice", "sr", "c"));
         assert!(hub.try_enqueue_cmd(&cfg, "bob", "sr", "d"));
+    }
+
+    #[test]
+    fn cmd_jobs_are_fifo() {
+        let hub = Hub::new();
+        let cfg = Config::default();
+        assert!(hub.try_enqueue_cmd(&cfg, "alice", "sr", "a"));
+        assert!(hub.try_enqueue_cmd(&cfg, "bob", "q", ""));
+        assert!(hub.try_enqueue_cmd(&cfg, "carol", "si", ""));
+        assert_eq!(hub.pop_job().unwrap().id, "sr");
+        assert_eq!(hub.pop_job().unwrap().id, "q");
+        assert_eq!(hub.pop_job().unwrap().id, "si");
+        assert!(hub.pop_job().is_none());
+    }
+
+    #[test]
+    fn cmd_queue_drops_newest_at_cap() {
+        let hub = Hub::new();
+        let cfg = Config::default();
+        for i in 0..MAX_CMD_JOBS {
+            assert!(hub.try_enqueue_cmd(&cfg, "alice", "sr", &i.to_string()));
+        }
+        assert_eq!(hub.pending_jobs(), MAX_CMD_JOBS);
+        assert!(!hub.try_enqueue_cmd(&cfg, "bob", "sr", "too-many"));
+        assert_eq!(hub.pending_jobs(), MAX_CMD_JOBS);
+        assert_eq!(hub.pop_job().unwrap().args, "0");
+        assert_eq!(hub.pop_job().unwrap().args, "1");
+    }
+
+    #[test]
+    fn gcd_stamps_on_accept() {
+        let hub = Hub::new();
+        let mut cfg = Config::default();
+        cfg.twitch_commands.get_mut("sr").unwrap().gcd = 30;
+        assert!(hub.try_enqueue_cmd(&cfg, "alice", "sr", "a"));
+        assert!(!hub.try_enqueue_cmd(&cfg, "bob", "sr", "b"));
+        assert_eq!(hub.pending_jobs(), 1);
     }
 
     #[test]
