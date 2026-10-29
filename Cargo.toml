@@ -1,6 +1,6 @@
 [package]
 name = "jb2"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "JB2 — Jukeboks 2.0, local Twitch / YTMD song-request control plane"
 license = "MIT"
