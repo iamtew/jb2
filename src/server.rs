@@ -13,7 +13,7 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::RecvTimeoutError;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tiny_http::{Header, Method, Request, Response, StatusCode};
 
@@ -28,6 +28,8 @@ pub struct App {
     pub seed: State,
     pub twitch: twitch::Hub,
     pub events: EventBus,
+    /// ponytail: one lock for every queue write. Split if a long purge blocks admin drags.
+    queue_lock: Mutex<()>,
 }
 
 impl App {
@@ -40,6 +42,7 @@ impl App {
             seed: State::new(),
             twitch: twitch::Hub::with_events(events.clone()),
             events,
+            queue_lock: Mutex::new(()),
         })
     }
 
@@ -339,12 +342,7 @@ Transfer-Encoding: chunked\r\n\
                     }
                 }
                 Err(e) => {
-                    return fail_link(
-                        &format!("failed to resolve Spotify track: {e}"),
-                        "",
-                        "",
-                        "",
-                    )
+                    return fail_link(&format!("failed to resolve Spotify track: {e}"), "", "", "")
                 }
             }
         } else {
@@ -364,12 +362,7 @@ Transfer-Encoding: chunked\r\n\
                 match ytmd::lookup_song_by_video_id(&self.ytmd, &video_id) {
                     Some(lookup) => (video_id, lookup),
                     None => {
-                        return fail_link(
-                            BAD_VIDEO_MSG,
-                            &link_thumb,
-                            &link_title,
-                            &link_artist,
-                        );
+                        return fail_link(BAD_VIDEO_MSG, &link_thumb, &link_title, &link_artist);
                     }
                 }
             } else if url_like {
@@ -399,6 +392,7 @@ Transfer-Encoding: chunked\r\n\
             return fail_link(&e, &link_thumb, &link_title, &link_artist);
         }
 
+        let _queue_edit = self.queue_lock.lock().expect("queue");
         let mut queue_payload =
             match self
                 .ytmd
@@ -482,12 +476,7 @@ Transfer-Encoding: chunked\r\n\
                 Ok(q) => queue_payload = q,
                 Err(e) => {
                     if youtube_url {
-                        return fail_link(
-                            BAD_VIDEO_MSG,
-                            &link_thumb,
-                            &link_title,
-                            &link_artist,
-                        );
+                        return fail_link(BAD_VIDEO_MSG, &link_thumb, &link_title, &link_artist);
                     }
                     return Dispatch::Json(
                         200,
@@ -514,11 +503,10 @@ Transfer-Encoding: chunked\r\n\
                 return fail_link(BAD_VIDEO_MSG, &link_thumb, &link_title, &link_artist);
             }
             Err(_) => {
-                if let Ok(fresh) = self.ytmd.fetch_json_retry(
-                    "/api/v1/queue",
-                    3,
-                    Duration::from_millis(250),
-                ) {
+                if let Ok(fresh) =
+                    self.ytmd
+                        .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
+                {
                     queue_payload = fresh;
                 }
             }
@@ -1005,6 +993,7 @@ Transfer-Encoding: chunked\r\n\
                 )
             }
         };
+        let _queue_edit = self.queue_lock.lock().expect("queue");
         let mut before_ids = HashSet::new();
         if let Ok(queue) =
             self.ytmd
@@ -1068,38 +1057,84 @@ Transfer-Encoding: chunked\r\n\
         if playlist_id.is_empty() {
             return Dispatch::Json(200, Envelope::fail("missing playlistId parameter"));
         }
-        let lookup = match ytmd::lookup_playlist_by_id(&self.ytmd, playlist_id) {
-            Ok(v) => v,
-            Err(e) => {
+        let mut target = self.seed.video_ids_for_playlist(playlist_id);
+        match ytmd::lookup_playlist_by_id(&self.ytmd, playlist_id) {
+            Ok(lookup) => {
+                for track in &lookup.tracks {
+                    let id = track.video_id.trim().to_lowercase();
+                    if !id.is_empty() {
+                        target.insert(id);
+                    }
+                }
+            }
+            Err(e) if target.is_empty() => {
                 return Dispatch::Json(
                     200,
                     Envelope::fail(format!("failed to look up playlist: {e}")),
-                )
+                );
             }
-        };
-        let target: HashSet<String> = lookup
-            .tracks
-            .iter()
-            .map(|t| t.video_id.trim().to_lowercase())
-            .collect();
-        let queue = match self
-            .ytmd
-            .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
-        {
-            Ok(v) => v,
-            Err(e) => {
-                return Dispatch::Json(
-                    200,
-                    Envelope::fail(format!("failed to reach queue endpoint: {e}")),
-                )
-            }
-        };
-        let indices = ytmd::queue_indices_for_video_ids(&queue, &target);
-        if let Err(e) = self.delete_queue_indices(&indices) {
+            Err(_) => {}
+        }
+        if target.is_empty() {
             return Dispatch::Json(
                 200,
-                Envelope::fail(format!("failed to remove seed tracks from queue: {e}")),
+                Envelope::fail("no seed tracks remembered for this playlist"),
             );
+        }
+        let _queue_edit = self.queue_lock.lock().expect("queue");
+        let mut removed = 0i32;
+        let mut refused: HashSet<String> = HashSet::new();
+        let mut saw = false;
+        let attempts = target.len().saturating_mul(2).max(1);
+        for _ in 0..attempts {
+            let queue =
+                match self
+                    .ytmd
+                    .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(150))
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return Dispatch::Json(
+                            200,
+                            Envelope::fail(format!("failed to reach queue endpoint: {e}")),
+                        );
+                    }
+                };
+            let ids = crate::seed::ordered_queue_ids(&queue);
+            let Some((index, video_id)) =
+                crate::seed::highest_matching_index(&ids, &target, &refused)
+            else {
+                break;
+            };
+            saw = true;
+            let before = ids.iter().filter(|id| target.contains(*id)).count();
+            if self.delete_queue_index(index).is_err() {
+                refused.insert(video_id);
+                continue;
+            }
+            std::thread::sleep(Duration::from_millis(150));
+            let after_queue =
+                match self
+                    .ytmd
+                    .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(150))
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return Dispatch::Json(
+                            200,
+                            Envelope::fail(format!("failed to reach queue endpoint: {e}")),
+                        );
+                    }
+                };
+            let after = crate::seed::ordered_queue_ids(&after_queue)
+                .iter()
+                .filter(|id| target.contains(*id))
+                .count();
+            if after < before {
+                removed += (before - after) as i32;
+            } else {
+                refused.insert(video_id);
+            }
         }
         let queue = self
             .ytmd
@@ -1113,11 +1148,19 @@ Transfer-Encoding: chunked\r\n\
             .sync_from_queue(&queue, &ytmd::current_song_video_id(&song));
         self.emit_queue();
         self.emit_seed();
+        if removed == 0 {
+            let message = if saw {
+                "failed to remove seed tracks from queue"
+            } else {
+                "no matching seed tracks in the queue"
+            };
+            return Dispatch::Json(200, Envelope::fail(message));
+        }
         Dispatch::Json(
             200,
             Envelope::ok_msg(
-                format!("Removed {} seed tracks from queue", indices.len()),
-                json!({"removed": indices.len(), "seedModeActive": self.seed.is_active()}),
+                format!("Removed {removed} seed tracks from queue"),
+                json!({"removed": removed, "seedModeActive": self.seed.is_active()}),
             ),
         )
     }
@@ -1163,6 +1206,11 @@ Transfer-Encoding: chunked\r\n\
         }
         let upstream_path = ytmd::route_for_path(path);
         let body_bytes = ytmd::build_upstream_body(&method, query, body);
+        let _queue_edit = if queue_mutating(&method, &upstream_path) {
+            Some(self.queue_lock.lock().expect("queue"))
+        } else {
+            None
+        };
         match self
             .ytmd
             .proxy(&method, &upstream_path, query_raw, body_bytes)
@@ -1317,101 +1365,52 @@ Transfer-Encoding: chunked\r\n\
         self.delete_queue_indices(&to_delete)
     }
 
-    fn repair_seed_request_block(
+    /// Read YTMD and move until the upcoming prefix matches the request book.
+    fn reconcile_upcoming(
         &self,
         mut queue_payload: Value,
         current_video_id: &str,
     ) -> Result<Value, String> {
-        let requests = self.seed.request_ids();
-        if requests.is_empty() {
-            return Ok(queue_payload);
-        }
-        let mut current_index = ytmd::resolve_current_queue_index(&queue_payload, current_video_id);
-        if current_index < 0 {
-            return Ok(queue_payload);
-        }
-        let mut offset = 0i32;
-        for video_id in &requests {
-            let fresh =
+        let mut stuck: Option<(i32, i32)> = None;
+        for _ in 0..32 {
+            if ytmd::resolve_current_queue_index(&queue_payload, current_video_id) < 0 {
+                return Err("queue order not applied: current track not found".into());
+            }
+            self.seed.sync_from_queue(&queue_payload, current_video_id);
+            let Some((from, to)) = self.seed.first_move(&queue_payload, current_video_id) else {
+                return Ok(queue_payload);
+            };
+            if stuck == Some((from, to)) {
+                return Err("queue order not applied: move did not stick".into());
+            }
+            stuck = Some((from, to));
+            self.move_queue_item(from, to)?;
+            std::thread::sleep(Duration::from_millis(150));
+            queue_payload =
                 self.ytmd
                     .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(150))?;
-            queue_payload = fresh;
-            current_index = ytmd::resolve_current_queue_index(&queue_payload, current_video_id);
-            if current_index < 0 {
-                return Ok(queue_payload);
-            }
-            let actual = ytmd::queue_index_for_video_id(&queue_payload, video_id, false);
-            if actual >= 0 && actual <= current_index {
-                continue;
-            }
-            let desired = current_index + 1 + offset;
-            offset += 1;
-            if actual < 0 || actual == desired {
-                continue;
-            }
-            self.move_queue_item(actual, desired)?;
-            std::thread::sleep(Duration::from_millis(150));
         }
-        Ok(self
-            .ytmd
-            .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(150))
-            .unwrap_or(queue_payload))
+        Err("queue order not applied".into())
     }
 
     fn insert_request_during_seed(
         &self,
-        queue_payload: &Value,
+        _queue_payload: &Value,
         song_payload: &Value,
         request_video_id: &str,
     ) -> Result<Value, String> {
         let current_video_id = ytmd::current_song_video_id(song_payload);
-        self.seed.sync_from_queue(queue_payload, &current_video_id);
-        let queue_payload =
-            self.repair_seed_request_block(queue_payload.clone(), &current_video_id)?;
-        self.seed.sync_from_queue(&queue_payload, &current_video_id);
-        let mut target_index = self
-            .seed
-            .request_insert_index(&queue_payload, &current_video_id);
+        // End is fine. YTMD's insert-after-current often lands on the seed tail.
         self.ytmd.post_json(
             "/api/v1/queue",
-            json!({"videoId": request_video_id, "insertPosition": "INSERT_AFTER_CURRENT_VIDEO"}),
+            json!({"videoId": request_video_id, "insertPosition": "INSERT_AT_END"}),
         )?;
-        let (mut fresh_queue, mut from_index) =
+        let (queue, _) =
             self.wait_for_queue_video(request_video_id, 12, Duration::from_millis(150))?;
-        let current_index = ytmd::resolve_current_queue_index(&fresh_queue, &current_video_id);
-        if target_index < 0 {
-            target_index = self
-                .seed
-                .request_insert_index(&fresh_queue, &current_video_id);
-        }
-        if target_index < 0 && current_index >= 0 {
-            target_index = current_index + 1;
-        }
-        if target_index >= 0 && from_index != target_index {
-            if let Err(e) = self.move_queue_item(from_index, target_index) {
-                self.seed.append_request(request_video_id);
-                return Err(e);
-            }
-            std::thread::sleep(Duration::from_millis(150));
-            if let Ok((q, idx)) =
-                self.wait_for_queue_video(request_video_id, 8, Duration::from_millis(150))
-            {
-                fresh_queue = q;
-                from_index = idx;
-                if idx != target_index {
-                    let _ = self.move_queue_item(from_index, target_index);
-                    if let Ok(q2) =
-                        self.ytmd
-                            .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(150))
-                    {
-                        fresh_queue = q2;
-                    }
-                }
-            }
-        }
         self.seed.append_request(request_video_id);
-        self.seed.sync_from_queue(&fresh_queue, &current_video_id);
-        Ok(fresh_queue)
+        let queue = self.reconcile_upcoming(queue, &current_video_id)?;
+        self.seed.sync_from_queue(&queue, &current_video_id);
+        Ok(queue)
     }
 
     fn enqueue_seed_tracks(

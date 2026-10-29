@@ -1401,7 +1401,14 @@ mod tests {
     #[test]
     fn history_json_newest_first_with_preview() {
         let hub = Hub::with_events(EventBus::new());
-        hub.push_history("Alice", "sr", "never gonna", "Added to queue: x.", None, true);
+        hub.push_history(
+            "Alice",
+            "sr",
+            "never gonna",
+            "Added to queue: x.",
+            None,
+            true,
+        );
         hub.push_history(
             "Bob",
             "sr",
@@ -1434,7 +1441,10 @@ mod tests {
             json!({"videoId": "dQw4w9WgXcQ", "title": "Song", "artist": "Artist"}),
         );
         let p = sr_preview("https://youtu.be/dQw4w9WgXcQ", &env).unwrap();
-        assert_eq!(p["thumb"], "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg");
+        assert_eq!(
+            p["thumb"],
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg"
+        );
         assert_eq!(p["title"], "Song");
     }
 

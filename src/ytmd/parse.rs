@@ -500,7 +500,9 @@ pub fn lookup_song_by_query(client: &Client, query: &str) -> Result<(String, Son
     let entry = find_best_search_result(&payload, query)
         .ok_or_else(|| format!("no close enough match on YouTube Music for \"{query}\""))?;
     if entry.video_id.is_empty() {
-        return Err(format!("no close enough match on YouTube Music for \"{query}\""));
+        return Err(format!(
+            "no close enough match on YouTube Music for \"{query}\""
+        ));
     }
     Ok((
         entry.video_id,
@@ -2027,7 +2029,10 @@ mod tests {
         assert!(query_relevance_score("TEW020 game boy", "Game Boy", "Someone Else").is_none());
         assert!(query_relevance_score("TEW020 game boy", "Game Boy", "TEW020").is_some());
         assert!(query_relevance_score("boy", "boyfriend", "x").is_none());
-        assert!(query_relevance_score("never gonna", "Never Gonna Give You Up", "Rick Astley").is_some());
+        assert!(
+            query_relevance_score("never gonna", "Never Gonna Give You Up", "Rick Astley")
+                .is_some()
+        );
     }
 
     #[test]

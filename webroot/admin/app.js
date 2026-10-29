@@ -94,6 +94,7 @@ const addSeedPlaylistButton = document.getElementById('addSeedPlaylistButton');
 const seedInputFeedback = document.getElementById('seedInputFeedback');
 const clearQueueOnRequestCheckbox = document.getElementById('clearQueueOnRequestCheckbox');
 const seedPlaylistList = document.getElementById('seedPlaylistList');
+const seedPurgeInFlight = new Set();
 const twitchStatusLine = document.getElementById('twitchStatusLine');
 const twitchChannelInput = document.getElementById('twitchChannelInput');
 const twitchNickInput = document.getElementById('twitchNickInput');
@@ -302,7 +303,12 @@ function renderSeedPlaylists(playlists) {
     purgeButton.type = 'button';
     purgeButton.className = 'seed-list__action';
     purgeButton.textContent = 'Purge';
-    purgeButton.addEventListener('click', () => removeSeedTracksFromQueue(playlist.id));
+    purgeButton.disabled = seedPurgeInFlight.has(playlist.id);
+    purgeButton.addEventListener('click', () => {
+      if (seedPurgeInFlight.has(playlist.id)) return;
+      purgeButton.disabled = true;
+      removeSeedTracksFromQueue(playlist.id);
+    });
 
     const removeButton = document.createElement('button');
     removeButton.type = 'button';
@@ -358,6 +364,8 @@ async function enqueueSeedPlaylist(playlistId) {
 }
 
 async function removeSeedTracksFromQueue(playlistId) {
+  if (!playlistId || seedPurgeInFlight.has(playlistId)) return;
+  seedPurgeInFlight.add(playlistId);
   try {
     const response = await fetch(`/cmd/jb/seed/queue?playlistId=${encodeURIComponent(playlistId)}`, {
       method: 'DELETE',
@@ -365,10 +373,12 @@ async function removeSeedTracksFromQueue(playlistId) {
     });
     const payload = await readCommandEnvelope(response);
     if (seedInputFeedback) seedInputFeedback.textContent = payload.message || 'Seed tracks removed from queue';
-    await loadSeedPanel();
-    refreshQueueFromProxy();
   } catch (err) {
     if (seedInputFeedback) seedInputFeedback.textContent = err.message;
+  } finally {
+    seedPurgeInFlight.delete(playlistId);
+    await loadSeedPanel();
+    refreshQueueFromProxy();
   }
 }
 
