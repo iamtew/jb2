@@ -208,7 +208,7 @@ img { image-rendering: pixelated; image-rendering: crisp-edges; }
   font-weight: 650;
 }
 
-.brand img { width: 28px; height: auto; }
+.brand img { width: 42px; height: auto; }
 
 .icon {
   width: 1.15rem;
