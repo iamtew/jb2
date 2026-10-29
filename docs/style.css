@@ -170,7 +170,9 @@ img { image-rendering: pixelated; image-rendering: crisp-edges; }
 
 .landing-copy p { margin: 0; max-width: 38rem; color: var(--muted); }
 
-.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+.landing-copy p.actions { margin-top: 40px; }
 
 .button {
   display: inline-flex;
@@ -224,8 +226,9 @@ img { image-rendering: pixelated; image-rendering: crisp-edges; }
   pointer-events: none;
 }
 
+.topbar .download { margin-left: auto; padding: 8px 14px; }
+
 .repo {
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 8px;

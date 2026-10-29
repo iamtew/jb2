@@ -142,14 +142,17 @@
     sound.bassAvg = sound.bassAvg * 0.9 + bass * 0.1;
   }
 
-  // Log bins from 1 so DC does not own the left. Level is 0..1.
+  // One slice per bar, 1..~11kHz. Log mapping stacked the left on one bin
+  // and parked the last three on empty air.
   function bandLevel(i, count) {
     var bins = sound.bins;
     var n = bins.length;
-    var a = Math.max(1, Math.floor(Math.pow(n, i / count)));
-    var c = Math.max(a + 1, Math.floor(Math.pow(n, (i + 1) / count)));
+    var maxBin = Math.max(count + 1, Math.floor(n * 0.55));
+    var a = 1 + Math.floor((maxBin - 1) * i / count);
+    var c = 1 + Math.floor((maxBin - 1) * (i + 1) / count);
     var k;
     var peak = 0;
+    if (c <= a) c = a + 1;
     if (c > n) c = n;
     for (k = a; k < c; k++) {
       if (bins[k] > peak) peak = bins[k];
