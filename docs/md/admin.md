@@ -2,7 +2,7 @@
 
 Open `http://localhost:42420/admin/`.
 
-The dock stays up while you switch pages. Playback state still comes from the [pear-desktop](https://github.com/pear-devs/pear-desktop) WebSocket. JB2 pushes its own changes over `GET /api/events` (Server-Sent Events): `twitch`, `chat`, `seed`, `commands`, `cmdHistory`, `queue`, `overlay`. Hidden tabs close that stream. Opening or focusing a page does a one-shot GET; leftover poll GETs are omitted from the request log.
+The dock stays up while you switch pages. Playback state still comes from the [pear-desktop](https://github.com/pear-devs/pear-desktop) WebSocket. JB2 pushes its own changes over `GET /api/events` (Server-Sent Events): `twitch`, `chat`, `seed`, `commands`, `cmdHistory`, `queue`, `overlay`. Hidden tabs close that stream. Opening or focusing a page does a one-shot GET; leftover poll GETs are omitted from the request log (`METHOD path status` plus a timestamp; see [Running](running.md)).
 
 The dock pill **Chat cmds ON/OFF** toggles the global chat-command switch (`twitchCommandsEnabled`). Off still logs chat. HTTP `/cmd/jb/songrequest` and Admin Add/Now stay live.
 

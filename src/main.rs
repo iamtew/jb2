@@ -55,8 +55,8 @@ fn main() {
     if let Err(e) = httpctl::start() {
         fatal(&format!("failed to start server: {e}"));
     }
-    eprintln!("webroot: {}", webroot.display());
-    eprintln!("config:  {}", config_path.display());
+    log(format!("webroot: {}", webroot.display()));
+    log(format!("config:  {}", config_path.display()));
 
     wait_for_quit();
 }
@@ -125,8 +125,48 @@ fn attach_parent_console() {
     }
 }
 
+pub fn log(msg: impl std::fmt::Display) {
+    eprintln!("{} {msg}", timestamp());
+}
+
+fn timestamp() -> String {
+    #[cfg(windows)]
+    unsafe {
+        let t = windows::Win32::System::SystemInformation::GetLocalTime();
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+            t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond
+        )
+    }
+    #[cfg(not(windows))]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let days = secs / 86400;
+        let tod = secs % 86400;
+        let h = tod / 3600;
+        let m = (tod % 3600) / 60;
+        let s = tod % 60;
+        // Howard Hinnant civil-from-days (Unix epoch).
+        let z = days as i64 + 719468;
+        let era = if z >= 0 { z } else { z - 146096 } / 146097;
+        let doe = (z - era * 146097) as u32;
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        let y = yoe as i64 + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        let mth = if mp < 10 { mp + 3 } else { mp - 9 };
+        let y = if mth <= 2 { y + 1 } else { y };
+        format!("{y:04}-{mth:02}-{d:02} {h:02}:{m:02}:{s:02}")
+    }
+}
+
 pub fn alert(msg: &str) {
-    eprintln!("{msg}");
+    log(msg);
     #[cfg(windows)]
     unsafe {
         use windows::core::HSTRING;

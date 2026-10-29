@@ -47,7 +47,7 @@ pub fn start() -> Result<(), String> {
         server,
         worker: Some(worker),
     });
-    eprintln!("listening on http://127.0.0.1:{port}");
+    crate::log(format!("listening on http://127.0.0.1:{port}"));
     Ok(())
 }
 

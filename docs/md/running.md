@@ -36,6 +36,8 @@ gh run download <run-id> -n dist -D dist
 
 The process exits if the port is busy, or if `webroot` is not a directory.
 
+Stderr is `YYYY-MM-DD HH:MM:SS` (local on Windows, UTC elsewhere). Request lines are `METHOD path status` (200, 404, …). Poll GETs stay omitted.
+
 ## Config file
 
 `jb2.sqlite` is created if it is missing. If a sibling `jb2.json` exists and the database is empty, that JSON is imported once. The JSON file is left in place.

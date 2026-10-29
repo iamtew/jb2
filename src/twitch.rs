@@ -696,7 +696,7 @@ fn worker(app: Arc<App>) {
                 app.twitch.set_wanted(false);
                 continue;
             }
-            eprintln!("twitch: {e}; retry in {AUTH_BACKOFF_SECS}s");
+            crate::log(format!("twitch: {e}; retry in {AUTH_BACKOFF_SECS}s"));
             wait_or_cancel(&app, gen, AUTH_BACKOFF_SECS);
             continue;
         }
@@ -729,7 +729,7 @@ fn worker(app: Arc<App>) {
                     RECONNECT_SECS
                 };
                 app.twitch.set_error(&e);
-                eprintln!("twitch: {e}; retry in {secs}s");
+                crate::log(format!("twitch: {e}; retry in {secs}s"));
                 wait_or_cancel(&app, gen, secs);
             }
         }
@@ -791,7 +791,7 @@ fn run(app: &Arc<App>, channel: &str, oauth: &str, nick: &str, gen: u64) -> Resu
                     if !joined && is_welcome(&line) {
                         joined = true;
                         app.twitch.set_session(true, channel, nick);
-                        eprintln!("twitch: joined #{channel} as {nick}");
+                        crate::log(format!("twitch: joined #{channel} as {nick}"));
                     }
                     handle_line(app, channel, nick, &line, &mut stream)?;
                 }
@@ -1142,7 +1142,7 @@ pub fn ensure_access_token(store: &Store, force: bool) -> Result<Config, String>
         Err(e)
             if e.starts_with("twitch oauth HTTP 400") || e.starts_with("twitch oauth HTTP 401") =>
         {
-            eprintln!("twitch: refresh rejected ({e}); clearing login");
+            crate::log(format!("twitch: refresh rejected ({e}); clearing login"));
             store.update(|c| {
                 c.twitch_oauth.clear();
                 c.twitch_refresh_token.clear();

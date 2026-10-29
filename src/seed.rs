@@ -105,11 +105,6 @@ impl State {
         "other"
     }
 
-    pub fn request_insert_index(&self, queue_payload: &Value, current_video_id: &str) -> i32 {
-        let s = self.inner.lock().expect("seed");
-        request_insert_index_locked(queue_payload, current_video_id, &s.requests)
-    }
-
     /// First upcoming row that is not where the book says it belongs: `(from, to)`.
     pub fn first_move(&self, queue_payload: &Value, current_video_id: &str) -> Option<(i32, i32)> {
         let s = self.inner.lock().expect("seed");
@@ -222,25 +217,6 @@ pub fn ordered_queue_ids(payload: &Value) -> Vec<String> {
         .collect()
 }
 
-fn request_insert_index_locked(
-    queue_payload: &Value,
-    current_video_id: &str,
-    requests: &[String],
-) -> i32 {
-    let current_index = ytmd::resolve_current_queue_index(queue_payload, current_video_id);
-    if current_index < 0 {
-        return -1;
-    }
-    let ids = ordered_queue_ids(queue_payload);
-    let desired = desired_upcoming(&ids, current_index, requests);
-    let request_set: HashSet<&String> = requests.iter().collect();
-    let prefix = desired
-        .iter()
-        .take_while(|id| request_set.contains(*id))
-        .count();
-    current_index + 1 + prefix as i32
-}
-
 fn sync_from_queue_locked(s: &mut Inner, queue_payload: &Value, current_video_id: &str) {
     if s.seed_ids.is_empty() && s.requests.is_empty() {
         s.active = false;
@@ -323,39 +299,8 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn queue(ids: &[&str]) -> Value {
-        json!({
-            "items": ids.iter().map(|id| json!({"videoId": id, "title": id})).collect::<Vec<_>>()
-        })
-    }
-
     fn ids(values: &[&str]) -> Vec<String> {
         values.iter().map(|id| (*id).to_string()).collect()
-    }
-
-    #[test]
-    fn insert_after_current_seed_then_after_requests() {
-        let s = State::new();
-        s.register_enqueue("pl", &["s1".into(), "s2".into(), "s3".into()]);
-        let q = queue(&["s1", "s2", "s3"]);
-        assert_eq!(s.request_insert_index(&q, "s1"), 1);
-
-        s.append_request("r1");
-        let q = queue(&["s1", "r1", "s2", "s3"]);
-        assert_eq!(s.request_insert_index(&q, "s1"), 2);
-
-        s.append_request("r2");
-        let q = queue(&["s1", "r1", "r2", "s2", "s3"]);
-        assert_eq!(s.request_insert_index(&q, "s1"), 3);
-    }
-
-    #[test]
-    fn insert_after_playing_request_block() {
-        let s = State::new();
-        s.append_request("r1");
-        s.append_request("r2");
-        let q = queue(&["r1", "r2", "s1"]);
-        assert_eq!(s.request_insert_index(&q, "r1"), 2);
     }
 
     #[test]

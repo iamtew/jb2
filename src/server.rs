@@ -58,20 +58,19 @@ impl App {
         let query = parse_query(query_raw);
         let host = header_host(&request);
         let method_s = method_str(&method);
-        if !is_quiet_poll_get(&method_s, &path) {
-            eprintln!("{method_s} {path}");
-        }
 
         // No auth on purpose (LAN use from OBS / Streamer.bot), so block the one thing a
         // random web page can do: fire a cross-site write. Non-browser clients send no Origin.
         if !matches!(method, Method::Get | Method::Head) {
             if let Some(origin) = header_value(&request, "Origin") {
                 if !origin_allowed(&origin, &host) {
-                    eprintln!("blocked cross-origin {method_s} {path} from {origin}");
                     respond_json(
                         request,
                         403,
                         &Envelope::fail("cross-origin request blocked"),
+                        &method_s,
+                        &path,
+                        &format!("blocked cross-origin from {origin}"),
                     );
                     return;
                 }
@@ -81,7 +80,14 @@ impl App {
             .body_length()
             .is_some_and(|n| n as u64 > MAX_BODY_BYTES)
         {
-            respond_json(request, 413, &Envelope::fail("request body too large"));
+            respond_json(
+                request,
+                413,
+                &Envelope::fail("request body too large"),
+                &method_s,
+                &path,
+                "",
+            );
             return;
         }
         let mut body = Vec::new();
@@ -91,7 +97,7 @@ impl App {
             .read_to_end(&mut body);
 
         if method_s == "GET" && path.trim_end_matches('/') == "/api/events" {
-            self.serve_events(request);
+            self.serve_events(request, &method_s, &path);
             return;
         }
 
@@ -102,15 +108,24 @@ impl App {
 
         let env = self.dispatch(&method_s, &path, &query, &body, &host);
         match env {
-            Dispatch::Json(status, envelope) => respond_json(request, status, &envelope),
-            Dispatch::Html(status, body) => respond_html(request, status, &body),
-            Dispatch::Static => self.serve_static(request, &path, query_raw),
+            Dispatch::Json(status, envelope) => {
+                respond_json(request, status, &envelope, &method_s, &path, "")
+            }
+            Dispatch::Html(status, body) => respond_html(request, status, &body, &method_s, &path),
+            Dispatch::Static => self.serve_static(request, &method_s, &path, query_raw),
         }
     }
 
-    fn serve_events(&self, request: Request) {
+    fn serve_events(&self, request: Request, method: &str, path: &str) {
         let Some(rx) = self.events.subscribe() else {
-            respond_json(request, 503, &Envelope::fail("too many event listeners"));
+            respond_json(
+                request,
+                503,
+                &Envelope::fail("too many event listeners"),
+                method,
+                path,
+                "",
+            );
             return;
         };
         let mut writer = request.into_writer();
@@ -127,6 +142,7 @@ Transfer-Encoding: chunked\r\n\
         if ok.is_err() {
             return;
         }
+        log_http(method, path, 200, "");
         loop {
             match rx.recv_timeout(Duration::from_secs(15)) {
                 Ok(frame) => {
@@ -1245,14 +1261,18 @@ Transfer-Encoding: chunked\r\n\
                     request,
                     200,
                     &Envelope::fail(format!("failed to load config: {e}")),
+                    method,
+                    path,
+                    "",
                 );
                 return;
             }
         };
         if let Err(e) = policy::enforce(&cfg, query, body) {
-            respond_json(request, 200, &Envelope::fail(e));
+            respond_json(request, 200, &Envelope::fail(e), method, path, "");
             return;
         }
+        let req_method = method;
         let mut method = ytmd::resolve_upstream_method(method, path);
         if method.eq_ignore_ascii_case("GET") {
             if let Some(m) = query_get(query, "_method") {
@@ -1287,7 +1307,7 @@ Transfer-Encoding: chunked\r\n\
                 if queue_mutating(&method, &upstream_path) {
                     self.emit_queue();
                 }
-                respond_json(request, 200, &decoded);
+                respond_json(request, 200, &decoded, req_method, path, "");
             }
             Ok((status, bytes)) => {
                 respond_json(
@@ -1297,6 +1317,9 @@ Transfer-Encoding: chunked\r\n\
                         "pear-desktop returned {status}: {}",
                         String::from_utf8_lossy(&bytes).trim()
                     )),
+                    req_method,
+                    path,
+                    "",
                 );
             }
             Err(e) => {
@@ -1307,12 +1330,15 @@ Transfer-Encoding: chunked\r\n\
                         "failed to reach pear-desktop at {}: {e}",
                         self.ytmd.base
                     )),
+                    req_method,
+                    path,
+                    "",
                 );
             }
         }
     }
 
-    fn serve_static(&self, request: Request, path: &str, query_raw: &str) {
+    fn serve_static(&self, request: Request, method: &str, path: &str, query_raw: &str) {
         let rel = path.trim_start_matches('/');
         let mut candidate = if rel.is_empty() {
             self.webroot.join("index.html")
@@ -1322,7 +1348,7 @@ Transfer-Encoding: chunked\r\n\
         // /overlay without a slash resolves relative CSS/JS against `/`, not `/overlay/`.
         if candidate.is_dir() {
             if let Some(loc) = dir_slash_location(path, query_raw) {
-                respond_redirect(request, 301, &loc);
+                respond_redirect(request, 301, &loc, method, path);
                 return;
             }
             candidate = candidate.join("index.html");
@@ -1333,6 +1359,7 @@ Transfer-Encoding: chunked\r\n\
             candidate = if ico.exists() { ico } else { png };
         }
         if !is_inside(&self.webroot, &candidate) {
+            log_http(method, path, 404, "");
             let _ = request
                 .respond(Response::from_string("not found").with_status_code(StatusCode(404)));
             return;
@@ -1344,9 +1371,11 @@ Transfer-Encoding: chunked\r\n\
                 if let Ok(h) = Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()) {
                     resp = resp.with_header(h);
                 }
+                log_http(method, path, 200, "");
                 let _ = request.respond(resp);
             }
             Err(_) => {
+                log_http(method, path, 404, "");
                 let _ = request
                     .respond(Response::from_string("not found").with_status_code(StatusCode(404)));
             }
@@ -1792,7 +1821,19 @@ fn dir_slash_location(path: &str, query_raw: &str) -> Option<String> {
     }
 }
 
-fn respond_redirect(request: Request, status: u16, location: &str) {
+fn log_http(method: &str, path: &str, status: u16, note: &str) {
+    if is_quiet_poll_get(method, path) {
+        return;
+    }
+    if note.is_empty() {
+        crate::log(format!("{method} {path} {status}"));
+    } else {
+        crate::log(format!("{method} {path} {status} {note}"));
+    }
+}
+
+fn respond_redirect(request: Request, status: u16, location: &str, method: &str, path: &str) {
+    log_http(method, path, status, "");
     let mut resp = Response::empty(StatusCode(status));
     if let Ok(h) = Header::from_bytes(&b"Location"[..], location.as_bytes()) {
         resp = resp.with_header(h);
@@ -1800,7 +1841,8 @@ fn respond_redirect(request: Request, status: u16, location: &str) {
     let _ = request.respond(resp);
 }
 
-fn respond_html(request: Request, status: u16, body: &str) {
+fn respond_html(request: Request, status: u16, body: &str, method: &str, path: &str) {
+    log_http(method, path, status, "");
     let mut resp = Response::from_string(body.to_string()).with_status_code(StatusCode(status));
     if let Ok(h) = Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..]) {
         resp = resp.with_header(h);
@@ -1808,7 +1850,15 @@ fn respond_html(request: Request, status: u16, body: &str) {
     let _ = request.respond(resp);
 }
 
-fn respond_json(request: Request, status: u16, envelope: &Envelope) {
+fn respond_json(
+    request: Request,
+    status: u16,
+    envelope: &Envelope,
+    method: &str,
+    path: &str,
+    note: &str,
+) {
+    log_http(method, path, status, note);
     let body = serde_json::to_vec(envelope).unwrap_or_else(|_| b"{}".to_vec());
     let mut resp = Response::from_data(body).with_status_code(StatusCode(status));
     if let Ok(h) = Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]) {
