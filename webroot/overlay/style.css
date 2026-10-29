@@ -364,7 +364,6 @@ body.dev .dev-checkerboard {
     left: 0;
     height: 100%;
     width: 0;
-    background-size: 200% 100%;
     transition: width 0.15s linear;
 }
 
@@ -687,7 +686,7 @@ body.dev .dev-checkerboard {
 #songInfo[data-seek="sesh-sofa"] #fill,
 #songInfo[data-seek="sesh-sofs"] #fill,
 #songInfo:not([data-seek]) #fill {
-    background: linear-gradient(to right, #E5F20D, #F20D0D, #E5F20D);
+    background: linear-gradient(to right, #E5F20D, #F20D0D);
     box-shadow: 0 0 8px #F20D0D, 0 0 12px #E5F20D;
 }
 
