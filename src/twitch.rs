@@ -555,23 +555,23 @@ fn run_chat_command(app: &App, id: &str, args: &str) -> (String, Option<Value>) 
 }
 
 fn sr_preview(args: &str, env: &Envelope) -> Option<Value> {
-    let data = env.data.as_ref()?;
+    let data = env.data.as_ref();
     let title = data
-        .get("linkTitle")
+        .and_then(|d| d.get("linkTitle"))
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
-        .or_else(|| data.get("title").and_then(|v| v.as_str()))
+        .or_else(|| data.and_then(|d| d.get("title")).and_then(|v| v.as_str()))
         .unwrap_or("")
         .to_string();
     let artist = data
-        .get("linkArtist")
+        .and_then(|d| d.get("linkArtist"))
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
-        .or_else(|| data.get("artist").and_then(|v| v.as_str()))
+        .or_else(|| data.and_then(|d| d.get("artist")).and_then(|v| v.as_str()))
         .unwrap_or("")
         .to_string();
     let mut thumb = data
-        .get("thumbnail")
+        .and_then(|d| d.get("thumbnail"))
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
@@ -587,7 +587,7 @@ fn sr_preview(args: &str, env: &Envelope) -> Option<Value> {
             }
         }
     }
-    if title.is_empty() && artist.is_empty() && thumb.is_empty() {
+    if title.is_empty() && artist.is_empty() && thumb.is_empty() && url.is_empty() {
         return None;
     }
     Some(json!({
@@ -1391,6 +1391,20 @@ mod tests {
         let p = sr_preview("https://youtu.be/dQw4w9WgXcQ", &env).unwrap();
         assert_eq!(p["thumb"], "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg");
         assert_eq!(p["title"], "Song");
+    }
+
+    #[test]
+    fn sr_preview_spotify_fail_still_has_url() {
+        let env = Envelope::fail("sound wasn't found on YouTube Music");
+        let p = sr_preview(
+            "https://open.spotify.com/track/0xrRQw8nggXnf01dBqtZlN",
+            &env,
+        )
+        .unwrap();
+        assert_eq!(
+            p["url"],
+            "https://open.spotify.com/track/0xrRQw8nggXnf01dBqtZlN"
+        );
     }
 
     #[test]

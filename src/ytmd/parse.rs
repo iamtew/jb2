@@ -182,9 +182,9 @@ pub fn list_search_results(payload: &Value, limit: usize) -> Vec<SearchHit> {
 pub fn lookup_song_by_query(client: &Client, query: &str) -> Result<(String, SongLookup), String> {
     let payload = client.post_json("/api/v1/search", json!({"query": query}))?;
     let entry = find_best_search_result(&payload, query)
-        .ok_or_else(|| format!("no matching search results for \"{query}\""))?;
+        .ok_or_else(|| format!("no close enough match on YouTube Music for \"{query}\""))?;
     if entry.video_id.is_empty() {
-        return Err(format!("no matching search results for \"{query}\""));
+        return Err(format!("no close enough match on YouTube Music for \"{query}\""));
     }
     Ok((
         entry.video_id,
@@ -196,23 +196,28 @@ pub fn lookup_song_by_query(client: &Client, query: &str) -> Result<(String, Son
     ))
 }
 
-pub fn lookup_song_by_video_id(client: &Client, video_id: &str) -> Result<SongLookup, String> {
-    let payload = client.post_json(
-        "/api/v1/search",
-        json!({"query": format!("https://www.youtube.com/watch?v={video_id}")}),
-    )?;
-    let entry = find_queue_entry_for_video_id(&payload, video_id)
-        .ok_or_else(|| format!("song metadata not found for video ID \"{video_id}\""))?;
-    if entry.title.is_empty() && entry.artist.is_empty() {
-        return Err(format!(
-            "song metadata not found for video ID \"{video_id}\""
-        ));
+pub fn lookup_song_by_video_id(client: &Client, video_id: &str) -> Option<SongLookup> {
+    let queries = [
+        format!("https://www.youtube.com/watch?v={video_id}"),
+        video_id.to_string(),
+    ];
+    for query in queries {
+        let Ok(payload) = client.post_json("/api/v1/search", json!({"query": query})) else {
+            continue;
+        };
+        let Some(entry) = find_queue_entry_for_video_id(&payload, video_id) else {
+            continue;
+        };
+        if entry.title.is_empty() && entry.artist.is_empty() {
+            continue;
+        }
+        return Some(SongLookup {
+            title: entry.title,
+            artist: entry.artist,
+            duration: entry.duration_seconds,
+        });
     }
-    Ok(SongLookup {
-        title: entry.title,
-        artist: entry.artist,
-        duration: entry.duration_seconds,
-    })
+    None
 }
 
 fn find_queue_entry_for_video_id(payload: &Value, video_id: &str) -> Option<QueueEntrySummary> {
@@ -269,6 +274,9 @@ fn find_best_search_result(payload: &Value, query: &str) -> Option<QueueEntrySum
             best_score = score;
             best_idx = i;
         }
+    }
+    if best_score < 0 {
+        return None;
     }
     Some(entries[best_idx].clone())
 }
@@ -329,35 +337,31 @@ fn query_relevance_score(query: &str, title: &str, artist: &str) -> Option<i32> 
     if query_norm.is_empty() || haystack.is_empty() {
         return None;
     }
-    if query_norm == haystack || haystack.contains(&query_norm) {
-        return Some(1000 + query_norm.len() as i32);
-    }
+    let words: std::collections::HashSet<&str> = haystack.split_whitespace().collect();
+    let title_norm = normalize_match_text(title);
+    let title_words: std::collections::HashSet<&str> = title_norm.split_whitespace().collect();
     let tokens = significant_query_tokens(&query_norm);
     if tokens.is_empty() {
+        if query_norm == haystack || words.iter().any(|w| *w == query_norm) {
+            return Some(1000 + query_norm.len() as i32);
+        }
         return None;
     }
-    let mut matched_count = 0;
     let mut score = 0;
-    let title_norm = normalize_match_text(title);
     for token in &tokens {
-        if haystack.contains(token) {
-            matched_count += 1;
-            if title_norm.contains(token) {
-                score += 15;
-            } else {
-                score += 5;
-            }
+        if !words.contains(token.as_str()) {
+            return None;
+        }
+        if title_words.contains(token.as_str()) {
+            score += 15;
+        } else {
+            score += 5;
         }
     }
-    let mut min_required = (tokens.len() + 1) / 2;
-    if tokens.len() <= 2 {
-        min_required = tokens.len();
+    if query_norm == haystack || haystack.contains(&query_norm) {
+        score += 1000 + query_norm.len() as i32;
     }
-    if matched_count < min_required {
-        return None;
-    }
-    score += matched_count as i32 * 100;
-    score += (matched_count as i32 * 100) / tokens.len() as i32;
+    score += tokens.len() as i32 * 100;
     Some(score)
 }
 
@@ -1487,6 +1491,14 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["vidA", "vidB"]
         );
+    }
+
+    #[test]
+    fn query_requires_every_significant_token_as_whole_word() {
+        assert!(query_relevance_score("TEW020 game boy", "Game Boy", "Someone Else").is_none());
+        assert!(query_relevance_score("TEW020 game boy", "Game Boy", "TEW020").is_some());
+        assert!(query_relevance_score("boy", "boyfriend", "x").is_none());
+        assert!(query_relevance_score("never gonna", "Never Gonna Give You Up", "Rick Astley").is_some());
     }
 
     #[test]

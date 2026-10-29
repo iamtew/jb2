@@ -19,6 +19,7 @@ use tiny_http::{Header, Method, Request, Response, StatusCode};
 
 /// Largest request body read; config imports and chat posts are a few KB.
 const MAX_BODY_BYTES: u64 = 1 << 20;
+const BAD_VIDEO_MSG: &str = "bad video: not playable on YouTube Music";
 
 pub struct App {
     pub store: Store,
@@ -296,6 +297,7 @@ Transfer-Encoding: chunked\r\n\
         let mut link_thumb = String::new();
         let mut link_title = String::new();
         let mut link_artist = String::new();
+        let mut youtube_url = false;
         let (video_id, lookup) = if let Some(track_url) =
             videoid::canonical_spotify_track_url(input)
         {
@@ -306,47 +308,45 @@ Transfer-Encoding: chunked\r\n\
                     link_artist = sp.artist;
                     match ytmd::lookup_song_by_query(&self.ytmd, &sp.query) {
                         Ok(v) => v,
-                        Err(e) => {
-                            return Dispatch::Json(
-                                200,
-                                Envelope::fail(format!("failed to look up song metadata: {e}")),
-                            )
+                        Err(_) => {
+                            let msg = if link_title.is_empty() {
+                                "sound wasn't found on YouTube Music".to_string()
+                            } else if link_artist.is_empty() {
+                                format!("sound wasn't found on YouTube Music: {link_title}")
+                            } else {
+                                format!(
+                                    "sound wasn't found on YouTube Music: {link_title} — {link_artist}"
+                                )
+                            };
+                            return fail_link(&msg, &link_thumb, &link_title, &link_artist);
                         }
                     }
                 }
                 Err(e) => {
-                    return Dispatch::Json(
-                        200,
-                        Envelope::fail(format!("failed to look up song metadata: {e}")),
+                    return fail_link(
+                        &format!("failed to resolve Spotify track: {e}"),
+                        "",
+                        "",
+                        "",
                     )
                 }
             }
         } else {
             let (video_id, url_like) = videoid::classify_song_request_input(input);
             if !video_id.is_empty() {
+                youtube_url = url_like;
                 if url_like {
                     link_thumb = format!("https://i.ytimg.com/vi/{video_id}/mqdefault.jpg");
                 }
-                match ytmd::lookup_song_by_video_id(&self.ytmd, &video_id) {
-                    Ok(lookup) => (video_id, lookup),
-                    Err(e) => {
-                        return Dispatch::Json(
-                            200,
-                            Envelope::fail(format!("failed to look up song metadata: {e}")),
-                        )
-                    }
-                }
+                let lookup = ytmd::lookup_song_by_video_id(&self.ytmd, &video_id)
+                    .unwrap_or_default();
+                (video_id, lookup)
             } else if url_like {
                 return Dispatch::Json(200, Envelope::fail("unsupported or invalid YouTube URL"));
             } else {
                 match ytmd::lookup_song_by_query(&self.ytmd, input) {
                     Ok(v) => v,
-                    Err(e) => {
-                        return Dispatch::Json(
-                            200,
-                            Envelope::fail(format!("failed to look up song metadata: {e}")),
-                        )
-                    }
+                    Err(e) => return Dispatch::Json(200, Envelope::fail(e)),
                 }
             }
         };
@@ -357,13 +357,15 @@ Transfer-Encoding: chunked\r\n\
                 return Dispatch::Json(200, Envelope::fail(format!("failed to load config: {e}")))
             }
         };
+        // ponytail: YouTube URL with no YTMD search hit has no duration; YTMD accept/refuse is the check.
+        let require_duration = lookup.duration > 0 || !youtube_url;
         if let Err(e) = policy::check_content(
             &cfg,
             lookup.duration,
-            true,
+            require_duration,
             &[input, &lookup.title, &lookup.artist],
         ) {
-            return Dispatch::Json(200, Envelope::fail(e));
+            return fail_link(&e, &link_thumb, &link_title, &link_artist);
         }
 
         let mut queue_payload =
@@ -395,7 +397,13 @@ Transfer-Encoding: chunked\r\n\
                         attach_link_preview(env, &link_thumb, &link_title, &link_artist),
                     )
                 }
-                Err(e) => Dispatch::Json(200, Envelope::fail(e)),
+                Err(e) => {
+                    if youtube_url {
+                        fail_link(BAD_VIDEO_MSG, &link_thumb, &link_title, &link_artist)
+                    } else {
+                        Dispatch::Json(200, Envelope::fail(e))
+                    }
+                }
             };
         }
 
@@ -442,23 +450,41 @@ Transfer-Encoding: chunked\r\n\
             match self.insert_request_during_seed(&queue_payload, &song_payload, &video_id) {
                 Ok(q) => queue_payload = q,
                 Err(e) => {
+                    if youtube_url {
+                        return fail_link(
+                            BAD_VIDEO_MSG,
+                            &link_thumb,
+                            &link_title,
+                            &link_artist,
+                        );
+                    }
                     return Dispatch::Json(
                         200,
                         Envelope::fail(format!("failed to reach queue endpoint: {e}")),
-                    )
+                    );
                 }
             }
         } else if let Err(e) = self.ytmd.post_json(
             "/api/v1/queue",
             json!({"videoId": video_id, "insertPosition": "INSERT_AT_END"}),
         ) {
+            if youtube_url {
+                return fail_link(BAD_VIDEO_MSG, &link_thumb, &link_title, &link_artist);
+            }
             return Dispatch::Json(
                 200,
                 Envelope::fail(format!("failed to reach queue endpoint: {e}")),
             );
         }
 
-        if let Ok(fresh) =
+        if youtube_url {
+            match self.wait_for_queue_video(&video_id, 12, Duration::from_millis(150)) {
+                Ok((q, _)) => queue_payload = q,
+                Err(_) => {
+                    return fail_link(BAD_VIDEO_MSG, &link_thumb, &link_title, &link_artist);
+                }
+            }
+        } else if let Ok(fresh) =
             self.ytmd
                 .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
         {
@@ -1269,7 +1295,8 @@ Transfer-Encoding: chunked\r\n\
         if current_index < 0 {
             return Ok(queue_payload);
         }
-        for (offset, video_id) in requests.iter().enumerate() {
+        let mut offset = 0i32;
+        for video_id in &requests {
             let fresh =
                 self.ytmd
                     .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(150))?;
@@ -1278,8 +1305,12 @@ Transfer-Encoding: chunked\r\n\
             if current_index < 0 {
                 return Ok(queue_payload);
             }
-            let desired = current_index + 1 + offset as i32;
-            let actual = ytmd::queue_index_for_video_id(&queue_payload, video_id, true);
+            let actual = ytmd::queue_index_for_video_id(&queue_payload, video_id, false);
+            if actual >= 0 && actual <= current_index {
+                continue;
+            }
+            let desired = current_index + 1 + offset;
+            offset += 1;
             if actual < 0 || actual == desired {
                 continue;
             }
@@ -1306,19 +1337,18 @@ Transfer-Encoding: chunked\r\n\
         let mut target_index = self
             .seed
             .request_insert_index(&queue_payload, &current_video_id);
-        let current_index = ytmd::resolve_current_queue_index(&queue_payload, &current_video_id);
         self.ytmd.post_json(
             "/api/v1/queue",
             json!({"videoId": request_video_id, "insertPosition": "INSERT_AFTER_CURRENT_VIDEO"}),
         )?;
-        let wait = self.wait_for_queue_video(request_video_id, 12, Duration::from_millis(150));
-        let (mut fresh_queue, from_index) = match wait {
-            Ok(v) => v,
-            Err(_) => {
-                self.seed.append_request(request_video_id);
-                return Ok(json!({}));
-            }
-        };
+        let (mut fresh_queue, mut from_index) =
+            self.wait_for_queue_video(request_video_id, 12, Duration::from_millis(150))?;
+        let current_index = ytmd::resolve_current_queue_index(&fresh_queue, &current_video_id);
+        if target_index < 0 {
+            target_index = self
+                .seed
+                .request_insert_index(&fresh_queue, &current_video_id);
+        }
         if target_index < 0 && current_index >= 0 {
             target_index = current_index + 1;
         }
@@ -1332,8 +1362,9 @@ Transfer-Encoding: chunked\r\n\
                 self.wait_for_queue_video(request_video_id, 8, Duration::from_millis(150))
             {
                 fresh_queue = q;
+                from_index = idx;
                 if idx != target_index {
-                    let _ = self.move_queue_item(idx, target_index);
+                    let _ = self.move_queue_item(from_index, target_index);
                     if let Ok(q2) =
                         self.ytmd
                             .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(150))
@@ -1504,6 +1535,18 @@ fn seed_input(query: &[(String, String)], body: &[u8]) -> Result<String, String>
         }
     }
     Err("missing input".into())
+}
+
+fn fail_link(message: &str, thumb: &str, link_title: &str, link_artist: &str) -> Dispatch {
+    Dispatch::Json(
+        200,
+        attach_link_preview(
+            Envelope::fail_data(message, json!({})),
+            thumb,
+            link_title,
+            link_artist,
+        ),
+    )
 }
 
 fn attach_link_preview(

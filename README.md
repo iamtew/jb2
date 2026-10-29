@@ -49,6 +49,8 @@ Retries back off: 10s after a network drop, 30s after a token refresh failure or
 
 Chat commands: `!songrequest` / `!sr`, `!queue` / `!q`, `!songinfo` / `!si`. They run on a serial FIFO (cap 32, drop newest) so a busy chat cannot stall IRC. Admin → Commands sets per-command GCD/UCD seconds (default 0, counted from accept) and a global on/off (`twitchCommandsEnabled`, default on). Off still logs chat; HTTP `/cmd/jb/songrequest` and Admin Add/Now stay live. Accepted commands this process (with YouTube/Spotify link cards) sit under the cooldown table until restart.
 
+`!sr` text must match every significant word in the YouTube Music title+artist or it is refused. Spotify links resolve via oEmbed then the same strict search; a miss is `sound wasn't found on YouTube Music` (card still shows the Spotify title). YouTube watch URLs queue that video ID only; if YTMD will not play it, chat gets `bad video: not playable on YouTube Music`. While a jb2 seed playlist is active, requests insert after the current track (then after earlier requests); leftover seed stays.
+
 Streamer.bot: `GET /cmd/jb/commands`, `GET /cmd/jb/commands/on`, `GET /cmd/jb/commands/off`
 
 Leave channel/token empty to skip IRC.

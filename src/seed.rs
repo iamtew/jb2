@@ -199,3 +199,40 @@ fn sync_from_queue_locked(s: &mut Inner, queue_payload: &Value, current_video_id
 fn normalize_id(video_id: &str) -> String {
     video_id.trim().to_lowercase()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn queue(ids: &[&str]) -> Value {
+        json!({
+            "items": ids.iter().map(|id| json!({"videoId": id, "title": id})).collect::<Vec<_>>()
+        })
+    }
+
+    #[test]
+    fn insert_after_current_seed_then_after_requests() {
+        let s = State::new();
+        s.register_enqueue("pl", &["s1".into(), "s2".into(), "s3".into()]);
+        let q = queue(&["s1", "s2", "s3"]);
+        assert_eq!(s.request_insert_index(&q, "s1"), 1);
+
+        s.append_request("r1");
+        let q = queue(&["s1", "r1", "s2", "s3"]);
+        assert_eq!(s.request_insert_index(&q, "s1"), 2);
+
+        s.append_request("r2");
+        let q = queue(&["s1", "r1", "r2", "s2", "s3"]);
+        assert_eq!(s.request_insert_index(&q, "s1"), 3);
+    }
+
+    #[test]
+    fn insert_after_playing_request_block() {
+        let s = State::new();
+        s.append_request("r1");
+        s.append_request("r2");
+        let q = queue(&["r1", "r2", "s1"]);
+        assert_eq!(s.request_insert_index(&q, "r1"), 2);
+    }
+}
