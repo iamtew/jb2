@@ -73,8 +73,10 @@ body.dev .dev-checkerboard {
     font-size: 1.2em;
     color: #e0fefe;
     width: 500px;
-    position: relative;
-    z-index: 1;
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 2;
     opacity: 1;
     transition: opacity 180ms ease;
     background: linear-gradient(135deg,

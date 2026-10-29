@@ -80,6 +80,31 @@
 
   applyGlass();
 
+  function applyLayout(layout) {
+    if (!ui.songInfo || !layout) return;
+    const x = Number(layout.x);
+    const y = Number(layout.y);
+    ui.songInfo.style.left = `${Number.isFinite(x) ? x : 0}px`;
+    ui.songInfo.style.top = `${Number.isFinite(y) ? y : 0}px`;
+  }
+
+  function followOverlayLayout() {
+    fetch("/api/overlay")
+      .then((res) => res.json())
+      .then((env) => {
+        if (env && env.exitCode === 0) applyLayout(env.data);
+      })
+      .catch(() => {});
+    const events = new EventSource("/api/events");
+    events.addEventListener("overlay", (event) => {
+      try {
+        applyLayout(JSON.parse(event.data || "{}"));
+      } catch (err) {
+        log({ error: "overlay layout parse", details: String(err) });
+      }
+    });
+  }
+
   function setSongInfoOpacity(opacity, duration) {
     if (!ui.songInfo) return;
     ui.songInfo.style.transition = `opacity ${duration}ms ease`;
@@ -314,4 +339,5 @@
   stopGlowPulse();
 
   connect();
+  followOverlayLayout();
 })();
