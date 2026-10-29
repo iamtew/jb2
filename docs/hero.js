@@ -12,7 +12,7 @@
   var volWrap = document.getElementById("deckVolWrap");
   var volBtn = document.getElementById("deckVolBtn");
   // playing gates the visualizer. bins stay allocated after the first click.
-  var sound = { playing: false, bins: null, analyser: null, kick: 0, bassAvg: 0.2, file: "" };
+  var sound = { playing: false, bins: null, analyser: null, kick: 0, bass: 0, bassAvg: 0.2, file: "" };
   var audioCtx = null;
   var playGen = 0;
 
@@ -43,6 +43,7 @@
     if (audio) audio.pause();
     setPlaying(false);
     sound.kick = 0;
+    sound.bass = 0;
   }
 
   function playSelected() {
@@ -137,6 +138,7 @@
     var b;
     for (b = 0; b < n; b++) bass += sound.bins[b];
     bass /= n * 255;
+    sound.bass = bass;
     if (bass > sound.bassAvg * 1.35 && bass > 0.28) sound.kick = 1;
     else sound.kick *= 0.85;
     sound.bassAvg = sound.bassAvg * 0.9 + bass * 0.1;
@@ -288,7 +290,7 @@
         var live = sound.playing && sound.bins;
         // Idle kick is ~120 bpm. A playing track uses the bass onset instead.
         var kick = live
-          ? sound.kick
+          ? Math.min(1, Math.max(0, sound.bass - sound.bassAvg) * 5 + sound.kick)
           : Math.pow(Math.max(0, Math.sin(time * Math.PI * 2)), 8);
         var scale = layout.scale * (1 + kick * 0.09);
         var y = layout.y + Math.sin(time * 1.7) * 12;
