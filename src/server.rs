@@ -1,3 +1,4 @@
+use crate::audio;
 use crate::config::{self, Config, OverlayLayout, SeedPlaylist, Store};
 use crate::envelope::Envelope;
 use crate::events::EventBus;
@@ -28,6 +29,7 @@ pub struct App {
     pub seed: State,
     pub twitch: twitch::Hub,
     pub events: EventBus,
+    pub audio: audio::Hub,
     /// Live overlay position. SQLite is updated only when Stage saves (pointer up).
     overlay_live: Mutex<OverlayLayout>,
     /// ponytail: one lock for every queue write. Split if a long purge blocks admin drags.
@@ -37,7 +39,12 @@ pub struct App {
 impl App {
     pub fn new(store: Store, ytmd: Client, webroot: PathBuf) -> Arc<Self> {
         let events = EventBus::new();
-        let overlay_live = store.get().map(|c| c.overlay_layout).unwrap_or_default();
+        let loaded = store.get().ok();
+        let overlay_live = loaded
+            .as_ref()
+            .map(|c| c.overlay_layout.clone())
+            .unwrap_or_default();
+        let audio = audio::Hub::start(loaded.map(|c| c.audio_visualizer).unwrap_or_default());
         Arc::new(Self {
             store,
             ytmd,
@@ -45,6 +52,7 @@ impl App {
             seed: State::new(),
             twitch: twitch::Hub::with_events(events.clone()),
             events,
+            audio,
             overlay_live: Mutex::new(overlay_live),
             queue_lock: Mutex::new(()),
         })
@@ -98,6 +106,10 @@ impl App {
 
         if method_s == "GET" && path.trim_end_matches('/') == "/api/events" {
             self.serve_events(request, &method_s, &path);
+            return;
+        }
+        if method_s == "GET" && path.trim_end_matches('/') == "/sse/audio" {
+            self.serve_audio(request, &method_s, &path);
             return;
         }
 
@@ -160,6 +172,34 @@ Transfer-Encoding: chunked\r\n\
         }
     }
 
+    fn serve_audio(&self, request: Request, method: &str, path: &str) {
+        let Some(_guard) = self.audio.try_listen() else {
+            respond_json(
+                request,
+                503,
+                &Envelope::fail("too many audio listeners"),
+                method,
+                path,
+                "",
+            );
+            return;
+        };
+        let mut writer = request.into_writer();
+        log_http(method, path, 200, "");
+        let _ = audio::write_sse(&self.audio, &mut writer);
+    }
+
+    fn sync_audio(&self, cfg: &Config, parsed: &Value) {
+        if parsed.get("audioVisualizer").is_none() {
+            return;
+        }
+        self.audio.apply(cfg.audio_visualizer.clone());
+        self.emit(
+            "audioVisualizer",
+            json!({"enabled": cfg.audio_visualizer.enabled}),
+        );
+    }
+
     fn emit(&self, kind: &str, data: Value) {
         self.events.emit(kind, &data);
     }
@@ -202,6 +242,7 @@ Transfer-Encoding: chunked\r\n\
             ("POST", "/api/config/import") => self.config_import(body),
             ("GET", "/api/ytmd") => self.ytmd_token(),
             ("GET", "/api/overlay") => self.overlay_get(),
+            ("GET", "/api/audio") => Dispatch::Json(200, Envelope::ok_data(self.audio.snapshot())),
             ("PUT", "/api/overlay") => self.overlay_put(body),
             ("GET", "/api/twitch") => self.twitch_status(),
             ("POST", "/api/twitch/connect") => self.twitch_connect(),
@@ -686,6 +727,7 @@ Transfer-Encoding: chunked\r\n\
         if parsed.get("overlayLayout").is_some() {
             let _ = self.publish_overlay(saved.overlay_layout.clone(), false);
         }
+        self.sync_audio(&saved, &parsed);
         Dispatch::Json(
             200,
             Envelope::ok_msg("config saved", config::public_json(&saved)),
@@ -724,6 +766,7 @@ Transfer-Encoding: chunked\r\n\
         if parsed.get("overlayLayout").is_some() {
             let _ = self.publish_overlay(saved.overlay_layout.clone(), false);
         }
+        self.sync_audio(&saved, &parsed);
         let mut data = config::public_json(&saved);
         if let Some(obj) = data.as_object_mut() {
             obj.insert("source".into(), json!(source.as_str()));

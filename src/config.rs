@@ -77,6 +77,106 @@ fn default_overlay_grid() -> String {
     "center,thirds".to_string()
 }
 
+fn default_viz_device() -> String {
+    "default".to_string()
+}
+
+fn default_viz_bands() -> i32 {
+    16
+}
+
+fn default_viz_hz() -> i32 {
+    30
+}
+
+fn default_viz_smoothing() -> f32 {
+    0.35
+}
+
+fn default_bass_hz() -> [i32; 2] {
+    [20, 250]
+}
+
+fn default_mid_hz() -> [i32; 2] {
+    [250, 2000]
+}
+
+fn default_treble_hz() -> [i32; 2] {
+    [2000, 16000]
+}
+
+/// Loopback analysis for the overlay canvas. Off until Stage or a config write turns it on.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AudioVisualizer {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_viz_device")]
+    pub device: String,
+    #[serde(rename = "spectrumBands", default = "default_viz_bands")]
+    pub spectrum_bands: i32,
+    #[serde(rename = "updateHz", default = "default_viz_hz")]
+    pub update_hz: i32,
+    #[serde(default = "default_viz_smoothing")]
+    pub smoothing: f32,
+    #[serde(rename = "bassHz", default = "default_bass_hz")]
+    pub bass_hz: [i32; 2],
+    #[serde(rename = "midHz", default = "default_mid_hz")]
+    pub mid_hz: [i32; 2],
+    #[serde(rename = "trebleHz", default = "default_treble_hz")]
+    pub treble_hz: [i32; 2],
+}
+
+impl Default for AudioVisualizer {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            device: default_viz_device(),
+            spectrum_bands: default_viz_bands(),
+            update_hz: default_viz_hz(),
+            smoothing: default_viz_smoothing(),
+            bass_hz: default_bass_hz(),
+            mid_hz: default_mid_hz(),
+            treble_hz: default_treble_hz(),
+        }
+    }
+}
+
+pub fn normalize_audio_visualizer(mut viz: AudioVisualizer) -> AudioVisualizer {
+    viz.device = {
+        let name = viz.device.trim();
+        if name.is_empty() {
+            default_viz_device()
+        } else {
+            name.to_string()
+        }
+    };
+    viz.spectrum_bands = if viz.spectrum_bands == 32 { 32 } else { 16 };
+    viz.update_hz = match viz.update_hz {
+        45 => 45,
+        60 => 60,
+        _ => 30,
+    };
+    if !viz.smoothing.is_finite() {
+        viz.smoothing = default_viz_smoothing();
+    } else {
+        viz.smoothing = viz.smoothing.clamp(0.0, 1.0);
+    }
+    viz.bass_hz = normalize_hz_pair(viz.bass_hz, default_bass_hz());
+    viz.mid_hz = normalize_hz_pair(viz.mid_hz, default_mid_hz());
+    viz.treble_hz = normalize_hz_pair(viz.treble_hz, default_treble_hz());
+    viz
+}
+
+fn normalize_hz_pair(pair: [i32; 2], fallback: [i32; 2]) -> [i32; 2] {
+    let lo = pair[0];
+    let hi = pair[1];
+    if lo < 20 || hi > 20000 || lo >= hi {
+        fallback
+    } else {
+        [lo, hi]
+    }
+}
+
 const OVERLAY_THEMES: [&str; 10] = [
     "lcd-glass",
     "lower-third",
@@ -353,6 +453,8 @@ pub struct Config {
     pub twitch_commands: BTreeMap<String, CommandCooldown>,
     #[serde(rename = "overlayLayout", default)]
     pub overlay_layout: OverlayLayout,
+    #[serde(rename = "audioVisualizer", default)]
+    pub audio_visualizer: AudioVisualizer,
 }
 
 impl Default for Config {
@@ -372,6 +474,7 @@ impl Default for Config {
             twitch_commands_enabled: true,
             twitch_commands: default_twitch_commands(),
             overlay_layout: OverlayLayout::default(),
+            audio_visualizer: AudioVisualizer::default(),
         }
     }
 }
@@ -440,6 +543,7 @@ pub fn normalize(mut cfg: Config) -> Config {
     cfg.seed_playlists = seeds;
     cfg.twitch_commands = filled_twitch_commands(cfg.twitch_commands);
     cfg.overlay_layout = normalize_overlay_layout(cfg.overlay_layout);
+    cfg.audio_visualizer = normalize_audio_visualizer(cfg.audio_visualizer);
     cfg
 }
 
@@ -564,6 +668,49 @@ pub fn apply_patch(cfg: &mut Config, parsed: &Value) {
     if let Some(v) = parsed.get("overlayLayout") {
         cfg.overlay_layout = overlay_layout_from_value(cfg.overlay_layout.clone(), v);
     }
+    if let Some(v) = parsed.get("audioVisualizer") {
+        apply_audio_patch(&mut cfg.audio_visualizer, v);
+    }
+}
+
+fn apply_audio_patch(dst: &mut AudioVisualizer, parsed: &Value) {
+    let Some(obj) = parsed.as_object() else {
+        return;
+    };
+    if let Some(b) = obj.get("enabled").and_then(|v| v.as_bool()) {
+        dst.enabled = b;
+    }
+    if let Some(s) = obj.get("device").and_then(|v| v.as_str()) {
+        dst.device = s.to_string();
+    }
+    if let Some(n) = obj.get("spectrumBands").and_then(|v| v.as_i64()) {
+        dst.spectrum_bands = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = obj.get("updateHz").and_then(|v| v.as_i64()) {
+        dst.update_hz = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = obj.get("smoothing").and_then(json_f32) {
+        dst.smoothing = n;
+    }
+    if let Some(pair) = obj.get("bassHz").and_then(json_hz_pair) {
+        dst.bass_hz = pair;
+    }
+    if let Some(pair) = obj.get("midHz").and_then(json_hz_pair) {
+        dst.mid_hz = pair;
+    }
+    if let Some(pair) = obj.get("trebleHz").and_then(json_hz_pair) {
+        dst.treble_hz = pair;
+    }
+}
+
+fn json_hz_pair(v: &Value) -> Option<[i32; 2]> {
+    let arr = v.as_array()?;
+    if arr.len() != 2 {
+        return None;
+    }
+    let lo = i32::try_from(arr[0].as_i64()?).ok()?;
+    let hi = i32::try_from(arr[1].as_i64()?).ok()?;
+    Some([lo, hi])
 }
 
 /// True when a patch should bounce the IRC socket (channel / nick / tokens only).
@@ -899,5 +1046,35 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(off.grid, "off");
+    }
+
+    #[test]
+    fn audio_visualizer_normalizes_junk() {
+        let mut cfg = Config::default();
+        assert!(!cfg.audio_visualizer.enabled);
+        assert_eq!(cfg.audio_visualizer.spectrum_bands, 16);
+        apply_patch(
+            &mut cfg,
+            &json!({
+                "audioVisualizer": {
+                    "enabled": true,
+                    "device": "  ",
+                    "spectrumBands": 7,
+                    "updateHz": 99,
+                    "smoothing": 4.0,
+                    "bassHz": [10, 10],
+                    "midHz": [300, 1500]
+                }
+            }),
+        );
+        let cfg = normalize(cfg);
+        assert!(cfg.audio_visualizer.enabled);
+        assert_eq!(cfg.audio_visualizer.device, "default");
+        assert_eq!(cfg.audio_visualizer.spectrum_bands, 16);
+        assert_eq!(cfg.audio_visualizer.update_hz, 30);
+        assert_eq!(cfg.audio_visualizer.smoothing, 1.0);
+        assert_eq!(cfg.audio_visualizer.bass_hz, [20, 250]);
+        assert_eq!(cfg.audio_visualizer.mid_hz, [300, 1500]);
+        assert_eq!(cfg.audio_visualizer.treble_hz, [2000, 16000]);
     }
 }
