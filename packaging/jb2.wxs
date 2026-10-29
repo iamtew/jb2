@@ -2,7 +2,7 @@
   <!-- UpgradeCode is permanent. Do not change it between releases. -->
   <Package
     Name="JB2"
-    Manufacturer="Mikael"
+    Manufacturer="TEW020"
     Version="$(var.Version)"
     UpgradeCode="a7e4c91b-3f62-4a18-9d8e-b15c6a0f3e27"
     Scope="perUser"
@@ -36,7 +36,7 @@
           WorkingDirectory="INSTALLFOLDER"
           Icon="AppIcon"
           Advertise="no" />
-        <RegistryValue Root="HKCU" Key="Software\Mikael\JB2" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="Software\TEW020\JB2" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </Feature>
 

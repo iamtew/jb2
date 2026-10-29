@@ -1238,6 +1238,113 @@ body.is-queue-dragging .queue-drag-handle {
   min-width: 0;
 }
 
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  max-width: 36rem;
+}
+
+.about-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.about-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  flex: 0 0 auto;
+  background: var(--control);
+}
+
+.about-hero-text h2 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.about-aka {
+  margin: 6px 0 0;
+  font-weight: 650;
+}
+
+.about-hero-text .muted {
+  margin: 6px 0 0;
+}
+
+.about-blurb {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.about-blurb a,
+.about-blurb a:visited,
+.about-meta a,
+.about-meta a:visited {
+  color: var(--accent);
+}
+
+.about-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.about-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--hit);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  background: var(--control);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.about-link:hover,
+.about-link:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.about-meta {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.about-meta div {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.about-meta dt {
+  min-width: 5.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.about-meta dd {
+  margin: 0;
+}
+
+.about-copy {
+  margin: 0;
+}
+
 .muted {
   color: var(--muted);
   font-size: 0.8rem;

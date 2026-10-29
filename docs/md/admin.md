@@ -48,4 +48,4 @@ The API page runs a built-in command with optional query params (for example `se
 
 ## About
 
-Shows the build version from `GET /health`. The Windows tray **About** item shows the same string.
+Product page: name, logo, the build version from `GET /health`, a short description, and links to GitHub, releases, docs, and credits. MIT, copyright, and pear-desktop are listed there too. The Windows tray **About** item still shows the version string.

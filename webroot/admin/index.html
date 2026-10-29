@@ -152,6 +152,14 @@
         <path d="M12 8v4" />
         <path d="M12 16h.01" />
       </symbol>
+      <symbol id="info-circle" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" />
+        <path d="M12 9h.01" />
+        <path d="M11 12h1v4h1" />
+      </symbol>
+      <symbol id="brand-github" viewBox="0 0 24 24">
+        <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+      </symbol>
       <symbol id="chevron-up" viewBox="0 0 24 24">
         <path d="M6 15l6 -6l6 6" />
       </symbol>
@@ -397,11 +405,40 @@
       </section>
 
       <section id="page-about" class="page">
-        <div class="panel">
-          <div class="settings-block">
-            <h4>Jukeboks 2</h4>
-            <p id="aboutVersion" class="muted">version …</p>
-          </div>
+        <div class="panel about">
+          <header class="about-hero">
+            <img class="about-logo" src="/img/jukeboks.png" alt="" width="72" height="72" />
+            <div class="about-hero-text">
+              <h2>JB2</h2>
+              <p class="about-aka">Jukeboks 2</p>
+              <p id="aboutVersion" class="muted">version …</p>
+            </div>
+          </header>
+          <p class="about-blurb">
+            Local control plane for YouTube Music Desktop: Twitch song requests, an OBS overlay,
+            Overlay Stage, and this admin dock. For
+            <a href="https://github.com/pear-devs/pear-desktop" target="_blank" rel="noopener">pear-desktop</a>,
+            not the original YouTube Music Desktop.
+          </p>
+          <nav class="about-links" aria-label="JB2 on the web">
+            <a class="about-link" href="https://github.com/iamtew/jb2" target="_blank" rel="noopener">
+              <svg class="icon" data-icon="brand-github" aria-hidden="true"></svg>GitHub
+            </a>
+            <a class="about-link" href="https://github.com/iamtew/jb2/releases" target="_blank" rel="noopener">Releases</a>
+            <a class="about-link" href="https://github.com/iamtew/jb2/blob/master/docs/md/overview.md" target="_blank" rel="noopener">Docs</a>
+            <a class="about-link" href="https://github.com/iamtew/jb2/blob/master/CREDITS.md" target="_blank" rel="noopener">Credits</a>
+          </nav>
+          <dl class="about-meta">
+            <div>
+              <dt>License</dt>
+              <dd><a href="https://github.com/iamtew/jb2/blob/master/LICENSE" target="_blank" rel="noopener">MIT</a></dd>
+            </div>
+            <div>
+              <dt>Player</dt>
+              <dd><a href="https://github.com/pear-devs/pear-desktop" target="_blank" rel="noopener">pear-desktop</a></dd>
+            </div>
+          </dl>
+          <p class="muted about-copy">© 2026 TEW020</p>
         </div>
       </section>
 
@@ -413,7 +450,7 @@
         <button class="tab" data-page="twitch" type="button"><svg class="icon" data-icon="brand-twitch" aria-hidden="true"></svg><span>Twitch</span></button>
         <button class="tab" data-page="settings" type="button"><svg class="icon" data-icon="settings" aria-hidden="true"></svg><span>Settings</span></button>
         <button class="tab" data-page="system" type="button"><svg class="icon" data-icon="api" aria-hidden="true"></svg><span>API</span></button>
-        <button class="tab" data-page="about" type="button"><svg class="icon" data-icon="alert-circle" aria-hidden="true"></svg><span>About</span></button>
+        <button class="tab" data-page="about" type="button"><svg class="icon" data-icon="info-circle" aria-hidden="true"></svg><span>About</span></button>
       </nav>
     </main>
 
