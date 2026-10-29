@@ -33,11 +33,11 @@ Compiled into `jb2`. Versions are the ones locked in `Cargo.lock`.
 
 ## Fonts
 
-Better VCR is not in the repo. The landing page and the OBS overlay load it at runtime from `https://fonts.cdnfonts.com/css/better-vcr` (`webroot/style.css`, `webroot/overlay/style.css`).
+[Geist Sans](https://github.com/vercel/geist-font) variable, v1.8.2, SIL Open Font License 1.1, The Geist Project Authors (Vercel). Vendored as `webroot/vendor/Geist-Variable.woff2` and `docs/vendor/Geist-Variable.woff2`. License text sits next to each file as `Geist.LICENSE`. Admin, Overlay Stage, the local landing page, and this docs site load it for body copy.
+
+Better VCR is not in the repo. Headings on the landing pages and Overlay Stage, plus the OBS overlay, load it at runtime from `https://fonts.cdnfonts.com/css/better-vcr` (`webroot/style.css`, `webroot/overlay/style.css`, `docs/style.css`). Overlay Stage gets that import because it also loads overlay CSS.
 
 [CDNFonts](https://www.cdnfonts.com/better-vcr.font) lists that face as designed by artdzyk and “Free for personal use”, and tells you to research the license before using it. That remote file is not the FontStruct face also named Better VCR (Petro Birov, SIL Open Font License 1.1). JB2 does not vendor either file.
-
-The admin dock and this docs site use `system-ui`. They do not load Better VCR.
 
 ## Docs site
 
