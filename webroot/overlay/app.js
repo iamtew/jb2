@@ -50,7 +50,13 @@
     pulseParam === null ? null : Math.max(0, Math.min(10, Number(pulseParam) || 0));
   const bgParam = params.get("bg");
   const glassOverride = bgParam === "0" || bgParam === "false" ? false : null;
-  const WS_URL = `${protocol}://${host}:${port}/api/v1/ws`;
+  function ytmdWsUrl(token) {
+    const url = `${protocol}://${host}:${port}/api/v1/ws`;
+    if (!token) {
+      return url;
+    }
+    return `${url}?token=${encodeURIComponent(token)}`;
+  }
 
   if (devMode) {
     document.documentElement.classList.add("dev");
@@ -327,10 +333,29 @@
   let ws;
 
   function connect() {
-    ws = new WebSocket(WS_URL);
+    fetch("/api/ytmd")
+      .then((res) => res.json())
+      .then((env) => {
+        const token = env && env.exitCode === 0 ? env.data && env.data.accessToken : "";
+        if (!token) {
+          setHasSignal(false);
+          setTimeout(connect, 2000);
+          return;
+        }
+        openSocket(ytmdWsUrl(token));
+      })
+      .catch((err) => {
+        log({ error: "ytmd token", details: String(err) });
+        setHasSignal(false);
+        setTimeout(connect, 2000);
+      });
+  }
+
+  function openSocket(url) {
+    ws = new WebSocket(url);
 
     ws.onopen = () => {
-      log({ status: "connected", url: WS_URL });
+      log({ status: "connected", url });
       setHasSignal(true);
       handlePlaybackState(true);
     };

@@ -1853,12 +1853,29 @@ function connectNowPlaying() {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const host = window.location.hostname || 'localhost';
   const port = new URLSearchParams(window.location.search).get('ytmdPort') || '26538';
-  const wsUrl = `${protocol}://${host}:${port}/api/v1/ws`;
 
   if (window.__jukeboksSocket && window.__jukeboksSocket.readyState === WebSocket.OPEN) {
     return;
   }
 
+  fetch('/api/ytmd')
+    .then((res) => res.json())
+    .then((env) => {
+      const token = env && env.exitCode === 0 ? env.data && env.data.accessToken : '';
+      if (!token) {
+        setCurrentMetaText('pear-desktop socket unavailable');
+        window.setTimeout(connectNowPlaying, 2000);
+        return;
+      }
+      openNowPlayingSocket(`${protocol}://${host}:${port}/api/v1/ws?token=${encodeURIComponent(token)}`);
+    })
+    .catch(() => {
+      setCurrentMetaText('pear-desktop socket unavailable');
+      window.setTimeout(connectNowPlaying, 2000);
+    });
+}
+
+function openNowPlayingSocket(wsUrl) {
   const socket = new WebSocket(wsUrl);
   socket.onopen = () => {
     setCurrentMetaText('Listening for pear-desktop…');

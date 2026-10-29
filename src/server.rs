@@ -200,6 +200,7 @@ Transfer-Encoding: chunked\r\n\
             ("GET", "/api/config") => self.config_get(),
             ("POST" | "PUT", "/api/config") => self.config_save(body),
             ("POST", "/api/config/import") => self.config_import(body),
+            ("GET", "/api/ytmd") => self.ytmd_token(),
             ("GET", "/api/overlay") => self.overlay_get(),
             ("PUT", "/api/overlay") => self.overlay_put(body),
             ("GET", "/api/twitch") => self.twitch_status(),
@@ -621,6 +622,13 @@ Transfer-Encoding: chunked\r\n\
         }
         self.emit("overlay", layout.to_json());
         Ok(layout)
+    }
+
+    fn ytmd_token(&self) -> Dispatch {
+        match self.ytmd.ensure_token() {
+            Ok(token) => Dispatch::Json(200, Envelope::ok_data(json!({"accessToken": token}))),
+            Err(e) => Dispatch::Json(200, Envelope::fail(e)),
+        }
     }
 
     fn overlay_get(&self) -> Dispatch {
@@ -1744,6 +1752,7 @@ fn is_quiet_poll_get(method: &str, path: &str) -> bool {
         && matches!(
             path,
             "/api/queue"
+                | "/api/ytmd"
                 | "/api/twitch"
                 | "/api/twitch/chat"
                 | "/api/twitch/history"
@@ -1884,6 +1893,7 @@ mod tests {
     #[test]
     fn admin_poll_gets_are_quiet() {
         assert!(is_quiet_poll_get("GET", "/api/queue"));
+        assert!(is_quiet_poll_get("GET", "/api/ytmd"));
         assert!(is_quiet_poll_get("GET", "/api/twitch"));
         assert!(is_quiet_poll_get("GET", "/api/twitch/chat"));
         assert!(is_quiet_poll_get("GET", "/api/twitch/history"));

@@ -1,12 +1,17 @@
 use crate::jsonutil::as_string;
 use serde_json::{json, Value};
 use std::io::Read;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 mod parse;
 pub use parse::*;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
+/// Pairing id shown in pear-desktop's Allow dialog. Stable so later starts skip the prompt.
+const AUTH_ID: &str = "jb2";
+/// Allow dialog can sit until the Meat Bag clicks; agent default 5s is too short.
+const AUTH_TIMEOUT: Duration = Duration::from_secs(120);
 /// Public web key the YouTube Music site itself ships; not an operator secret.
 const INNERTUBE_BROWSE: &str =
     "https://music.youtube.com/youtubei/v1/browse?alt=json&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30";
@@ -16,6 +21,7 @@ pub const INNERTUBE_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleW
 pub struct Client {
     pub base: String,
     agent: ureq::Agent,
+    token: Arc<Mutex<Option<String>>>,
 }
 
 impl Client {
@@ -24,6 +30,7 @@ impl Client {
         Self {
             base: format!("http://{host}:{port}"),
             agent,
+            token: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -49,14 +56,50 @@ impl Client {
         Err(last)
     }
 
+    /// JWT for overlay/admin `?token=`. Pairs with pear-desktop on first use.
+    pub fn ensure_token(&self) -> Result<String, String> {
+        let mut guard = self.token.lock().expect("ytmd token");
+        if let Some(token) = guard.as_ref().filter(|t| !t.is_empty()) {
+            return Ok(token.clone());
+        }
+        crate::log(format!("pear-desktop: waiting for Allow (id={AUTH_ID})"));
+        let url = format!("{}/auth/{AUTH_ID}", self.base);
+        let resp = match self.agent.post(&url).timeout(AUTH_TIMEOUT).call() {
+            Ok(r) => r,
+            Err(ureq::Error::Status(code, r)) => {
+                let text = r.into_string().unwrap_or_default();
+                if code == 403 {
+                    return Err(format!("pear-desktop denied Allow (id={AUTH_ID})"));
+                }
+                return Err(status_err(code, &text));
+            }
+            Err(e) => return Err(e.to_string()),
+        };
+        let payload: Value = resp
+            .into_json()
+            .map_err(|e| format!("failed to decode auth payload: {e}"))?;
+        let token = parse_access_token(&payload)?;
+        *guard = Some(token.clone());
+        Ok(token)
+    }
+
+    fn clear_token(&self) {
+        *self.token.lock().expect("ytmd token") = None;
+    }
+
+    fn apply_auth(&self, req: ureq::Request) -> ureq::Request {
+        match self.token.lock().expect("ytmd token").as_ref() {
+            Some(token) if !token.is_empty() => {
+                req.set("Authorization", &format!("Bearer {token}"))
+            }
+            _ => req,
+        }
+    }
+
     fn get_json(&self, endpoint: &str) -> Result<Value, String> {
         let url = format!("{}{endpoint}", self.base);
-        let resp = self.agent.get(&url).call().map_err(|e| e.to_string())?;
-        if resp.status() >= 400 {
-            return Err(format!("endpoint returned {}", resp.status()));
-        }
-        resp.into_json()
-            .map_err(|e| format!("failed to decode payload: {e}"))
+        let (status, body) = self.authed_bytes("GET", &url, None)?;
+        decode_json_body(status, &body)
     }
 
     pub fn post_json(&self, endpoint: &str, body: Value) -> Result<Value, String> {
@@ -70,27 +113,17 @@ impl Client {
         body: Option<Value>,
     ) -> Result<Value, String> {
         let url = format!("{}{endpoint}", self.base);
-        let req = self.agent.request(method, &url);
-        let resp = if let Some(body) = body {
-            req.set("Content-Type", "application/json")
-                .send_json(body)
-                .map_err(|e| e.to_string())?
-        } else {
-            req.call().map_err(|e| e.to_string())?
+        let bytes = body.map(|v| {
+            (
+                true,
+                serde_json::to_vec(&v).unwrap_or_else(|_| b"{}".to_vec()),
+            )
+        });
+        let (status, body) = match bytes {
+            Some((_, buf)) => self.authed_bytes(method, &url, Some((true, buf)))?,
+            None => self.authed_bytes(method, &url, None)?,
         };
-        if resp.status() >= 400 {
-            let status = resp.status();
-            let text = resp.into_string().unwrap_or_default();
-            if text.is_empty() {
-                return Err(format!("endpoint returned {status}"));
-            }
-            return Err(format!("endpoint returned {status}: {text}"));
-        }
-        let text = resp.into_string().map_err(|e| e.to_string())?;
-        if text.trim().is_empty() {
-            return Ok(json!({}));
-        }
-        serde_json::from_str(&text).map_err(|e| format!("failed to decode payload: {e}"))
+        decode_json_body(status, &body)
     }
 
     pub fn proxy(
@@ -105,22 +138,88 @@ impl Client {
             url.push('?');
             url.push_str(query);
         }
-        let mut req = self.agent.request(method, &url);
-        let resp = if let Some(body) = body {
-            if method != "GET" {
-                req = req.set("Content-Type", "application/json");
-            }
-            req.send_bytes(&body).map_err(|e| e.to_string())?
-        } else {
-            req.call().map_err(|e| e.to_string())?
-        };
-        let status = resp.status();
-        let mut buf = Vec::new();
-        resp.into_reader()
-            .read_to_end(&mut buf)
-            .map_err(|e| e.to_string())?;
+        let json_body = method != "GET";
+        self.authed_bytes(method, &url, body.map(|b| (json_body, b)))
+    }
+
+    fn authed_bytes(
+        &self,
+        method: &str,
+        url: &str,
+        body: Option<(bool, Vec<u8>)>,
+    ) -> Result<(u16, Vec<u8>), String> {
+        self.ensure_token()?;
+        let (status, buf) = self.send_once(method, url, body.as_ref())?;
+        if status == 401 {
+            self.clear_token();
+            self.ensure_token()?;
+            return self.send_once(method, url, body.as_ref());
+        }
         Ok((status, buf))
     }
+
+    fn send_once(
+        &self,
+        method: &str,
+        url: &str,
+        body: Option<&(bool, Vec<u8>)>,
+    ) -> Result<(u16, Vec<u8>), String> {
+        let mut req = self.apply_auth(self.agent.request(method, url));
+        let result = match body {
+            Some((true, buf)) => {
+                req = req.set("Content-Type", "application/json");
+                req.send_bytes(buf)
+            }
+            Some((false, buf)) => req.send_bytes(buf),
+            None => req.call(),
+        };
+        read_ureq(result)
+    }
+}
+
+fn read_ureq(result: Result<ureq::Response, ureq::Error>) -> Result<(u16, Vec<u8>), String> {
+    let resp = match result {
+        Ok(r) => r,
+        Err(ureq::Error::Status(_, r)) => r,
+        Err(e) => return Err(e.to_string()),
+    };
+    let status = resp.status();
+    let mut buf = Vec::new();
+    resp.into_reader()
+        .read_to_end(&mut buf)
+        .map_err(|e| e.to_string())?;
+    Ok((status, buf))
+}
+
+fn status_err(status: u16, text: &str) -> String {
+    if text.trim().is_empty() {
+        format!("endpoint returned {status}")
+    } else {
+        format!("endpoint returned {status}: {text}")
+    }
+}
+
+fn decode_json_body(status: u16, body: &[u8]) -> Result<Value, String> {
+    if status >= 400 {
+        let text = String::from_utf8_lossy(body);
+        return Err(status_err(status, &text));
+    }
+    let text = String::from_utf8_lossy(body);
+    if text.trim().is_empty() {
+        return Ok(json!({}));
+    }
+    serde_json::from_str(&text).map_err(|e| format!("failed to decode payload: {e}"))
+}
+
+pub fn parse_access_token(payload: &Value) -> Result<String, String> {
+    let token = payload
+        .get("accessToken")
+        .map(as_string)
+        .unwrap_or_default();
+    if token.is_empty() {
+        return Err("auth response missing accessToken".into());
+    }
+    Ok(token)
 }
 
 pub fn route_for_path(path: &str) -> String {
@@ -476,6 +575,16 @@ fn lookup_playlist_via_ytmd_search(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn parse_access_token_reads_jwt() {
+        assert_eq!(
+            parse_access_token(&json!({"accessToken": "abc.def"})).unwrap(),
+            "abc.def"
+        );
+        assert!(parse_access_token(&json!({})).is_err());
+        assert!(parse_access_token(&json!({"accessToken": ""})).is_err());
+    }
 
     #[test]
     fn oembed_reads_title_author_thumb() {

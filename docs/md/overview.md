@@ -6,7 +6,7 @@ One process, one `jb2.sqlite`, one `webroot/`.
 
 **Default base URL:** `http://localhost:42420` (binds `0.0.0.0:42420`; exits if the port is busy)
 
-The player is [pear-desktop](https://github.com/pear-devs/pear-desktop). JB2 does not work with the original [YouTube Music Desktop](https://github.com/th-ch/youtube-music). pear-desktop serves its local API at `http://localhost:26538` (open local API / authStrategy NONE). The overlay WebSocket connects there. See [Overlay](overlay.md).
+The player is [pear-desktop](https://github.com/pear-devs/pear-desktop). JB2 does not work with the original [YouTube Music Desktop](https://github.com/th-ch/youtube-music). pear-desktop serves its local API at `http://localhost:26538`. JB2 pairs as client `jb2` (`POST /auth/jb2`) and sends the JWT on HTTP and the overlay WebSocket. First pairing pops Allow in pear-desktop. See [Overlay](overlay.md) and [Running](running.md).
 
 ## Surfaces
 

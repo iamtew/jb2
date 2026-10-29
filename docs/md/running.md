@@ -25,6 +25,8 @@ gh run download <run-id> -n dist -D dist
 
 `-ytmd_host` and `-ytmd_port` are the [pear-desktop](https://github.com/pear-devs/pear-desktop) local API, not the original [YouTube Music Desktop](https://github.com/th-ch/youtube-music).
 
+The first call to pear-desktop with API auth on pops **Allow** in the player (`id=jb2`). After that, JB2 sends `Authorization: Bearer` on `/api` and overlay/admin open `ws://…/api/v1/ws?token=` using `GET /api/ytmd`. The JWT stays in memory.
+
 | Flag | Default |
 |---|---|
 | `-port` | `42420` |

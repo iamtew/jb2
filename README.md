@@ -13,7 +13,7 @@ just test
 just package
 ```
 
-Flags: `-port`, `-bind`, `-ytmd_host`, `-ytmd_port`, `-webroot`, `-config`.
+Flags: `-port`, `-bind`, `-ytmd_host`, `-ytmd_port`, `-webroot`, `-config`. pear-desktop API auth: first run pops Allow (`id=jb2`).
 
 ## Release
 

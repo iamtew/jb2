@@ -10,7 +10,7 @@ Each theme paints a small PixiJS FX layer behind the widget (scan, motes, neon, 
 
 Playback does not come from JB2. The page opens a WebSocket to [pear-desktop](https://github.com/pear-devs/pear-desktop):
 
-`ws://<host>:26538/api/v1/ws`
+`ws://<host>:26538/api/v1/ws?token=` (token from JB2 `GET /api/ytmd`)
 
 `<host>` is the page hostname, unless you override it. JB2 only serves the HTML.
 
