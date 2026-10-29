@@ -93,8 +93,10 @@
       return;
     }
     if (ui.overlayState) {
-      ui.overlayState.textContent =
-        kind === "nosignal" ? "NO SIGNAL" : "Jukeboks Paused\nAdd song with !sr <song / URL>";
+      ui.overlayState.innerHTML =
+        kind === "nosignal"
+          ? "NO SIGNAL"
+          : '<span class="overlay-state-lead">Jukeboks Paused</span><span class="overlay-state-hint">Add song with !sr &lt;song / URL&gt;</span>';
     }
     ui.songInfo.classList.add("is-status");
   }
