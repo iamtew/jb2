@@ -5,15 +5,18 @@ just run
 just build
 just test
 just package
+just msi
 ```
 
-`just run` is `cargo run --release`. `just build` copies `target/release/jb2.exe` to `jb2.exe` in the repo. `just package` writes `dist/jb2.exe` and a copy of `webroot/`. `just build-dist` does that and zips `dist/jb2-<version>-win-x64.zip` using the `version` in `Cargo.toml`. `just icon` rebuilds `webroot/img/jukeboks.ico` from the PNG (needs ImageMagick).
+`just run` is `cargo run --release`. `just build` copies `target/release/jb2.exe` to `jb2.exe` in the repo. `just package` writes `dist/jb2.exe` and a copy of `webroot/`. `just build-dist` does that, zips `dist/jb2-<version>-win-x64.zip`, and builds `dist/jb2-<version>-win-x64.msi` using the `version` in `Cargo.toml`. `just msi` is package plus the MSI only; both need WiX 5 on PATH (`dotnet tool install -g wix`). `just icon` rebuilds `webroot/img/jukeboks.ico` from the PNG (needs ImageMagick).
+
+The MSI is per-user: `%LOCALAPPDATA%\Programs\JB2`, no admin. The Start Menu shortcut is a checkbox, on by default. Config (`jb2.sqlite`) lives next to that exe and survives upgrades.
 
 ## Release
 
-Windows zip comes from GitHub Actions (`.github/workflows/dist.yml`). Run it from the Actions tab, or push a numeric tag such as `0.0.1` (no `v` prefix). The workflow does not publish a release.
+Windows zip and MSI come from GitHub Actions (`.github/workflows/dist.yml`). Run it from the Actions tab, or push a numeric tag such as `0.0.1` (no `v` prefix). The workflow does not publish a release.
 
-The `dist` artifact is `jb2-<version>-win-x64.zip`. Download it with:
+The `dist` artifact is `jb2-<version>-win-x64.zip` and `jb2-<version>-win-x64.msi`. Download it with:
 
 ```
 gh run download <run-id> -n dist -D dist

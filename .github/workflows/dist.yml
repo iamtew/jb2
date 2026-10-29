@@ -1,4 +1,4 @@
-# Windows release zip. One artifact named dist.
+# Windows release zip and per-user MSI. One artifact named dist.
 # Run from the Actions tab, or push a numeric tag such as 0.0.1. Does not publish a release.
 name: dist
 
@@ -21,6 +21,15 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v2
 
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          $tools = Join-Path $env:USERPROFILE ".dotnet\tools"
+          Add-Content $env:GITHUB_PATH $tools
+          $env:PATH = "$tools;$env:PATH"
+          wix extension add --global WixToolset.UI.wixext/5.0.2
+
       - name: Build dist
         shell: pwsh
         run: just build-dist
@@ -28,5 +37,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.msi
           if-no-files-found: error
