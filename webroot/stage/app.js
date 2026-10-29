@@ -44,7 +44,7 @@
 
   const DEFAULTS = {
     theme: "lcd-glass",
-    seekStyle: "sesh-sofs",
+    seekStyle: "sesh-sofa",
     playingOpacity: 1,
     pausedOpacity: 0.25,
     panelW: 500,

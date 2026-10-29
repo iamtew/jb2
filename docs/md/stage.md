@@ -29,7 +29,7 @@ Theme, seek style, playing/paused opacity, pulse, glass, and framing grid. Each 
 
 Typefaces come with the theme ([Typography](typography.md)). Stage does not pick fonts.
 
-Seek styles: Sesh Sofs (yellow/red), Ice, Magenta, White.
+Seek styles: Sesh Sofa (yellow/red), Ice, Magenta, White.
 
 Framing grids are Stage-only (not drawn in OBS): thirds+center, thirds, center, golden, broadcast safe (action ~90% / title ~80%), 4×4, off. The panel snaps to the selected grid.
 

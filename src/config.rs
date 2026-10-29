@@ -54,7 +54,7 @@ fn default_overlay_theme() -> String {
 }
 
 fn default_seek_style() -> String {
-    "sesh-sofs".to_string()
+    "sesh-sofa".to_string()
 }
 
 fn default_playing_opacity() -> f32 {
@@ -78,7 +78,7 @@ fn default_overlay_grid() -> String {
 }
 
 const OVERLAY_THEMES: [&str; 3] = ["lcd-glass", "lower-third", "amber-terminal"];
-const OVERLAY_SEEK_STYLES: [&str; 4] = ["sesh-sofs", "ice", "magenta", "white"];
+const OVERLAY_SEEK_STYLES: [&str; 4] = ["sesh-sofa", "ice", "magenta", "white"];
 const OVERLAY_GRIDS: [&str; 7] = [
     "thirds-center",
     "thirds",
@@ -199,7 +199,10 @@ pub fn normalize_overlay_layout(mut layout: OverlayLayout) -> OverlayLayout {
         }
     }
     layout.theme = pick_allowed(&layout.theme, &OVERLAY_THEMES, "lcd-glass");
-    layout.seek_style = pick_allowed(&layout.seek_style, &OVERLAY_SEEK_STYLES, "sesh-sofs");
+    if layout.seek_style == "sesh-sofs" {
+        layout.seek_style = "sesh-sofa".to_string();
+    }
+    layout.seek_style = pick_allowed(&layout.seek_style, &OVERLAY_SEEK_STYLES, "sesh-sofa");
     layout.grid = pick_allowed(&layout.grid, &OVERLAY_GRIDS, "thirds-center");
     if !layout.playing_opacity.is_finite() {
         layout.playing_opacity = 1.0;
@@ -775,7 +778,7 @@ mod tests {
         assert_eq!(bogus.x, 0);
         assert_eq!(bogus.y, OVERLAY_CANVAS_1080.1 - OVERLAY_PANEL_H_MIN);
         assert_eq!(bogus.theme, "lcd-glass");
-        assert_eq!(bogus.seek_style, "sesh-sofs");
+        assert_eq!(bogus.seek_style, "sesh-sofa");
         assert_eq!(bogus.grid, "thirds-center");
         assert_eq!(bogus.playing_opacity, 1.0);
         assert_eq!(bogus.paused_opacity, 0.0);

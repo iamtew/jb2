@@ -123,7 +123,7 @@
     ui.songInfo.style.transformOrigin = "0 0";
     ui.songInfo.style.transform = s === 1 ? "none" : `scale(${s})`;
     ui.songInfo.setAttribute("data-theme", layout.theme || "lcd-glass");
-    ui.songInfo.setAttribute("data-seek", layout.seekStyle || "sesh-sofs");
+    ui.songInfo.setAttribute("data-seek", layout.seekStyle || "sesh-sofa");
     const playOp = Number(layout.playingOpacity);
     const pauseOp = Number(layout.pausedOpacity);
     state.playingOpacity = Number.isFinite(playOp) ? playOp : 1;
