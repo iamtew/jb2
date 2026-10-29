@@ -1369,7 +1369,7 @@ async function handleQueueItemAction(event) {
 
 async function handleClearQueue() {
   if (!clearQueueButton) return;
-  if (!window.confirm('Clear the entire YTMD queue?')) {
+  if (!window.confirm('Clear the entire pear-desktop queue?')) {
     return;
   }
 
@@ -1639,7 +1639,7 @@ function renderQueue() {
   if (playbackState.queueStatus === 'unavailable') {
     syncPreviousToggle(false);
     setQueueCount(0);
-    queueList.innerHTML = `${feedbackMarkup}<div class="queue-empty-state">YTMD queue unavailable. Check that the player is reachable.</div>`;
+    queueList.innerHTML = `${feedbackMarkup}<div class="queue-empty-state">pear-desktop queue unavailable. Check that the player is reachable.</div>`;
     return;
   }
 
@@ -1839,7 +1839,7 @@ async function refreshNowPlayingFromProxy() {
       return;
     }
 
-    setCurrentMetaText('YTMD unavailable');
+    setCurrentMetaText('pear-desktop unavailable');
     updateCurrentMetaMarquee();
     playbackState.isPaused = true;
     setPlayGlyph(true);
@@ -1861,7 +1861,7 @@ function connectNowPlaying() {
 
   const socket = new WebSocket(wsUrl);
   socket.onopen = () => {
-    setCurrentMetaText('Listening for YTMD…');
+    setCurrentMetaText('Listening for pear-desktop…');
     currentMeta.classList.remove('is-marquee');
   };
   socket.onmessage = (event) => {
@@ -1902,7 +1902,7 @@ function connectNowPlaying() {
     }
   };
   socket.onerror = () => {
-    setCurrentMetaText('YTMD socket unavailable');
+    setCurrentMetaText('pear-desktop socket unavailable');
   };
   socket.onclose = () => {
     window.setTimeout(connectNowPlaying, 2000);

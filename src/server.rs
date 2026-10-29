@@ -1168,7 +1168,7 @@ Transfer-Encoding: chunked\r\n\
     fn alias_ytmd(&self, method: &str, endpoint: &str) -> Dispatch {
         match self.ytmd.request_json(method, endpoint, None) {
             Ok(data) => Dispatch::Json(200, Envelope::ok_data(data)),
-            Err(e) => Dispatch::Json(502, Envelope::fail(format!("failed to reach YTMD: {e}"))),
+            Err(e) => Dispatch::Json(502, Envelope::fail(format!("failed to reach pear-desktop: {e}"))),
         }
     }
 
@@ -1237,7 +1237,7 @@ Transfer-Encoding: chunked\r\n\
                     request,
                     502,
                     &Envelope::fail(format!(
-                        "YTMD returned {status}: {}",
+                        "pear-desktop returned {status}: {}",
                         String::from_utf8_lossy(&bytes).trim()
                     )),
                 );
@@ -1246,7 +1246,7 @@ Transfer-Encoding: chunked\r\n\
                 respond_json(
                     request,
                     502,
-                    &Envelope::fail(format!("failed to reach YTMD at {}: {e}", self.ytmd.base)),
+                    &Envelope::fail(format!("failed to reach pear-desktop at {}: {e}", self.ytmd.base)),
                 );
             }
         }
@@ -1346,7 +1346,7 @@ Transfer-Encoding: chunked\r\n\
             }
         }
         Err(format!(
-            "queued video \"{video_id}\" not visible in YTMD queue yet"
+            "queued video \"{video_id}\" not visible in the pear-desktop queue yet"
         ))
     }
 

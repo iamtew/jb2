@@ -412,7 +412,7 @@ pub fn lookup_playlist_by_id(client: &Client, playlist_id: &str) -> Result<Playl
         Err(e) => attempts.push(e),
     }
     let detail = if attempts.is_empty() {
-        "playlist must be public or viewable in YTMD".into()
+        "playlist must be public or viewable in pear-desktop".into()
     } else {
         attempts.join("; ")
     };
