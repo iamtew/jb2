@@ -1115,7 +1115,7 @@ pub fn build_song_request_response(
 }
 
 /// 1-based index from the current track, plus seconds until `video_id` starts.
-/// None if the video is current or not in the remaining queue.
+/// If the video is not in the queue yet, treat it as appended after remaining items.
 fn queue_position_and_wait(
     queue_payload: &Value,
     song_payload: &Value,
@@ -1125,25 +1125,36 @@ fn queue_position_and_wait(
     if video_id.is_empty() {
         return None;
     }
+    let items = ordered_queue_items_array(queue_payload)?;
+    if items.is_empty() {
+        return Some((1, 0));
+    }
     let song_data = flatten_song_payload(song_payload);
-    let mut entries = collect_queue_entries_for_command(queue_payload);
-    entries = reorder_queue_entries_from_current_song(entries, &song_data);
+    let current_id = current_song_video_id(song_payload);
+    let mut start = resolve_current_queue_index(queue_payload, &current_id);
+    if start < 0 {
+        start = 0;
+    }
+    let start_u = start as usize;
     let mut found = None;
-    for (i, e) in entries.iter().enumerate() {
-        if e.video_id.eq_ignore_ascii_case(video_id) {
+    for i in start_u..items.len() {
+        if queue_item_video_id(&items[i]).eq_ignore_ascii_case(video_id) {
             found = Some(i);
         }
     }
-    let idx = found?;
-    if idx == 0 {
-        return None;
+    // Missing from this snapshot: assume INSERT_AT_END after remaining rows.
+    let end = found.unwrap_or(items.len());
+    let pos = end - start_u + 1;
+    if found == Some(start_u) {
+        return Some((1, 0));
     }
-    let mut wait = current_remaining_seconds(&song_data, entries.first());
+    let current_entry = summarize_queue_entry(&items[start_u]);
+    let mut wait = current_remaining_seconds(&song_data, Some(&current_entry));
     // ponytail: missing lengths count as 0, so ETA can be short; add when YTMD always sends durations.
-    for e in &entries[1..idx] {
-        wait += e.duration_seconds;
+    for item in &items[start_u + 1..end] {
+        wait += summarize_queue_entry(item).duration_seconds;
     }
-    Some((idx + 1, wait))
+    Some((pos, wait))
 }
 
 fn current_remaining_seconds(song_data: &Value, current: Option<&QueueEntrySummary>) -> i32 {
@@ -2042,6 +2053,62 @@ mod tests {
                 { "videoId": "cur", "title": "Now", "artist": "A", "duration": "3:00" },
                 { "videoId": "mid", "title": "Mid", "artist": "B", "duration": "2:00" },
                 { "videoId": "new", "title": "Title", "artist": "Artist", "duration": "3:33" }
+            ]
+        });
+        let song = json!({
+            "videoId": "cur",
+            "elapsedSeconds": 40,
+            "songDuration": 180
+        });
+        let lookup = SongLookup {
+            title: "Title".into(),
+            artist: "Artist".into(),
+            duration: 213,
+        };
+        let env = build_song_request_response("new", &queue, &lookup, Some(&song));
+        assert_eq!(
+            env.message.as_deref(),
+            Some("Added to queue: Artist - Title. #3 in queue ~4:20 until play.")
+        );
+    }
+
+    #[test]
+    fn song_request_reply_when_added_track_is_already_current() {
+        let queue = json!({
+            "items": [
+                { "videoId": "old", "title": "Old", "artist": "A", "duration": "3:00" },
+                {
+                    "videoId": "new",
+                    "title": "Title",
+                    "artist": "Artist",
+                    "duration": "3:33",
+                    "playlistPanelVideoRenderer": { "selected": true, "videoId": "new" }
+                }
+            ]
+        });
+        let song = json!({
+            "videoId": "new",
+            "elapsedSeconds": 1,
+            "songDuration": 213
+        });
+        let lookup = SongLookup {
+            title: "Title".into(),
+            artist: "Artist".into(),
+            duration: 213,
+        };
+        let env = build_song_request_response("new", &queue, &lookup, Some(&song));
+        assert_eq!(
+            env.message.as_deref(),
+            Some("Added to queue: Artist - Title. #1 in queue ~0:00 until play.")
+        );
+    }
+
+    #[test]
+    fn song_request_reply_when_video_not_in_queue_snapshot() {
+        let queue = json!({
+            "items": [
+                { "videoId": "cur", "title": "Now", "artist": "A", "duration": "3:00" },
+                { "videoId": "mid", "title": "Mid", "artist": "B", "duration": "2:00" }
             ]
         });
         let song = json!({

@@ -508,18 +508,20 @@ Transfer-Encoding: chunked\r\n\
             );
         }
 
-        if youtube_url {
-            match self.wait_for_queue_video(&video_id, 12, Duration::from_millis(150)) {
-                Ok((q, _)) => queue_payload = q,
-                Err(_) => {
-                    return fail_link(BAD_VIDEO_MSG, &link_thumb, &link_title, &link_artist);
+        match self.wait_for_queue_video(&video_id, 12, Duration::from_millis(150)) {
+            Ok((q, _)) => queue_payload = q,
+            Err(_) if youtube_url => {
+                return fail_link(BAD_VIDEO_MSG, &link_thumb, &link_title, &link_artist);
+            }
+            Err(_) => {
+                if let Ok(fresh) = self.ytmd.fetch_json_retry(
+                    "/api/v1/queue",
+                    3,
+                    Duration::from_millis(250),
+                ) {
+                    queue_payload = fresh;
                 }
             }
-        } else if let Ok(fresh) =
-            self.ytmd
-                .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
-        {
-            queue_payload = fresh;
         }
         self.seed.sync_from_queue(&queue_payload, &current_video_id);
         let env = ytmd::build_song_request_response(
