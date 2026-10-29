@@ -33,11 +33,26 @@ Compiled into `jb2`. Versions are the ones locked in `Cargo.lock`.
 
 ## Fonts
 
-[Geist Sans](https://github.com/vercel/geist-font) variable, v1.8.2, SIL Open Font License 1.1, The Geist Project Authors (Vercel). Vendored as `webroot/vendor/Geist-Variable.woff2` and `docs/vendor/Geist-Variable.woff2`. License text sits next to each file as `Geist.LICENSE`. Admin, Overlay Stage, the local landing page, this docs site, and the overlay Lower Third theme load it.
+Catalog and who paints them: [Typography](typography.md). Overlay loads `webroot/vendor/fonts/overlay.css`. Landing and this docs site load `ui.css` (Better VCR + Geist). Admin keeps its own Geist `@font-face`.
 
-Better VCR is not in the repo. Headings on the landing pages and Overlay Stage, plus the OBS overlay, load it at runtime from `https://fonts.cdnfonts.com/css/better-vcr` (`webroot/style.css`, `webroot/overlay/style.css`, `docs/style.css`). Overlay Stage gets that import because it also loads overlay CSS.
+[Geist Sans](https://github.com/vercel/geist-font) variable, v1.8.2, SIL Open Font License 1.1, The Geist Project Authors (Vercel). Vendored as `webroot/vendor/Geist-Variable.woff2` and `docs/vendor/Geist-Variable.woff2`. License text sits next to each file as `Geist.LICENSE`.
 
-[CDNFonts](https://www.cdnfonts.com/better-vcr.font) lists that face as designed by artdzyk and “Free for personal use”, and tells you to research the license before using it. That remote file is not the FontStruct face also named Better VCR (Petro Birov, SIL Open Font License 1.1). JB2 does not vendor either file.
+| Face | Group | License | Source | Local path |
+|---|---|---|---|---|
+| Geist | Regular | SIL Open Font License 1.1 | https://vercel.com/font · https://github.com/vercel/geist-font | `webroot/vendor/Geist-Variable.woff2` (docs copy too) |
+| Monster Chiller | Display | Foundry license via CDNFonts | https://fonts.cdnfonts.com/css/monster-chiller | `webroot/vendor/fonts/monster-chiller/` |
+| YouMurderer BB | Display | Foundry license via CDNFonts | https://fonts.cdnfonts.com/css/youmurderer-bb | `webroot/vendor/fonts/youmurderer-bb/` |
+| Streetmark | Display | Foundry license via CDNFonts | https://fonts.cdnfonts.com/css/streetmark | `webroot/vendor/fonts/streetmark/` |
+| Germania One | Display | Foundry license via CDNFonts | https://fonts.cdnfonts.com/css/germania-one | `webroot/vendor/fonts/germania-one/` |
+| Konstruktor | Display | Foundry license via CDNFonts | https://fonts.cdnfonts.com/css/konstruktor | `webroot/vendor/fonts/konstruktor/` |
+| Better VCR | Display and Regular | Foundry license via CDNFonts | https://fonts.cdnfonts.com/css/better-vcr | `webroot/vendor/fonts/better-vcr/` (docs copy under `docs/vendor/fonts/better-vcr/`) |
+| Flapdoodle | Regular | Foundry license via CDNFonts | https://fonts.cdnfonts.com/css/flapdoodle | `webroot/vendor/fonts/flapdoodle/` |
+| Londrina Solid | Regular | Foundry license via CDNFonts | https://fonts.cdnfonts.com/css/londrina-solid | `webroot/vendor/fonts/londrina-solid/` |
+| Pill Gothic 600mg | Regular | Foundry license via CDNFonts | https://fonts.cdnfonts.com/css/pill-gothic-600mg | `webroot/vendor/fonts/pill-gothic-600mg/` |
+| Lemondrop | Display | Foundry license via CDNFonts | https://fonts.cdnfonts.com/css/lemondrop | `webroot/vendor/fonts/lemondrop/` |
+| Brighton Sans NBP | Regular | Foundry license via CDNFonts | https://fonts.cdnfonts.com/css/brighton-sans-nbp | `webroot/vendor/fonts/brighton-sans-nbp/` |
+
+CDNFonts redistributes faces from various foundries. Copies here are for offline OBS and GitHub Pages. If a foundry license is stricter than this project's needs, replace that face. CDNFonts Better VCR (artdzyk) is not the FontStruct face also named Better VCR (Petro Birov, SIL Open Font License 1.1).
 
 ## Docs site
 

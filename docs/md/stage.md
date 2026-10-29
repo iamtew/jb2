@@ -24,8 +24,10 @@ Theme, seek style, playing/paused opacity, pulse, glass, and framing grid. Each 
 | Theme | Look |
 |---|---|
 | LCD Glass | Translucent blue glass, Better VCR |
-| Lower Third | Opaque charcoal chyron |
-| Amber Terminal | Black slab, amber type |
+| Lower Third | Opaque charcoal chyron, Geist |
+| Amber Terminal | Black slab, amber Better VCR |
+
+Typefaces come with the theme ([Typography](typography.md)). Stage does not pick fonts.
 
 Seek styles: Sesh Sofs (yellow/red), Ice, Magenta, White.
 

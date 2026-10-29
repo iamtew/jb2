@@ -12,7 +12,7 @@ Playback does not come from JB2. The page opens a WebSocket to [pear-desktop](ht
 
 `<host>` is the page hostname, unless you override it. JB2 only serves the HTML.
 
-LCD Glass uses Better VCR from CDNFonts. Lower Third uses Geist. See [Credits](credits.md).
+LCD Glass and Amber Terminal use Better VCR. Lower Third uses Geist. Faces are local; see [Typography](typography.md) and [Credits](credits.md).
 
 ## Query
 

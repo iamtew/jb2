@@ -1,46 +1,30 @@
 ---
-description: Font catalog index stability and preferred-font resolution for overlays
-globs: seshbanner/**/*.{js,css,html},trbanner/**/*.{js,css,html},themes/**/*.{js,json}
+description: Overlay font catalog — vendored faces and theme assignments
+globs: webroot/overlay/**,webroot/vendor/fonts/**,webroot/style.css,docs/style.css,docs/md/typography.md
 alwaysApply: false
 ---
 
 # Typography
 
-Catalog: [`docs/TYPOGRAPHY.md`](../../docs/TYPOGRAPHY.md).
+Catalog: [`docs/md/typography.md`](../../docs/md/typography.md). Licenses: [`CREDITS.md`](../../CREDITS.md).
 
-## Indices are a URL contract
+## Catalog is local
 
-The catalog order is the persisted numeric index for `titleFont`, `messageFont`,
-`userFont`, and `prefixFont` — Display faces first, then Regular.
+Faces live under `webroot/vendor/fonts/`. Overlay and Overlay Stage import `overlay.css`. Landing and the docs site import `ui.css` (Better VCR + Geist). Admin stays Geist-only.
 
-- **Append new faces only.** Never reorder without URL migration logic, or old meat-bag
-  bookmarks wake up wearing the wrong typeface.
-- Persist the **index**, not the family name. Legacy family-name URLs are still accepted
-  and rewritten to indices.
-- Adding a face means updating the table in `docs/TYPOGRAPHY.md` and importing it in the
-  banner stylesheets before the picker is shown.
+- Quote family names and always give a generic fallback: `font-family: 'Better VCR', sans-serif`.
+- `font-display: swap`. Never block paint waiting for a font.
+- Adding a face: folder + `family.css`, `@import` from `overlay.css`, row in Typography and Credits, then name it on a theme in overlay CSS.
+- Append. Do not shuffle the catalog for fun.
 
-## Usage
+## Overlay themes
 
-Quote family names and always give a generic fallback:
+These assignments live in `webroot/overlay/style.css`. New themes may name any catalog family there. Overlay Stage has no font selector and no persisted font index. Do not add one.
 
-```css
-font-family: 'Better VCR', monospace;
-```
+| Theme | Face |
+|-------|------|
+| LCD Glass | Better VCR |
+| Lower Third | Geist |
+| Amber Terminal | Better VCR |
 
-The settings menu is always **Better VCR**; overlay fields may use any catalog entry.
-These are third-party CDN fonts — if the CDN is down, browser fallbacks render the
-overlay. Never block startup waiting for a font.
-
-## Preferred fonts from the active theme
-
-When a font param is absent, a font control is reset, the theme changes, or on
-**Reset all**, resolve from the active theme's catalog entry before falling back to
-Better VCR:
-
-| Field role | Source |
-|------------|--------|
-| Title, prefix, user | theme `preferredDisplay` |
-| Message | theme `preferredRegular` |
-
-Meat bags can still pick any catalog face in the Fonts section.
+Landing / Stage / docs headings stay Better VCR. Body chrome stays Geist.

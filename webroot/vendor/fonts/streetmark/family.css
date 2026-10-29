@@ -1,0 +1,17 @@
+@font-face {
+    font-family: 'Streetmark';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./face-1.woff') format('woff');
+}
+@font-face {
+    font-family: 'Streetmark';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('./face-2.woff') format('woff');
+}
+
+
+

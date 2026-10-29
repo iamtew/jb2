@@ -1,0 +1,31 @@
+@font-face {
+    font-family: 'Lemondrop';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./face-1.woff') format('woff');
+}
+@font-face {
+    font-family: 'Lemondrop';
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./face-2.woff') format('woff');
+}
+@font-face {
+    font-family: 'Lemondrop';
+    font-style: normal;
+    font-weight: 800;
+    font-display: swap;
+    src: url('./face-3.woff') format('woff');
+}
+@font-face {
+    font-family: 'Lemondrop';
+    font-style: italic;
+    font-weight: 800;
+    font-display: swap;
+    src: url('./face-4.woff') format('woff');
+}
+
+
+

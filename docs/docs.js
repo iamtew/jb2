@@ -5,6 +5,7 @@
     { id: "admin", title: "Admin", icon: "settings" },
     { id: "overlay", title: "Overlay", icon: "device-tv" },
     { id: "stage", title: "Overlay Stage", icon: "artboard" },
+    { id: "typography", title: "Typography", icon: "typography" },
     { id: "twitch", title: "Twitch", icon: "brand-twitch" },
     { id: "requests", title: "Requests", icon: "music" },
     { id: "seed", title: "Seed", icon: "plant" },
