@@ -1,0 +1,32 @@
+# Windows release zip. One artifact named dist.
+# Run from the Actions tab, or push a numeric tag such as 0.0.1. Does not publish a release.
+name: dist
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "[0-9]*"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Build dist
+        shell: pwsh
+        run: just build-dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*.zip
+          if-no-files-found: error

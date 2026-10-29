@@ -1,7 +1,6 @@
 set shell := ["powershell.exe", "-NoProfile", "-Command"]
 
 binary := "jb2.exe"
-archive_name := "jb2-dist"
 output_dir := "dist"
 
 default:
@@ -34,6 +33,10 @@ package:
     cargo build --release
     Copy-Item -Path target/release/jb2.exe -Destination {{output_dir}}/{{binary}} -Force
     Copy-Item -Path webroot -Destination {{output_dir}}/webroot -Recurse -Force
+
+# Unpacked dist plus jb2-<version>-win-x64.zip. Version is Cargo.toml.
+build-dist: package
+    $ver = ([regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version = "([^"]+)"')).Groups[1].Value; if (-not $ver) { Write-Error "no version in Cargo.toml"; exit 1 }; Compress-Archive -Path '{{output_dir}}\{{binary}}','{{output_dir}}\webroot' -DestinationPath "{{output_dir}}\jb2-$ver-win-x64.zip" -Force
 
 verify-package:
     @just package

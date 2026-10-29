@@ -7,7 +7,17 @@ just test
 just package
 ```
 
-`just run` is `cargo run --release`. `just build` copies `target/release/jb2.exe` to `jb2.exe` in the repo. `just package` writes `dist/jb2.exe` and a copy of `webroot/`. `just icon` rebuilds `webroot/img/jukeboks.ico` from the PNG (needs ImageMagick).
+`just run` is `cargo run --release`. `just build` copies `target/release/jb2.exe` to `jb2.exe` in the repo. `just package` writes `dist/jb2.exe` and a copy of `webroot/`. `just build-dist` does that and zips `dist/jb2-<version>-win-x64.zip` using the `version` in `Cargo.toml`. `just icon` rebuilds `webroot/img/jukeboks.ico` from the PNG (needs ImageMagick).
+
+## Release
+
+Windows zip comes from GitHub Actions (`.github/workflows/dist.yml`). Run it from the Actions tab, or push a numeric tag such as `0.0.1` (no `v` prefix). The workflow does not publish a release.
+
+The `dist` artifact is `jb2-<version>-win-x64.zip`. Download it with:
+
+```
+gh run download <run-id> -n dist -D dist
+```
 
 ## Flags
 
