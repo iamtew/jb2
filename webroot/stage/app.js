@@ -25,7 +25,8 @@
   const pausedOpacity = document.getElementById("pausedOpacity");
   const pulseInput = document.getElementById("pulseInput");
   const glassInput = document.getElementById("glassInput");
-  const gridSelect = document.getElementById("gridSelect");
+  const gridChecks = document.querySelectorAll('input[name="grid"]');
+  const gridSvg = document.getElementById("stageGridLines");
   const previewBtn = document.getElementById("previewBtn");
   const ui = {
     artist: document.getElementById("artist"),
@@ -51,8 +52,11 @@
     panelH: 0,
     pulse: 3,
     glass: true,
-    grid: "thirds-center",
+    grid: "center,thirds",
   };
+  const GRID_IDS = ["center", "golden", "quad", "safe", "thirds"];
+  const GRID_CYAN = "rgba(0, 255, 255, 0.45)";
+  const GRID_ORANGE = "rgba(255, 64, 0, 0.55)";
   const layout = {
     x: 0,
     y: 0,
@@ -62,6 +66,7 @@
   };
   let drag = null;
   let putTimer = null;
+  let canvasScale = 1;
   let demoPaused = false;
   let demoPos = 0;
   let previewMode = "cycle";
@@ -211,24 +216,88 @@
     return { w, h };
   }
 
-  function gridLines(span) {
-    const edges = [0, span];
-    switch (layout.grid) {
-      case "off":
-        return edges;
+  function parseGrid(value) {
+    const raw = String(value || "").trim();
+    if (!raw || raw === "off") return [];
+    const text = raw === "thirds-center" ? "center,thirds" : raw;
+    const seen = new Set();
+    const ids = [];
+    text.split(",").forEach((part) => {
+      const id = part.trim();
+      if (GRID_IDS.includes(id) && !seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
+    });
+    ids.sort();
+    return ids;
+  }
+
+  function formatGrid(ids) {
+    const unique = parseGrid(ids.join(","));
+    return unique.length ? unique.join(",") : "off";
+  }
+
+  function gridFractions(id) {
+    switch (id) {
       case "center":
-        return edges.concat([span / 2]);
+        return [0.5];
       case "thirds":
-        return edges.concat([span / 3, (2 * span) / 3]);
+        return [1 / 3, 2 / 3];
       case "golden":
-        return edges.concat([span * 0.382, span * 0.618]);
-      case "safe":
-        return edges.concat([span * 0.05, span * 0.1, span * 0.9, span * 0.95]);
+        return [0.382, 0.618];
       case "quad":
-        return edges.concat([span * 0.25, span / 2, span * 0.75]);
+        return [0.25, 0.5, 0.75];
+      case "safe":
+        return [0.05, 0.1, 0.9, 0.95];
       default:
-        return edges.concat([span / 3, span / 2, (2 * span) / 3]);
+        return [];
     }
+  }
+
+  function gridLines(span) {
+    const ids = parseGrid(layout.grid);
+    const set = new Set([0, span]);
+    ids.forEach((id) => {
+      gridFractions(id).forEach((f) => set.add(span * f));
+    });
+    return Array.from(set);
+  }
+
+  function paintGrid() {
+    const w = layout.canvasW;
+    const h = layout.canvasH;
+    const stroke = Math.max(2, Math.round(1 / canvasScale));
+    const ids = parseGrid(layout.grid);
+    gridSvg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    const marks = [];
+    function addCross(fracs, color) {
+      fracs.forEach((f) => {
+        const x = w * f;
+        const y = h * f;
+        marks.push(
+          `<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="${color}" stroke-width="${stroke}"/>`,
+          `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${color}" stroke-width="${stroke}"/>`
+        );
+      });
+    }
+    ids.forEach((id) => {
+      if (id === "safe") {
+        marks.push(
+          `<rect x="${w * 0.05}" y="${h * 0.05}" width="${w * 0.9}" height="${h * 0.9}" fill="none" stroke="${GRID_ORANGE}" stroke-width="${stroke}"/>`,
+          `<rect x="${w * 0.1}" y="${h * 0.1}" width="${w * 0.8}" height="${h * 0.8}" fill="none" stroke="${GRID_CYAN}" stroke-width="${stroke}"/>`
+        );
+        return;
+      }
+      const fracs = gridFractions(id);
+      if (id === "center" || id === "quad") {
+        addCross(fracs.filter((f) => f === 0.5), GRID_ORANGE);
+        addCross(fracs.filter((f) => f !== 0.5), GRID_CYAN);
+      } else {
+        addCross(fracs, GRID_CYAN);
+      }
+    });
+    gridSvg.innerHTML = marks.join("");
   }
 
   function snapAxis(origin, size, canvasSpan, lines) {
@@ -276,8 +345,11 @@
     pausedOpacity.value = String(layout.pausedOpacity);
     pulseInput.value = String(layout.pulse);
     glassInput.checked = layout.glass;
-    gridSelect.value = layout.grid;
-    canvas.setAttribute("data-grid", layout.grid);
+    const selected = new Set(parseGrid(layout.grid));
+    gridChecks.forEach((el) => {
+      el.checked = selected.has(el.value);
+    });
+    paintGrid();
   }
 
   function fitCanvas() {
@@ -286,7 +358,9 @@
     const host = fit.getBoundingClientRect();
     const pad = 24;
     const scale = Math.min((host.width - pad) / layout.canvasW, (host.height - pad) / layout.canvasH);
-    canvas.style.transform = `translate(-50%, -50%) scale(${Math.max(0.05, scale)})`;
+    canvasScale = Math.max(0.05, scale);
+    canvas.style.transform = `translate(-50%, -50%) scale(${canvasScale})`;
+    paintGrid();
     btn720.classList.toggle("is-active", layout.canvasW === 1280);
     btn1080.classList.toggle("is-active", layout.canvasW === 1920);
     btn720.setAttribute("aria-pressed", layout.canvasW === 1280 ? "true" : "false");
@@ -499,10 +573,16 @@
     applyLook();
     saveNow();
   });
-  gridSelect.addEventListener("change", () => {
-    layout.grid = gridSelect.value;
-    canvas.setAttribute("data-grid", layout.grid);
-    saveNow();
+  gridChecks.forEach((el) => {
+    el.addEventListener("change", () => {
+      const ids = [];
+      gridChecks.forEach((box) => {
+        if (box.checked) ids.push(box.value);
+      });
+      layout.grid = formatGrid(ids);
+      paintGrid();
+      saveNow();
+    });
   });
   previewBtn.addEventListener("click", () => {
     const i = PREVIEW_MODES.indexOf(previewMode);
@@ -547,7 +627,7 @@
     if (data.panelH != null) layout.panelH = Number(data.panelH) || 0;
     if (data.pulse != null) layout.pulse = Number(data.pulse);
     if (typeof data.glass === "boolean") layout.glass = data.glass;
-    if (data.grid) layout.grid = data.grid;
+    if (data.grid) layout.grid = formatGrid(parseGrid(data.grid));
   }
 
   if (window.JB2OverlayFx) {

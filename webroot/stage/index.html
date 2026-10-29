@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Overlay Stage</title>
     <link rel="icon" href="/img/jukeboks.png" />
-    <link rel="stylesheet" href="/overlay/style.css?v=20261029ab" />
-    <link rel="stylesheet" href="/stage/style.css?v=20261029ab" />
+    <link rel="stylesheet" href="/overlay/style.css?v=20261029ac" />
+    <link rel="stylesheet" href="/stage/style.css?v=20261029ac" />
   </head>
   <body>
     <!-- Tabler Icons (outline), MIT. https://github.com/tabler/tabler-icons -->
@@ -104,30 +104,30 @@
             </button>
           </span>
         </label>
-        <label class="stage-field">Grid
-          <span class="stage-control">
-            <select id="gridSelect">
-              <option value="thirds-center">Thirds + center</option>
-              <option value="thirds">Thirds</option>
-              <option value="center">Center</option>
-              <option value="golden">Golden</option>
-              <option value="safe">Safe areas</option>
-              <option value="quad">4×4</option>
-              <option value="off">Off</option>
-            </select>
+        <div class="stage-field">Grid
+          <span class="stage-control stage-grid-picks">
+            <span class="stage-grid-checks">
+              <label><input type="checkbox" name="grid" value="thirds" checked /> Thirds</label>
+              <label><input type="checkbox" name="grid" value="center" checked /> Center</label>
+              <label><input type="checkbox" name="grid" value="golden" /> Golden</label>
+              <label><input type="checkbox" name="grid" value="safe" /> Safe areas</label>
+              <label><input type="checkbox" name="grid" value="quad" /> 4×4</label>
+            </span>
             <button type="button" class="stage-reset" data-reset="grid" aria-label="Reset grid">
               <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
             </button>
           </span>
-        </label>
+        </div>
         <button type="button" class="stage-reset stage-reset-size" data-reset="size" aria-label="Reset size">
           <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
           Size
         </button>
       </aside>
       <div class="stage-fit" id="stageFit">
-        <div class="stage-canvas" id="stageCanvas" data-grid="thirds-center">
-          <div class="stage-grid" aria-hidden="true"></div>
+        <div class="stage-canvas" id="stageCanvas">
+          <div class="stage-grid" aria-hidden="true">
+            <svg id="stageGridLines"></svg>
+          </div>
           <div class="overlay-box" id="overlayBox">
             <div id="songInfo" data-theme="lcd-glass" data-seek="sesh-sofa">
               <p id="overlayState">Jukeboks Paused
@@ -170,7 +170,7 @@ Add song with !sr &lt;song / URL&gt;</p>
       </div>
     </div>
     <script src="/vendor/pixi.min.js"></script>
-    <script src="/overlay/fx.js?v=20261029ab"></script>
-    <script src="/stage/app.js?v=20261029ab"></script>
+    <script src="/overlay/fx.js?v=20261029ac"></script>
+    <script src="/stage/app.js?v=20261029ac"></script>
   </body>
 </html>

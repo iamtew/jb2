@@ -83,9 +83,27 @@ body {
 }
 
 .stage-control select,
-.stage-control input[type="range"] {
+.stage-control input[type="range"],
+.stage-grid-checks {
   flex: 1;
   min-width: 0;
+}
+
+.stage-grid-picks {
+  align-items: flex-start;
+}
+
+.stage-grid-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stage-grid-checks label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #eee;
 }
 
 .stage-field select,
@@ -201,79 +219,12 @@ body {
   background-position: 0 0, 0 16px, 16px -16px, -16px 0;
 }
 
-.stage-grid::before,
-.stage-grid::after {
-  content: "";
+.stage-grid svg {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-}
-
-.stage-canvas[data-grid="off"] .stage-grid::before,
-.stage-canvas[data-grid="off"] .stage-grid::after {
-  content: none;
-}
-
-.stage-canvas[data-grid="thirds-center"] .stage-grid::before,
-.stage-canvas[data-grid="thirds"] .stage-grid::before {
-  background-image:
-    linear-gradient(to right, transparent calc(33.333% - 0.5px), rgba(0, 255, 255, 0.45) calc(33.333% - 0.5px), rgba(0, 255, 255, 0.45) calc(33.333% + 0.5px), transparent calc(33.333% + 0.5px)),
-    linear-gradient(to right, transparent calc(66.666% - 0.5px), rgba(0, 255, 255, 0.45) calc(66.666% - 0.5px), rgba(0, 255, 255, 0.45) calc(66.666% + 0.5px), transparent calc(66.666% + 0.5px)),
-    linear-gradient(to bottom, transparent calc(33.333% - 0.5px), rgba(0, 255, 255, 0.45) calc(33.333% - 0.5px), rgba(0, 255, 255, 0.45) calc(33.333% + 0.5px), transparent calc(33.333% + 0.5px)),
-    linear-gradient(to bottom, transparent calc(66.666% - 0.5px), rgba(0, 255, 255, 0.45) calc(66.666% - 0.5px), rgba(0, 255, 255, 0.45) calc(66.666% + 0.5px), transparent calc(66.666% + 0.5px));
-}
-
-.stage-canvas[data-grid="thirds-center"] .stage-grid::after,
-.stage-canvas[data-grid="center"] .stage-grid::after {
-  background-image:
-    linear-gradient(to right, transparent calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
-    linear-gradient(to bottom, transparent calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% + 0.5px), transparent calc(50% + 0.5px));
-}
-
-.stage-canvas[data-grid="center"] .stage-grid::before {
-  content: none;
-}
-
-.stage-canvas[data-grid="thirds"] .stage-grid::after {
-  content: none;
-}
-
-.stage-canvas[data-grid="golden"] .stage-grid::before {
-  background-image:
-    linear-gradient(to right, transparent calc(38.2% - 0.5px), rgba(0, 255, 255, 0.45) calc(38.2% - 0.5px), rgba(0, 255, 255, 0.45) calc(38.2% + 0.5px), transparent calc(38.2% + 0.5px)),
-    linear-gradient(to right, transparent calc(61.8% - 0.5px), rgba(0, 255, 255, 0.45) calc(61.8% - 0.5px), rgba(0, 255, 255, 0.45) calc(61.8% + 0.5px), transparent calc(61.8% + 0.5px)),
-    linear-gradient(to bottom, transparent calc(38.2% - 0.5px), rgba(0, 255, 255, 0.45) calc(38.2% - 0.5px), rgba(0, 255, 255, 0.45) calc(38.2% + 0.5px), transparent calc(38.2% + 0.5px)),
-    linear-gradient(to bottom, transparent calc(61.8% - 0.5px), rgba(0, 255, 255, 0.45) calc(61.8% - 0.5px), rgba(0, 255, 255, 0.45) calc(61.8% + 0.5px), transparent calc(61.8% + 0.5px));
-}
-
-.stage-canvas[data-grid="golden"] .stage-grid::after {
-  content: none;
-}
-
-.stage-canvas[data-grid="quad"] .stage-grid::before {
-  background-image:
-    linear-gradient(to right, transparent calc(25% - 0.5px), rgba(0, 255, 255, 0.4) calc(25% - 0.5px), rgba(0, 255, 255, 0.4) calc(25% + 0.5px), transparent calc(25% + 0.5px)),
-    linear-gradient(to right, transparent calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
-    linear-gradient(to right, transparent calc(75% - 0.5px), rgba(0, 255, 255, 0.4) calc(75% - 0.5px), rgba(0, 255, 255, 0.4) calc(75% + 0.5px), transparent calc(75% + 0.5px)),
-    linear-gradient(to bottom, transparent calc(25% - 0.5px), rgba(0, 255, 255, 0.4) calc(25% - 0.5px), rgba(0, 255, 255, 0.4) calc(25% + 0.5px), transparent calc(25% + 0.5px)),
-    linear-gradient(to bottom, transparent calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
-    linear-gradient(to bottom, transparent calc(75% - 0.5px), rgba(0, 255, 255, 0.4) calc(75% - 0.5px), rgba(0, 255, 255, 0.4) calc(75% + 0.5px), transparent calc(75% + 0.5px));
-}
-
-.stage-canvas[data-grid="quad"] .stage-grid::after {
-  content: none;
-}
-
-.stage-canvas[data-grid="safe"] .stage-grid::before {
-  inset: 5%;
-  border: 1px solid rgba(255, 64, 0, 0.55);
-  background: none;
-}
-
-.stage-canvas[data-grid="safe"] .stage-grid::after {
-  inset: 10%;
-  border: 1px solid rgba(0, 255, 255, 0.45);
-  background: none;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
 .overlay-box {

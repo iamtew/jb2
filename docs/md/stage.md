@@ -38,7 +38,7 @@ Typefaces come with the theme ([Typography](typography.md)). Stage does not pick
 
 Seek styles: Sesh Sofa (yellow/red), Ice, Magenta, White, Sunset, Forest, Gold, Lava, Ocean, Candy, Ultraviolet, Acid, Copper, Cherry, Vapor, Graphite, Honey.
 
-Framing grids are Stage-only (not drawn in OBS): thirds+center, thirds, center, golden, broadcast safe (action ~90% / title ~80%), 4×4, off. The panel snaps to the selected grid.
+Framing grids are Stage-only (not drawn in OBS). Toggle any mix of thirds, center, golden, broadcast safe (action ~90% / title ~80%), and 4×4; uncheck all for off. The panel snaps to the union of selected lines. `grid` is a comma-separated list (`center,thirds` default) or `off`. Legacy `thirds-center` still loads as thirds + center.
 
 ## HTTP
 
@@ -47,4 +47,4 @@ Framing grids are Stage-only (not drawn in OBS): thirds+center, thirds, center, 
 | `GET /api/overlay` | live layout |
 | `PUT /api/overlay` | same fields; `save: true` persists to sqlite. Omit or `false` while dragging. |
 
-Layout fields: `{ x, y, canvasW, canvasH, theme, seekStyle, playingOpacity, pausedOpacity, panelW, panelH, pulse, glass, grid }`. `panelW` is the visual width; the widget is always 500px internally and scaled. `panelH` is unused for paint (height follows content × scale). Overlay query `?pulse=` and `?bg=0` still override pulse and glass when present.
+Layout fields: `{ x, y, canvasW, canvasH, theme, seekStyle, playingOpacity, pausedOpacity, panelW, panelH, pulse, glass, grid }`. `grid` is a sorted comma list of `thirds`, `center`, `golden`, `safe`, `quad`, or `off`. `panelW` is the visual width; the widget is always 500px internally and scaled. `panelH` is unused for paint (height follows content × scale). Overlay query `?pulse=` and `?bg=0` still override pulse and glass when present.

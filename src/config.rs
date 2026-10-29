@@ -74,7 +74,7 @@ fn default_overlay_pulse() -> i32 {
 }
 
 fn default_overlay_grid() -> String {
-    "thirds-center".to_string()
+    "center,thirds".to_string()
 }
 
 const OVERLAY_THEMES: [&str; 10] = [
@@ -108,15 +108,7 @@ const OVERLAY_SEEK_STYLES: [&str; 17] = [
     "graphite",
     "honey",
 ];
-const OVERLAY_GRIDS: [&str; 7] = [
-    "thirds-center",
-    "thirds",
-    "center",
-    "golden",
-    "safe",
-    "quad",
-    "off",
-];
+const OVERLAY_GRID_PARTS: [&str; 5] = ["center", "golden", "quad", "safe", "thirds"];
 const OVERLAY_PANEL_W_MIN: i32 = 280;
 const OVERLAY_PANEL_H_MIN: i32 = 80;
 
@@ -214,6 +206,30 @@ fn pick_allowed(value: &str, allowed: &[&str], fallback: &str) -> String {
     }
 }
 
+fn normalize_overlay_grid(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed == "off" {
+        return "off".to_string();
+    }
+    let mapped = if trimmed == "thirds-center" {
+        "center,thirds"
+    } else {
+        trimmed
+    };
+    let mut parts: Vec<&str> = mapped
+        .split(',')
+        .map(str::trim)
+        .filter(|id| OVERLAY_GRID_PARTS.contains(id))
+        .collect();
+    parts.sort_unstable();
+    parts.dedup();
+    if parts.is_empty() {
+        default_overlay_grid()
+    } else {
+        parts.join(",")
+    }
+}
+
 pub fn normalize_overlay_layout(mut layout: OverlayLayout) -> OverlayLayout {
     let is_720 = layout.canvas_w == OVERLAY_CANVAS_720.0 && layout.canvas_h == OVERLAY_CANVAS_720.1;
     let is_1080 =
@@ -232,7 +248,7 @@ pub fn normalize_overlay_layout(mut layout: OverlayLayout) -> OverlayLayout {
         layout.seek_style = "sesh-sofa".to_string();
     }
     layout.seek_style = pick_allowed(&layout.seek_style, &OVERLAY_SEEK_STYLES, "sesh-sofa");
-    layout.grid = pick_allowed(&layout.grid, &OVERLAY_GRIDS, "thirds-center");
+    layout.grid = normalize_overlay_grid(&layout.grid);
     if !layout.playing_opacity.is_finite() {
         layout.playing_opacity = 1.0;
     }
@@ -808,7 +824,7 @@ mod tests {
         assert_eq!(bogus.y, OVERLAY_CANVAS_1080.1 - OVERLAY_PANEL_H_MIN);
         assert_eq!(bogus.theme, "lcd-glass");
         assert_eq!(bogus.seek_style, "sesh-sofa");
-        assert_eq!(bogus.grid, "thirds-center");
+        assert_eq!(bogus.grid, "center,thirds");
         assert_eq!(bogus.playing_opacity, 1.0);
         assert_eq!(bogus.paused_opacity, 0.0);
         assert_eq!(bogus.panel_w, OVERLAY_PANEL_W_MIN);
@@ -865,5 +881,23 @@ mod tests {
         assert_eq!(cfg.overlay_layout.pulse, 0);
         assert!(!cfg.overlay_layout.glass);
         assert_eq!(cfg.overlay_layout.grid, "safe");
+
+        let alias = normalize_overlay_layout(OverlayLayout {
+            grid: "thirds-center".into(),
+            ..Default::default()
+        });
+        assert_eq!(alias.grid, "center,thirds");
+
+        let combo = normalize_overlay_layout(OverlayLayout {
+            grid: "thirds,golden,nope".into(),
+            ..Default::default()
+        });
+        assert_eq!(combo.grid, "golden,thirds");
+
+        let off = normalize_overlay_layout(OverlayLayout {
+            grid: "off".into(),
+            ..Default::default()
+        });
+        assert_eq!(off.grid, "off");
     }
 }

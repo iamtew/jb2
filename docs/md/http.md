@@ -18,7 +18,7 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | `GET /api/events` | SSE (`twitch` / `chat` / `seed` / `commands` / `cmdHistory` / `queue` / `overlay`) |
 | `GET /api/queue` | admin queue rows |
 | `/api/config` | blacklist, maxDuration, Twitch, command cooldowns, overlayLayout (`GET`, and `POST` or `PUT` to save) |
-| `GET` / `PUT /api/overlay` | live overlay layout (`x`, `y`, `canvasW`, `canvasH`, `theme`, `seekStyle`, opacities, `panelW`/`panelH`, `pulse`, `glass`, `grid`); `save: true` on PUT writes sqlite. See [Overlay Stage](stage.md) |
+| `GET` / `PUT /api/overlay` | live overlay layout (`x`, `y`, `canvasW`, `canvasH`, `theme`, `seekStyle`, opacities, `panelW`/`panelH`, `pulse`, `glass`, `grid` comma list or `off`); `save: true` on PUT writes sqlite. See [Overlay Stage](stage.md) |
 | `POST /api/config/import` | merge a JB1 or JB2 JSON dump |
 | `/api/seed/*` `/cmd/jb/seed/*` | seed playlists. See [Seed](seed.md) |
 
