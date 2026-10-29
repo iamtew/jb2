@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>JB2 Admin</title>
+    <script>
+      try {
+        var theme = localStorage.getItem('jb2-admin-theme');
+        var known = ['default-hc','amber','amber-hc','crimson','crimson-hc','forest','forest-hc','violet','violet-hc','teal','teal-hc','rose','rose-hc','steel','steel-hc','lime','lime-hc'];
+        if (known.indexOf(theme) !== -1) document.documentElement.dataset.theme = theme;
+      } catch (e) {}
+    </script>
     <link rel="icon" href="/img/jukeboks.png" />
     <link rel="stylesheet" href="/admin/style.css" />
   </head>
@@ -328,6 +335,33 @@
 
       <section id="page-settings" class="page">
         <div class="panel">
+          <div class="settings-block">
+            <label for="themeSelect">Theme</label>
+            <select id="themeSelect">
+              <optgroup label="Themes">
+                <option value="">Default</option>
+                <option value="amber">Amber</option>
+                <option value="crimson">Crimson</option>
+                <option value="forest">Forest</option>
+                <option value="violet">Violet</option>
+                <option value="teal">Teal</option>
+                <option value="rose">Rose</option>
+                <option value="steel">Steel</option>
+                <option value="lime">Lime</option>
+              </optgroup>
+              <optgroup label="High contrast">
+                <option value="default-hc">Default</option>
+                <option value="amber-hc">Amber</option>
+                <option value="crimson-hc">Crimson</option>
+                <option value="forest-hc">Forest</option>
+                <option value="violet-hc">Violet</option>
+                <option value="teal-hc">Teal</option>
+                <option value="rose-hc">Rose</option>
+                <option value="steel-hc">Steel</option>
+                <option value="lime-hc">Lime</option>
+              </optgroup>
+            </select>
+          </div>
           <div class="settings-block">
             <label for="maxDurationInput">maxDuration</label>
             <div class="url-row">

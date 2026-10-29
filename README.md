@@ -81,7 +81,7 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | `/api/seed/*` `/cmd/jb/seed/*` | seed playlists |
 
 OBS overlay: `http://localhost:42420/overlay/`
-Admin dock: `http://localhost:42420/admin/` (`GET /api/events` SSE for Twitch/chat/seed/commands/cmdHistory/queue; playback still uses the YTMD WebSocket. Hidden tabs close the stream. One-shot GETs on open/focus; leftover poll GETs are omitted from the request log)
+Admin dock: `http://localhost:42420/admin/` (`GET /api/events` SSE for Twitch/chat/seed/commands/cmdHistory/queue; playback still uses the YTMD WebSocket. Hidden tabs close the stream. One-shot GETs on open/focus; leftover poll GETs are omitted from the request log). Settings includes a theme picker stored in the browser, not in `jb2.json`.
 
 `/overlay` and `/admin` without a trailing slash 301 to the slash form so relative assets resolve.
 

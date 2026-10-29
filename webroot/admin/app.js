@@ -72,6 +72,18 @@ const compactPrev = document.getElementById('compactPrev');
 const compactPlay = document.getElementById('compactPlay');
 const compactNext = document.getElementById('compactNext');
 const DOCK_FOLD_KEY = 'jb2-admin-dock-folded';
+const THEME_KEY = 'jb2-admin-theme';
+const THEME_IDS = new Set([
+  'default-hc',
+  'amber', 'amber-hc',
+  'crimson', 'crimson-hc',
+  'forest', 'forest-hc',
+  'violet', 'violet-hc',
+  'teal', 'teal-hc',
+  'rose', 'rose-hc',
+  'steel', 'steel-hc',
+  'lime', 'lime-hc',
+]);
 const songRequestInput = document.getElementById('songRequestInput');
 const songRequestForm = document.getElementById('songRequestForm');
 const songRequestNow = document.getElementById('songRequestNow');
@@ -103,6 +115,7 @@ const cmdHistoryLog = document.getElementById('cmdHistoryLog');
 const importFileInput = document.getElementById('importFileInput');
 const importConfigButton = document.getElementById('importConfigButton');
 const importFeedback = document.getElementById('importFeedback');
+const themeSelect = document.getElementById('themeSelect');
 const aboutVersion = document.getElementById('aboutVersion');
 
 let adminEvents = null;
@@ -2140,7 +2153,35 @@ if (compactPlay) {
   });
 }
 
+function applyTheme(id) {
+  const theme = THEME_IDS.has(id) ? id : '';
+  if (theme) document.documentElement.dataset.theme = theme;
+  else delete document.documentElement.dataset.theme;
+  try {
+    if (theme) localStorage.setItem(THEME_KEY, theme);
+    else localStorage.removeItem(THEME_KEY);
+  } catch (_) {
+    /* private mode */
+  }
+  if (themeSelect) themeSelect.value = theme;
+}
+
+function initTheme() {
+  let stored = '';
+  try {
+    stored = localStorage.getItem(THEME_KEY) || '';
+  } catch (_) {
+    stored = '';
+  }
+  applyTheme(stored);
+}
+
+if (themeSelect) {
+  themeSelect.addEventListener('change', () => applyTheme(themeSelect.value));
+}
+
 initDockFold();
+initTheme();
 
 Object.entries(playerButtons).forEach(([key, button]) => {
   if (!button) return;
