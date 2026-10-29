@@ -282,7 +282,6 @@ body {
   background: #161c26;
   border: 1px solid rgba(62, 200, 255, 0.45);
   border-radius: var(--radius);
-  max-height: 240px;
   overflow-y: auto;
 }
 

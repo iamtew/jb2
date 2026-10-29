@@ -3,6 +3,7 @@ use crate::jsonutil::{as_bool, as_f64, as_string, nested_map};
 use crate::ytmd::Client;
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::collections::HashSet;
 
 #[derive(Clone, Debug, Default)]
 pub struct CurrentSong {
@@ -20,11 +21,15 @@ pub struct SongLookup {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct SearchHit {
-    #[serde(rename = "videoId")]
+    #[serde(rename = "videoId", skip_serializing_if = "String::is_empty")]
     pub video_id: String,
     pub title: String,
     pub artist: String,
     pub duration: i32,
+    /// `song`, `album`, `artist`, or `playlist`. Only `song` carries `videoId`.
+    pub kind: String,
+    #[serde(rename = "browseId", skip_serializing_if = "String::is_empty")]
+    pub browse_id: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -155,28 +160,337 @@ pub fn list_search_results(payload: &Value, limit: usize) -> Vec<SearchHit> {
     if limit == 0 {
         return Vec::new();
     }
-    let entries = collect_search_results(payload, limit * 2);
     let mut out = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    for entry in entries {
-        let id = entry.video_id.trim().to_string();
-        if id.is_empty() {
-            continue;
-        }
-        if !seen.insert(id.to_lowercase()) {
-            continue;
-        }
-        out.push(SearchHit {
-            video_id: id,
-            title: entry.title,
-            artist: entry.artist,
-            duration: entry.duration_seconds,
-        });
-        if out.len() >= limit {
-            break;
-        }
-    }
+    let mut seen = HashSet::new();
+    walk_search_hits(payload, limit, &mut out, &mut seen);
     out
+}
+
+/// Album, playlist, or artist top-songs for `GET /cmd/jb/search?browse=`.
+/// ponytail: first 100 album/playlist rows and 20 artist top songs; page when a shelf is longer.
+pub fn search_browse(browse_id: &str) -> Result<(String, Vec<SearchHit>), String> {
+    let browse_id = browse_id.trim();
+    let kind = browse_target(browse_id).ok_or_else(|| "bad browse id".to_string())?;
+    let id = if kind == "playlist" {
+        super::browse_id_for_playlist(browse_id)
+    } else {
+        browse_id.to_string()
+    };
+    let payload = super::post_innertube_browse(&id)?;
+    if kind == "artist" {
+        let items = list_artist_top_songs(&payload, 20);
+        if items.is_empty() {
+            return Err("no top songs".into());
+        }
+        return Ok((extract_playlist_name(&payload), items));
+    }
+    let lookup = parse_playlist_payload(&id, &payload).ok_or_else(|| "no tracks".to_string())?;
+    let items = lookup
+        .tracks
+        .into_iter()
+        .take(100)
+        .map(|t| SearchHit {
+            video_id: t.video_id,
+            title: t.title,
+            artist: t.artist,
+            duration: t.duration,
+            kind: "song".into(),
+            browse_id: String::new(),
+        })
+        .collect();
+    Ok((lookup.name, items))
+}
+
+pub fn browse_target(id: &str) -> Option<&'static str> {
+    let id = id.trim();
+    if id.is_empty()
+        || id.len() > 80
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return None;
+    }
+    if id.starts_with("MPREb_") && id.len() > 8 {
+        Some("album")
+    } else if id.starts_with("UC") && id.len() >= 10 {
+        Some("artist")
+    } else if (id.starts_with("VL") || id.starts_with("PL")) && id.len() > 4 {
+        Some("playlist")
+    } else {
+        None
+    }
+}
+
+pub fn list_artist_top_songs(payload: &Value, limit: usize) -> Vec<SearchHit> {
+    if limit == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    collect_top_song_shelves(payload, limit, &mut out, &mut seen);
+    out
+}
+
+fn walk_search_hits(
+    value: &Value,
+    limit: usize,
+    out: &mut Vec<SearchHit>,
+    seen: &mut HashSet<String>,
+) -> bool {
+    if out.len() >= limit {
+        return true;
+    }
+    match value {
+        Value::Object(map) => {
+            if let Some(shelf) = map.get("musicCardShelfRenderer") {
+                if push_search_hit(shelf, limit, out, seen) {
+                    return true;
+                }
+            }
+            if let Some(item) = map.get("musicResponsiveListItemRenderer") {
+                if push_search_hit(item, limit, out, seen) {
+                    return true;
+                }
+            }
+            for nested in map.values() {
+                if walk_search_hits(nested, limit, out, seen) {
+                    return true;
+                }
+            }
+        }
+        Value::Array(arr) => {
+            for item in arr {
+                if walk_search_hits(item, limit, out, seen) {
+                    return true;
+                }
+            }
+        }
+        _ => {}
+    }
+    false
+}
+
+fn push_search_hit(
+    renderer: &Value,
+    limit: usize,
+    out: &mut Vec<SearchHit>,
+    seen: &mut HashSet<String>,
+) -> bool {
+    let Some(hit) = classify_renderer(renderer) else {
+        return false;
+    };
+    let key = if hit.kind == "song" {
+        format!("v:{}", hit.video_id.to_lowercase())
+    } else {
+        format!("b:{}:{}", hit.kind, hit.browse_id.to_lowercase())
+    };
+    if !seen.insert(key) {
+        return false;
+    }
+    out.push(hit);
+    out.len() >= limit
+}
+
+fn classify_renderer(renderer: &Value) -> Option<SearchHit> {
+    let (flex_title, flex_byline) = if renderer.get("flexColumns").is_some() {
+        let (title, _) = extract_flex_column_metadata(renderer);
+        let byline = renderer
+            .get("flexColumns")
+            .and_then(|v| v.as_array())
+            .and_then(|cols| cols.get(1))
+            .map(extract_flex_column_text)
+            .unwrap_or_default();
+        (title, byline)
+    } else {
+        (String::new(), String::new())
+    };
+    let mut title = flex_title;
+    if title.is_empty() {
+        title = extract_text_from_runs(renderer.get("title").unwrap_or(&Value::Null));
+    }
+    if title.is_empty() {
+        return None;
+    }
+    let mut byline = flex_byline;
+    if byline.is_empty() {
+        byline = extract_text_from_runs(renderer.get("subtitle").unwrap_or(&Value::Null));
+    }
+    let (kind, browse_id) = kind_and_browse(renderer, &byline);
+    let video_id = extract_video_id_from_value(renderer);
+    if kind == "song" && video_id.is_empty() {
+        return None;
+    }
+    if kind != "song" && browse_id.is_empty() {
+        return None;
+    }
+    let mut duration = extract_fixed_column_duration(renderer);
+    if duration == 0 {
+        duration = parse_duration_seconds(&extract_duration_token_from_subtitle(&byline));
+    }
+    let (video_id, browse_id) = if kind == "song" {
+        (video_id, String::new())
+    } else {
+        (String::new(), browse_id)
+    };
+    Some(SearchHit {
+        video_id,
+        title,
+        artist: display_artist(&byline),
+        duration,
+        kind: kind.to_string(),
+        browse_id,
+    })
+}
+
+fn kind_and_browse(renderer: &Value, byline: &str) -> (&'static str, String) {
+    if let Some(pair) = nav_page_kind(renderer) {
+        return pair;
+    }
+    let token = type_token(byline);
+    if matches!(token, "album" | "artist" | "playlist") {
+        let id = direct_browse_id(renderer);
+        if browse_id_matches(token, &id) {
+            return (token, id);
+        }
+        return (token, String::new());
+    }
+    ("song", String::new())
+}
+
+fn nav_page_kind(renderer: &Value) -> Option<(&'static str, String)> {
+    let browse = renderer.pointer("/navigationEndpoint/browseEndpoint")?;
+    let id = browse
+        .get("browseId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if id.is_empty() {
+        return None;
+    }
+    let page = browse
+        .pointer("/browseEndpointContextSupportedConfigs/browseEndpointContextMusicConfig/pageType")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let kind = match page {
+        "MUSIC_PAGE_TYPE_ALBUM" => "album",
+        "MUSIC_PAGE_TYPE_ARTIST" => "artist",
+        "MUSIC_PAGE_TYPE_PLAYLIST" => "playlist",
+        _ if id.starts_with("MPREb_") => "album",
+        _ if id.starts_with("UC") => "artist",
+        _ if id.starts_with("VL") || id.starts_with("PL") => "playlist",
+        _ => return None,
+    };
+    Some((kind, id))
+}
+
+fn direct_browse_id(renderer: &Value) -> String {
+    renderer
+        .pointer("/navigationEndpoint/browseEndpoint/browseId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string()
+}
+
+fn type_token(byline: &str) -> &'static str {
+    let first = byline
+        .split('•')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    match first.as_str() {
+        "album" => "album",
+        "artist" => "artist",
+        "playlist" => "playlist",
+        "song" | "video" | "music" | "single" | "ep" => "song",
+        _ => "",
+    }
+}
+
+fn browse_id_matches(kind: &str, id: &str) -> bool {
+    match kind {
+        "album" => id.starts_with("MPREb_"),
+        "artist" => id.starts_with("UC"),
+        "playlist" => id.starts_with("VL") || id.starts_with("PL"),
+        _ => false,
+    }
+}
+
+fn display_artist(byline: &str) -> String {
+    let artist = extract_artist_from_search_subtitle(byline);
+    if is_result_type_word(&artist) {
+        String::new()
+    } else {
+        artist
+    }
+}
+
+fn is_result_type_word(s: &str) -> bool {
+    matches!(
+        s.trim().to_ascii_lowercase().as_str(),
+        "video" | "song" | "music" | "single" | "ep" | "album" | "artist" | "playlist"
+    )
+}
+
+fn collect_top_song_shelves(
+    value: &Value,
+    limit: usize,
+    out: &mut Vec<SearchHit>,
+    seen: &mut HashSet<String>,
+) {
+    if out.len() >= limit {
+        return;
+    }
+    match value {
+        Value::Array(arr) => {
+            for item in arr {
+                collect_top_song_shelves(item, limit, out, seen);
+                if out.len() >= limit {
+                    return;
+                }
+            }
+        }
+        Value::Object(map) => {
+            for key in ["musicShelfRenderer", "musicCarouselShelfRenderer"] {
+                let Some(shelf) = map.get(key) else {
+                    continue;
+                };
+                if !is_top_songs_shelf(shelf) {
+                    continue;
+                }
+                if let Some(contents) = shelf.get("contents") {
+                    walk_search_hits(contents, limit, out, seen);
+                }
+                if out.len() >= limit {
+                    return;
+                }
+            }
+            for (key, nested) in map {
+                if matches!(
+                    key.as_str(),
+                    "musicShelfRenderer" | "musicCarouselShelfRenderer"
+                ) && is_top_songs_shelf(nested)
+                {
+                    continue;
+                }
+                collect_top_song_shelves(nested, limit, out, seen);
+                if out.len() >= limit {
+                    return;
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_top_songs_shelf(shelf: &Value) -> bool {
+    let title = extract_text_from_runs(shelf.get("title").unwrap_or(&Value::Null))
+        .trim()
+        .to_ascii_lowercase();
+    title == "top songs" || title == "songs"
 }
 
 pub fn lookup_song_by_query(client: &Client, query: &str) -> Result<(String, SongLookup), String> {
@@ -1491,6 +1805,149 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["vidA", "vidB"]
         );
+    }
+
+    fn flex(text: &str) -> Value {
+        json!({
+            "musicResponsiveListItemFlexColumnRenderer": {
+                "text": { "runs": [{ "text": text }] }
+            }
+        })
+    }
+
+    #[test]
+    fn search_hit_song_keeps_video_album_does_not() {
+        let payload = json!([
+            {
+                "musicResponsiveListItemRenderer": {
+                    "flexColumns": [
+                        flex("Never Gonna"),
+                        flex("Song • Rick Astley • 3:33")
+                    ],
+                    "navigationEndpoint": {
+                        "watchEndpoint": { "videoId": "dQw4w9WgXcQ" }
+                    }
+                }
+            },
+            {
+                "musicResponsiveListItemRenderer": {
+                    "flexColumns": [
+                        flex("Whenever You Need Somebody"),
+                        flex("Album • Rick Astley")
+                    ],
+                    "navigationEndpoint": {
+                        "browseEndpoint": {
+                            "browseId": "MPREb_abc",
+                            "browseEndpointContextSupportedConfigs": {
+                                "browseEndpointContextMusicConfig": {
+                                    "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                                }
+                            }
+                        }
+                    },
+                    "overlay": {
+                        "musicItemThumbnailOverlayRenderer": {
+                            "content": {
+                                "musicPlayButtonRenderer": {
+                                    "playNavigationEndpoint": {
+                                        "watchEndpoint": { "videoId": "guessedVid" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "musicResponsiveListItemRenderer": {
+                    "flexColumns": [
+                        flex("Rick Astley"),
+                        flex("Artist")
+                    ],
+                    "navigationEndpoint": {
+                        "browseEndpoint": {
+                            "browseId": "UCrickastleyxxxxxxxxxxxx",
+                            "browseEndpointContextSupportedConfigs": {
+                                "browseEndpointContextMusicConfig": {
+                                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                                }
+                            }
+                        }
+                    },
+                    "overlay": {
+                        "musicItemThumbnailOverlayRenderer": {
+                            "content": {
+                                "musicPlayButtonRenderer": {
+                                    "playNavigationEndpoint": {
+                                        "watchEndpoint": { "videoId": "artistGuess" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        ]);
+        let hits = list_search_results(&payload, 8);
+        assert_eq!(hits.len(), 3);
+        assert_eq!(hits[0].kind, "song");
+        assert_eq!(hits[0].video_id, "dQw4w9WgXcQ");
+        assert_eq!(hits[0].artist, "Rick Astley");
+        assert_eq!(hits[1].kind, "album");
+        assert_eq!(hits[1].browse_id, "MPREb_abc");
+        assert!(hits[1].video_id.is_empty());
+        assert_eq!(hits[1].artist, "Rick Astley");
+        assert_eq!(hits[2].kind, "artist");
+        assert_eq!(hits[2].browse_id, "UCrickastleyxxxxxxxxxxxx");
+        assert!(hits[2].video_id.is_empty());
+        assert!(hits[2].artist.is_empty());
+    }
+
+    #[test]
+    fn artist_top_songs_ignore_other_shelves() {
+        let payload = json!({
+            "contents": [
+                {
+                    "musicCarouselShelfRenderer": {
+                        "title": { "runs": [{ "text": "Albums" }] },
+                        "contents": [{
+                            "musicResponsiveListItemRenderer": {
+                                "flexColumns": [flex("Other"), flex("Song • Nobody")],
+                                "navigationEndpoint": {
+                                    "watchEndpoint": { "videoId": "notTop" }
+                                }
+                            }
+                        }]
+                    }
+                },
+                {
+                    "musicShelfRenderer": {
+                        "title": { "runs": [{ "text": "Top songs" }] },
+                        "contents": [{
+                            "musicResponsiveListItemRenderer": {
+                                "flexColumns": [flex("Together Forever"), flex("Song • Rick Astley")],
+                                "navigationEndpoint": {
+                                    "watchEndpoint": { "videoId": "topVid" }
+                                }
+                            }
+                        }]
+                    }
+                }
+            ]
+        });
+        let hits = list_artist_top_songs(&payload, 20);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].video_id, "topVid");
+        assert_eq!(hits[0].kind, "song");
+    }
+
+    #[test]
+    fn browse_target_rejects_junk() {
+        assert_eq!(browse_target("MPREb_abc"), Some("album"));
+        assert_eq!(browse_target("UCrickastleyxxxxxxxxxxxx"), Some("artist"));
+        assert_eq!(browse_target("PLabcde"), Some("playlist"));
+        assert_eq!(browse_target("../etc"), None);
+        assert_eq!(browse_target("dQw4w9WgXcQ"), None);
     }
 
     #[test]

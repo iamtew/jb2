@@ -1895,6 +1895,8 @@ let songSearchTimer = null;
 let songSearchToken = 0;
 let songSearchItems = [];
 let songSearchHighlight = -1;
+let songSearchBack = '';
+let songSearchStack = [];
 
 function songQueryLooksLikeUrl(value) {
   const v = String(value || '').trim();
@@ -1902,16 +1904,34 @@ function songQueryLooksLikeUrl(value) {
 }
 
 function hideSongSearchPopup() {
+  songSearchToken += 1;
   songSearchItems = [];
   songSearchHighlight = -1;
+  songSearchBack = '';
+  songSearchStack = [];
   if (!songSearchPopup) return;
   songSearchPopup.innerHTML = '';
   songSearchPopup.hidden = true;
+  songSearchPopup.style.maxHeight = '';
+}
+
+function sizeSongSearchPopup() {
+  if (!songSearchPopup || songSearchPopup.hidden || !songRequestInput) return;
+  const anchor = songRequestInput.getBoundingClientRect();
+  const tabs = document.querySelector('.tabs');
+  const bottom = tabs ? tabs.getBoundingClientRect().top : window.innerHeight;
+  const height = Math.max(120, Math.floor(bottom - anchor.bottom - 8));
+  songSearchPopup.style.maxHeight = `${height}px`;
+}
+
+function searchKindLabel(kind) {
+  if (!kind || kind === 'song') return '';
+  return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
 function setSongSearchHighlight(index) {
   if (!songSearchPopup) return;
-  const buttons = songSearchPopup.querySelectorAll('.search-popup__item');
+  const buttons = songSearchPopup.querySelectorAll('[data-search-index]');
   songSearchHighlight = index;
   buttons.forEach((btn, i) => {
     btn.classList.toggle('is-active', i === index);
@@ -1922,20 +1942,28 @@ function renderSongSearchPopup(items) {
   if (!songSearchPopup) return;
   songSearchItems = items;
   songSearchHighlight = -1;
-  if (!items.length) {
+  if (!items.length && !songSearchBack) {
     hideSongSearchPopup();
     return;
   }
-  songSearchPopup.innerHTML = items.map((item, i) => {
+  const back = songSearchBack
+    ? `<li role="presentation"><button type="button" class="search-popup__item" data-search-back><span class="search-popup__title">← ${escapeHtml(songSearchBack)}</span></button></li>`
+    : '';
+  const rows = items.map((item, i) => {
     const title = escapeHtml(item.title || item.videoId || 'Untitled');
-    const artist = item.artist ? `<span class="search-popup__artist">${escapeHtml(item.artist)}</span>` : '';
+    const meta = [searchKindLabel(item.kind), item.artist].filter(Boolean).join(' · ');
+    const artist = meta ? `<span class="search-popup__artist">${escapeHtml(meta)}</span>` : '';
     return `<li role="presentation"><button type="button" class="search-popup__item" role="option" data-search-index="${i}"><span class="search-popup__title">${title}</span>${artist}</button></li>`;
   }).join('');
+  songSearchPopup.innerHTML = back + rows;
   songSearchPopup.hidden = false;
+  sizeSongSearchPopup();
 }
 
 async function fetchSongSearch(query) {
   const token = ++songSearchToken;
+  songSearchBack = '';
+  songSearchStack = [];
   try {
     const response = await fetch(`/cmd/jb/search?input=${encodeURIComponent(query)}`, {
       headers: { Accept: 'application/json' },
@@ -1962,11 +1990,58 @@ function scheduleSongSearch() {
   }, 250);
 }
 
-function songRequestInputFromHighlight() {
-  if (songSearchHighlight >= 0 && songSearchItems[songSearchHighlight]?.videoId) {
-    return songSearchItems[songSearchHighlight].videoId;
+function highlightedSearchItem() {
+  if (songSearchHighlight >= 0) return songSearchItems[songSearchHighlight] || null;
+  return null;
+}
+
+function isSongHit(item) {
+  return !!item && (!item.kind || item.kind === 'song') && !!item.videoId;
+}
+
+async function drillSearch(item) {
+  const browse = item?.browseId;
+  if (!browse) return;
+  const token = ++songSearchToken;
+  songSearchStack.push({ items: songSearchItems.slice(), back: songSearchBack });
+  songSearchBack = item.title || 'Back';
+  renderSongSearchPopup([]);
+  try {
+    const response = await fetch(`/cmd/jb/search?browse=${encodeURIComponent(browse)}`, {
+      headers: { Accept: 'application/json' },
+    });
+    const payload = await readCommandEnvelope(response);
+    if (token !== songSearchToken) return;
+    const items = payload?.data?.items;
+    renderSongSearchPopup(Array.isArray(items) ? items : []);
+  } catch (err) {
+    if (token !== songSearchToken) return;
+    const prev = songSearchStack.pop();
+    songSearchBack = prev?.back || '';
+    if (prev) renderSongSearchPopup(prev.items);
+    setQueueActionFeedback(err.message || 'No songs', 'error');
   }
-  return '';
+}
+
+function popSongSearch() {
+  songSearchToken += 1;
+  const prev = songSearchStack.pop();
+  if (!prev) {
+    hideSongSearchPopup();
+    return;
+  }
+  songSearchBack = prev.back;
+  renderSongSearchPopup(prev.items);
+}
+
+function activateSearchSelection(playNow) {
+  const item = highlightedSearchItem();
+  if (item && item.kind && item.kind !== 'song') {
+    drillSearch(item);
+    return;
+  }
+  const picked = isSongHit(item) ? item.videoId : '';
+  submitSongRequest(picked || undefined, playNow);
 }
 
 async function refreshShuffleFromProxy() {
@@ -2096,14 +2171,12 @@ Object.entries(playerButtons).forEach(([key, button]) => {
 if (songRequestForm) {
   songRequestForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    const picked = songRequestInputFromHighlight();
-    submitSongRequest(picked || undefined, false);
+    activateSearchSelection(false);
   });
 }
 if (songRequestNow) {
   songRequestNow.addEventListener('click', () => {
-    const picked = songRequestInputFromHighlight();
-    submitSongRequest(picked || undefined, true);
+    activateSearchSelection(true);
   });
 }
 if (songSearchPopup) {
@@ -2111,10 +2184,19 @@ if (songSearchPopup) {
     event.preventDefault();
   });
   songSearchPopup.addEventListener('click', (event) => {
+    if (event.target.closest('[data-search-back]')) {
+      popSongSearch();
+      return;
+    }
     const button = event.target.closest('[data-search-index]');
     if (!button) return;
     const item = songSearchItems[Number(button.dataset.searchIndex)];
-    if (!item?.videoId) return;
+    if (!item) return;
+    if (item.kind && item.kind !== 'song') {
+      drillSearch(item);
+      return;
+    }
+    if (!isSongHit(item)) return;
     submitSongRequest(item.videoId, false);
   });
 }
@@ -2134,13 +2216,17 @@ if (songRequestInput) {
       return;
     }
     if (event.key === 'Escape') {
+      if (songSearchStack.length) {
+        event.preventDefault();
+        popSongSearch();
+        return;
+      }
       hideSongSearchPopup();
       return;
     }
     if (event.key === 'Enter') {
       event.preventDefault();
-      const picked = songRequestInputFromHighlight();
-      submitSongRequest(picked || undefined, false);
+      activateSearchSelection(false);
     }
   });
   songRequestInput.addEventListener('blur', () => {
@@ -2166,7 +2252,10 @@ refreshQueueFromProxy();
 refreshShuffleFromProxy();
 connectNowPlaying();
 startAdminEvents();
-window.addEventListener('resize', updateCurrentMetaMarquee);
+window.addEventListener('resize', () => {
+  updateCurrentMetaMarquee();
+  sizeSongSearchPopup();
+});
 
 const tabNav = document.querySelector('.tabs');
 function fitAdminTabs() {

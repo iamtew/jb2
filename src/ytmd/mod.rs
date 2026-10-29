@@ -360,7 +360,7 @@ fn chrono_lite_ymd() -> String {
     format!("{y:04}{m:02}{d:02}")
 }
 
-fn browse_id_for_playlist(playlist_id: &str) -> String {
+pub(crate) fn browse_id_for_playlist(playlist_id: &str) -> String {
     if playlist_id.starts_with("VL") {
         playlist_id.to_string()
     } else {

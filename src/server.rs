@@ -266,6 +266,22 @@ Transfer-Encoding: chunked\r\n\
     }
 
     fn search(&self, query: &[(String, String)]) -> Dispatch {
+        if let Some(browse) = query_get(query, "browse") {
+            let browse = browse.trim();
+            if browse.is_empty() {
+                return Dispatch::Json(200, Envelope::fail("missing browse parameter"));
+            }
+            return match ytmd::search_browse(browse) {
+                Ok((title, items)) => Dispatch::Json(
+                    200,
+                    Envelope::ok_msg(
+                        format!("{} songs", items.len()),
+                        json!({"title": title, "items": items}),
+                    ),
+                ),
+                Err(e) => Dispatch::Json(200, Envelope::fail(e)),
+            };
+        }
         let input = query_get(query, "input").unwrap_or("").trim();
         if input.is_empty() {
             return Dispatch::Json(200, Envelope::fail("missing input parameter"));
