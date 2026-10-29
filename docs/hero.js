@@ -4,6 +4,152 @@
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var CYAN = 0x3ec8ff;
   var ORANGE = 0xff7a1a;
+  var playBtn = document.getElementById("deckPlay");
+  var playIcon = document.getElementById("deckPlayIcon");
+  var trackSel = document.getElementById("deckTrack");
+  var audio = document.getElementById("deckAudio");
+  var vol = document.getElementById("deckVol");
+  var volWrap = document.getElementById("deckVolWrap");
+  var volBtn = document.getElementById("deckVolBtn");
+  // playing gates the visualizer. bins stay allocated after the first click.
+  var sound = { playing: false, bins: null, analyser: null, kick: 0, bassAvg: 0.2, file: "" };
+  var audioCtx = null;
+  var playGen = 0;
+
+  function setPlaying(on) {
+    sound.playing = on;
+    if (!playBtn || !playIcon) return;
+    playBtn.setAttribute("aria-label", on ? "Pause" : "Play");
+    playIcon.setAttribute("href", on ? "#player-pause" : "#player-play");
+  }
+
+  function arm() {
+    if (audioCtx || !audio) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = new AC();
+    var source = audioCtx.createMediaElementSource(audio);
+    var analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.4;
+    source.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    sound.analyser = analyser;
+    sound.bins = new Uint8Array(analyser.frequencyBinCount);
+  }
+
+  function stop() {
+    playGen += 1;
+    if (audio) audio.pause();
+    setPlaying(false);
+    sound.kick = 0;
+  }
+
+  function playSelected() {
+    var gen;
+    if (!audio || !trackSel) return;
+    if (sound.file !== trackSel.value) {
+      audio.src = trackSel.value;
+      sound.file = trackSel.value;
+      sound.bassAvg = 0.2;
+    }
+    arm();
+    if (audioCtx) audioCtx.resume();
+    gen = ++playGen;
+    // play() stays in the click turn. A resumed context promise can miss the gesture.
+    audio
+      .play()
+      .then(function () {
+        if (gen !== playGen) return;
+        setPlaying(true);
+      })
+      .catch(function () {
+        if (gen !== playGen) return;
+        setPlaying(false);
+      });
+  }
+
+  if (audio && vol) audio.volume = Number(vol.value);
+  if (vol && audio) {
+    vol.addEventListener("input", function () {
+      audio.volume = Number(vol.value);
+    });
+  }
+  if (volWrap && volBtn) {
+    volBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var open = !volWrap.classList.contains("is-open");
+      volWrap.classList.toggle("is-open", open);
+      volBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    document.addEventListener("click", function (e) {
+      if (volWrap.contains(e.target)) return;
+      volWrap.classList.remove("is-open");
+      volBtn.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  if (trackSel) {
+    var opts = Array.prototype.slice.call(trackSel.options);
+    var i;
+    var j;
+    var tmp;
+    for (i = opts.length - 1; i > 0; i--) {
+      j = Math.floor(Math.random() * (i + 1));
+      tmp = opts[i];
+      opts[i] = opts[j];
+      opts[j] = tmp;
+    }
+    for (i = 0; i < opts.length; i++) trackSel.appendChild(opts[i]);
+    trackSel.selectedIndex = 0;
+  }
+
+  if (playBtn && audio && trackSel) {
+    playBtn.addEventListener("click", function () {
+      if (sound.playing) {
+        stop();
+        return;
+      }
+      playSelected();
+    });
+    trackSel.addEventListener("change", function () {
+      var was = sound.playing;
+      stop();
+      sound.file = "";
+      if (was) playSelected();
+    });
+    audio.addEventListener("ended", function () {
+      stop();
+    });
+  }
+
+  function sample() {
+    if (!sound.playing || !sound.analyser) return;
+    sound.analyser.getByteFrequencyData(sound.bins);
+    var bass = 0;
+    var n = Math.min(4, sound.bins.length);
+    var b;
+    for (b = 0; b < n; b++) bass += sound.bins[b];
+    bass /= n * 255;
+    if (bass > sound.bassAvg * 1.35 && bass > 0.28) sound.kick = 1;
+    else sound.kick *= 0.85;
+    sound.bassAvg = sound.bassAvg * 0.9 + bass * 0.1;
+  }
+
+  // Log bins from 1 so DC does not own the left. Level is 0..1.
+  function bandLevel(i, count) {
+    var bins = sound.bins;
+    var n = bins.length;
+    var a = Math.max(1, Math.floor(Math.pow(n, i / count)));
+    var c = Math.max(a + 1, Math.floor(Math.pow(n, (i + 1) / count)));
+    var k;
+    var peak = 0;
+    if (c > n) c = n;
+    for (k = a; k < c; k++) {
+      if (bins[k] > peak) peak = bins[k];
+    }
+    return peak / 255;
+  }
 
   if (!stage || typeof PIXI === "undefined") return;
 
@@ -91,6 +237,8 @@
       app.stage.addChild(scan);
 
       var notes = [];
+      var shown = [];
+      var avg = [];
       for (var n = 0; n < 42; n++) {
         notes.push({ x: 0, y: 0, v: 40, life: 0, color: CYAN });
       }
@@ -128,8 +276,11 @@
       function draw(time, dt) {
         var w = app.screen.width;
         var h = app.screen.height;
-        // Kick at ~120 bpm. High power keeps it a hit, not a swell.
-        var kick = Math.pow(Math.max(0, Math.sin(time * Math.PI * 2)), 8);
+        var live = sound.playing && sound.bins;
+        // Idle kick is ~120 bpm. A playing track uses the bass onset instead.
+        var kick = live
+          ? sound.kick
+          : Math.pow(Math.max(0, Math.sin(time * Math.PI * 2)), 8);
         var scale = layout.scale * (1 + kick * 0.09);
         var y = layout.y + Math.sin(time * 1.7) * 12;
         var split = 3 + kick * 10 + Math.sin(time * 9) * 2;
@@ -189,8 +340,21 @@
         var base = Math.min(horizon + 8, h * 0.62);
         bars.clear();
         for (var i = 0; i < count; i++) {
-          var wave = Math.abs(Math.sin(time * 7.5 + i * 0.48) * Math.sin(time * 1.8 + i * 0.27));
-          var bh = 10 + wave * h * 0.2 + kick * (i % 3 === 0 ? 36 : 12);
+          var raw = live
+            ? bandLevel(i, count)
+            : Math.abs(Math.sin(time * 7.5 + i * 0.48) * Math.sin(time * 1.8 + i * 0.27));
+          if (avg[i] == null) avg[i] = raw;
+          avg[i] += (raw - avg[i]) * 0.06;
+          // Left keeps the bass level. Right keeps the twitch. Kick lifts the low end.
+          var t = count > 1 ? i / (count - 1) : 0;
+          var hit = Math.max(0, raw - avg[i]);
+          var wave = live
+            ? Math.max(0, Math.min(1, raw * (0.85 - 0.5 * t) + hit * (4 + 8 * t) + (1 - t) * (1 - t) * sound.kick * 0.4))
+            : raw;
+          var prev = shown[i] || 0;
+          shown[i] = prev + (wave - prev) * (wave > prev ? 0.7 : 0.2);
+          wave = shown[i];
+          var bh = 2 + wave * h * 0.13 + kick * (i % 3 === 0 ? 10 : 3);
           var color = i % 4 === 0 ? ORANGE : CYAN;
           var x = x0 + i * (barW + gap);
           bars.rect(x, base - bh, barW, bh).fill({ color: color, alpha: 0.95 });
@@ -231,6 +395,7 @@
       app.ticker.add(function (ticker) {
         var dt = Math.min(ticker.deltaMS / 1000, 0.05);
         time += dt;
+        sample();
         draw(time, dt);
       });
     })
