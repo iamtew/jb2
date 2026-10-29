@@ -23,6 +23,7 @@ const WM_TRAY: u32 = WM_APP + 1;
 const ID_OPEN_HOME: usize = 1001;
 const ID_OPEN_ADMIN: usize = 1002;
 const ID_OPEN_OVERLAY: usize = 1003;
+const ID_OPEN_STAGE: usize = 1007;
 const ID_ABOUT: usize = 1004;
 const ID_RESTART: usize = 1005;
 const ID_QUIT: usize = 1006;
@@ -119,6 +120,7 @@ fn show_menu(hwnd: HWND) {
         let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_HOME, w!("Open Home"));
         let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_ADMIN, w!("Open Admin"));
         let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_OVERLAY, w!("Open Overlay"));
+        let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_STAGE, w!("Open Overlay Stage"));
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         let _ = AppendMenuW(menu, MF_STRING, ID_ABOUT, w!("About"));
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
@@ -142,6 +144,7 @@ fn show_menu(hwnd: HWND) {
             ID_OPEN_HOME => open_url(&httpctl::serving_url("/")),
             ID_OPEN_ADMIN => open_url(&httpctl::serving_url("/admin/")),
             ID_OPEN_OVERLAY => open_url(&httpctl::serving_url("/overlay/")),
+            ID_OPEN_STAGE => open_url(&httpctl::serving_url("/stage/")),
             ID_ABOUT => show_about(hwnd),
             ID_RESTART => httpctl::restart(),
             ID_QUIT => PostQuitMessage(0),

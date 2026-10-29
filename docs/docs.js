@@ -4,6 +4,7 @@
     { id: "running", title: "Running", icon: "player-play" },
     { id: "admin", title: "Admin", icon: "settings" },
     { id: "overlay", title: "Overlay", icon: "device-tv" },
+    { id: "stage", title: "Overlay Stage", icon: "artboard" },
     { id: "twitch", title: "Twitch", icon: "brand-twitch" },
     { id: "requests", title: "Requests", icon: "music" },
     { id: "seed", title: "Seed", icon: "plant" },

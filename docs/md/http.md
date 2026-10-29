@@ -15,14 +15,15 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | `GET /cmd/jb/commands/on` `off` | enable or disable Twitch chat commands |
 | `GET /cmd/jb/play` `pause` `next` `previous` | transport aliases (`GET` or `POST`) |
 | `/cmd/ytmd/*` | pear-desktop proxy (method suffix or `?_method=`) |
-| `GET /api/events` | Admin SSE (`twitch` / `chat` / `seed` / `commands` / `cmdHistory` / `queue`) |
+| `GET /api/events` | SSE (`twitch` / `chat` / `seed` / `commands` / `cmdHistory` / `queue` / `overlay`) |
 | `GET /api/queue` | admin queue rows |
-| `/api/config` | blacklist, maxDuration, Twitch, command cooldowns (`GET`, and `POST` or `PUT` to save) |
+| `/api/config` | blacklist, maxDuration, Twitch, command cooldowns, overlayLayout (`GET`, and `POST` or `PUT` to save) |
+| `GET` / `PUT /api/overlay` | live overlay layout; `save: true` on PUT writes sqlite. See [Overlay Stage](stage.md) |
 | `POST /api/config/import` | merge a JB1 or JB2 JSON dump |
 | `/api/seed/*` `/cmd/jb/seed/*` | seed playlists. See [Seed](seed.md) |
 
 Twitch login, connect, and chat routes are listed in [Twitch](twitch.md).
 
-OBS overlay: `http://localhost:42420/overlay/`. Admin dock: `http://localhost:42420/admin/`.
+OBS overlay: `http://localhost:42420/overlay/`. Overlay Stage: `http://localhost:42420/stage/`. Admin dock: `http://localhost:42420/admin/`.
 
-`/overlay` and `/admin` without a trailing slash 301 to the slash form so relative assets resolve.
+`/overlay`, `/stage`, and `/admin` without a trailing slash 301 to the slash form so relative assets resolve.
