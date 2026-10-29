@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Overlay Stage</title>
     <link rel="icon" href="/img/jukeboks.png" />
-    <link rel="stylesheet" href="/overlay/style.css?v=20261029ad" />
-    <link rel="stylesheet" href="/stage/style.css?v=20261029ae" />
+    <link rel="stylesheet" href="/overlay/style.css?v=20261029ag" />
+    <link rel="stylesheet" href="/stage/style.css?v=20261029ag" />
   </head>
   <body>
     <!-- Tabler Icons (outline), MIT. https://github.com/tabler/tabler-icons -->
@@ -99,6 +99,11 @@
         </label>
         <label class="stage-check">
           <span class="stage-control">
+            <input id="vizInput" type="checkbox" /> Visualizer
+          </span>
+        </label>
+        <label class="stage-check">
+          <span class="stage-control">
             <input id="glassInput" type="checkbox" checked /> Glass
             <button type="button" class="stage-reset" data-reset="glass" aria-label="Reset glass">
               <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
@@ -126,6 +131,7 @@
       </aside>
       <div class="stage-fit" id="stageFit">
         <div class="stage-canvas" id="stageCanvas">
+          <div class="viz-layer" hidden aria-hidden="true"></div>
           <div class="stage-grid" aria-hidden="true">
             <svg id="stageGridLines"></svg>
           </div>
@@ -170,6 +176,7 @@
       </div>
     </div>
     <script src="/vendor/pixi.min.js"></script>
+    <script src="/overlay/viz.js?v=20261029ag"></script>
     <script src="/overlay/fx.js?v=20261029ad"></script>
     <script src="/stage/app.js?v=20261029af"></script>
   </body>

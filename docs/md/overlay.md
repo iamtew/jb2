@@ -8,6 +8,8 @@ Look (theme, seek style, opacities, size, pulse, glass) comes from JB2 `overlayL
 
 Each theme paints a small PixiJS FX layer behind the widget (scan, motes, neon, and so on). Type and the seek bar stay HTML. Text-only (`glass` off or `?bg=0`) hides the FX. If WebGL fails, the canvas is removed and CSS look still works.
 
+A second Pixi layer, `.viz-layer`, sits on the canvas under the panel. It draws spectrum bars from `GET /sse/audio` in the theme colors. Overlay Stage owns the on/off switch (`audioVisualizer.enabled`). This page follows `event: audioVisualizer` on `GET /api/events`. Capture errors and the disabled state hide the layer. The panel does not move the bars.
+
 Playback does not come from JB2. The page opens a WebSocket to [pear-desktop](https://github.com/pear-devs/pear-desktop):
 
 `ws://<host>:26538/api/v1/ws?token=` (token from JB2 `GET /api/ytmd`)

@@ -1,6 +1,6 @@
 # JB2
 
-Local control plane for [YouTube Music Desktop (pear-desktop)](https://github.com/pear-devs/pear-desktop): Twitch song requests, an OBS overlay, Overlay Stage, and an admin dock. For [pear-desktop](https://github.com/pear-devs/pear-desktop), not the original [YouTube Music Desktop](https://github.com/th-ch/youtube-music).
+Local control plane for [YouTube Music Desktop (pear-desktop)](https://github.com/pear-devs/pear-desktop): Twitch song requests, an OBS overlay, Overlay Stage, a canvas spectrum layer, and an admin dock. For [pear-desktop](https://github.com/pear-devs/pear-desktop), not the original [YouTube Music Desktop](https://github.com/th-ch/youtube-music).
 
 Documentation: [docs/md/overview.md](docs/md/overview.md). The same pages are the product site in [`docs/`](docs/index.html) (GitHub Pages from the `/docs` folder on `master`).
 
