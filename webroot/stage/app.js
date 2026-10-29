@@ -155,7 +155,7 @@
       return;
     }
     if (paused) {
-      if (overlayState) overlayState.textContent = "PAUSED";
+      if (overlayState) overlayState.textContent = "Jukeboks Paused\nAdd song with !sr <song / URL>";
       songInfo.classList.add("is-status");
       songInfo.style.transition = "opacity 600ms ease";
       songInfo.style.opacity = String(layout.pausedOpacity);

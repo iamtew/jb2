@@ -92,7 +92,10 @@
       ui.songInfo.classList.remove("is-status");
       return;
     }
-    if (ui.overlayState) ui.overlayState.textContent = kind === "nosignal" ? "NO SIGNAL" : "PAUSED";
+    if (ui.overlayState) {
+      ui.overlayState.textContent =
+        kind === "nosignal" ? "NO SIGNAL" : "Jukeboks Paused\nAdd song with !sr <song / URL>";
+    }
     ui.songInfo.classList.add("is-status");
   }
 
@@ -202,7 +205,7 @@
     ui.songInfo?.classList.remove("is-glowing");
   }
 
-  // Paused → fade + PAUSED cover. Playing → track. No WS → NO SIGNAL.
+  // Paused → fade + request cover. Playing → track. No WS → NO SIGNAL.
   function handlePlaybackState(isPaused) {
     const next = Boolean(isPaused);
     if (state.hasSignal && state.isPaused === next) {
