@@ -1,3 +1,11 @@
+@font-face {
+  font-family: Geist;
+  src: url("../vendor/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 html,
 body {
   margin: 0;
@@ -5,7 +13,7 @@ body {
   overflow: hidden;
   background: #111;
   color: #eee;
-  font-family: "Better VCR", sans-serif;
+  font-family: Geist, system-ui, sans-serif;
 }
 
 body {
@@ -27,6 +35,12 @@ body {
 .stage-bar h1 {
   margin: 0;
   font-size: 1.1rem;
+  font-family: "Better VCR", sans-serif;
+}
+
+/* Overlay widget stays on Better VCR; overlay/style.css is not the cascade winner here. */
+#songInfo {
+  font-family: "Better VCR", sans-serif;
 }
 
 .stage-hint {
