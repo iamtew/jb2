@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Overlay Stage</title>
     <link rel="icon" href="/img/jukeboks.png" />
-    <link rel="stylesheet" href="/overlay/style.css?v=20261029ag" />
-    <link rel="stylesheet" href="/stage/style.css?v=20261029ag" />
+    <link rel="stylesheet" href="/overlay/style.css?v=20261029ai" />
+    <link rel="stylesheet" href="/stage/style.css?v=20261029ai" />
   </head>
   <body>
     <!-- Tabler Icons (outline), MIT. https://github.com/tabler/tabler-icons -->
@@ -102,6 +102,15 @@
             <input id="vizInput" type="checkbox" /> Visualizer
           </span>
         </label>
+        <div class="stage-field">Layers
+          <ol id="layerList" class="stage-layers"></ol>
+        </div>
+        <label class="stage-field">Output
+          <span class="stage-control">
+            <select id="vizDevice" aria-label="Visualizer output"></select>
+          </span>
+          <span id="vizStatus" class="stage-viz-status"></span>
+        </label>
         <label class="stage-check">
           <span class="stage-control">
             <input id="glassInput" type="checkbox" checked /> Glass
@@ -131,7 +140,19 @@
       </aside>
       <div class="stage-fit" id="stageFit">
         <div class="stage-canvas" id="stageCanvas">
-          <div class="viz-layer" hidden aria-hidden="true"></div>
+          <div class="viz-box" id="vizBox">
+            <div class="viz-layer" aria-hidden="true"></div>
+            <div class="overlay-handles" aria-hidden="true">
+              <span class="overlay-handle" data-handle="n"></span>
+              <span class="overlay-handle" data-handle="s"></span>
+              <span class="overlay-handle" data-handle="e"></span>
+              <span class="overlay-handle" data-handle="w"></span>
+              <span class="overlay-handle" data-handle="ne"></span>
+              <span class="overlay-handle" data-handle="nw"></span>
+              <span class="overlay-handle" data-handle="se"></span>
+              <span class="overlay-handle" data-handle="sw"></span>
+            </div>
+          </div>
           <div class="stage-grid" aria-hidden="true">
             <svg id="stageGridLines"></svg>
           </div>
@@ -176,8 +197,8 @@
       </div>
     </div>
     <script src="/vendor/pixi.min.js"></script>
-    <script src="/overlay/viz.js?v=20261029ag"></script>
+    <script src="/overlay/viz.js?v=20261030a"></script>
     <script src="/overlay/fx.js?v=20261029ad"></script>
-    <script src="/stage/app.js?v=20261029af"></script>
+    <script src="/stage/app.js?v=20261029ai"></script>
   </body>
 </html>

@@ -28,9 +28,12 @@
   }
 
   function applyVisibility() {
-    if (!host) return;
-    host.hidden = !(enabled && !hideForStatus);
-    if (!host.hidden) window.requestAnimationFrame(resize);
+    const frame = document.getElementById("vizBox") || host;
+    if (!frame) return;
+    const hide = !enabled;
+    if (frame.hidden === hide) return;
+    frame.hidden = hide;
+    if (!hide) window.requestAnimationFrame(resize);
   }
 
   function setEnabled(on) {
@@ -40,11 +43,25 @@
     applyVisibility();
   }
 
+  function setStatus(text) {
+    const el = document.getElementById("vizStatus");
+    if (el) el.textContent = text || "";
+  }
+
+  function saveViz(patch) {
+    fetch("/api/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audioVisualizer: patch }),
+    }).catch(() => {});
+  }
+
   function resize() {
     if (!app || !host || host.hidden) return;
     const w = host.clientWidth;
     const h = host.clientHeight;
     if (w < 2 || h < 2) return;
+    if (app.renderer.width === w && app.renderer.height === h) return;
     app.renderer.resize(w, h);
   }
 
@@ -61,7 +78,7 @@
     if (tint > 0.01) gfx.rect(0, 0, w, h).fill({ color: colors.a, alpha: tint });
     const gap = Math.max(2, Math.round(w / 400));
     const bw = (w - gap * (n + 1)) / n;
-    const maxH = h * 0.28 * (1 + punch * 0.18);
+    const maxH = h * 0.92 * (1 + punch * 0.18);
     for (let i = 0; i < n; i++) {
       const bh = Math.max(1, (Number(spectrum[i]) || 0) * maxH);
       gfx.rect(gap + i * (bw + gap), h - bh, Math.max(1, bw), bh).fill({
@@ -81,8 +98,12 @@
     }
     if (data.type === "status") {
       const message = String(data.message || "");
+      const device = String(data.device || "");
       hideForStatus =
         data.state === "error" || (data.state === "silent" && /disabled/i.test(message));
+      if (data.state === "capturing") setStatus(device || "capturing");
+      else if (data.state === "error" || data.state === "device_changed") setStatus(message || data.state);
+      else setStatus("");
       applyVisibility();
       return;
     }
@@ -100,12 +121,46 @@
     return source;
   }
 
+  let deviceList = null;
+
+  function fillDevices(selected) {
+    const sel = document.getElementById("vizDevice");
+    if (!sel) return Promise.resolve();
+    const load = deviceList || (deviceList = fetch("/api/audio/devices")
+      .then((res) => res.json())
+      .then((env) => (env && env.data && env.data.devices) || [])
+      .catch(() => []));
+    return load.then((devices) => {
+      const want = selected || "default";
+      sel.replaceChildren();
+      const fallback = document.createElement("option");
+      fallback.value = "default";
+      fallback.textContent = "Default output";
+      sel.appendChild(fallback);
+      devices.forEach((device) => {
+        if (!device || !device.name || device.name === "default") return;
+        const opt = document.createElement("option");
+        opt.value = device.name;
+        opt.textContent = device.default ? `${device.name} (system default)` : device.name;
+        sel.appendChild(opt);
+      });
+      if (![...sel.options].some((opt) => opt.value === want)) {
+        const extra = document.createElement("option");
+        extra.value = want;
+        extra.textContent = want;
+        sel.appendChild(extra);
+      }
+      sel.value = want;
+    });
+  }
+
   function followEnabled() {
     fetch("/api/config")
       .then((res) => res.json())
       .then((env) => {
-        const on = Boolean(env && env.data && env.data.audioVisualizer && env.data.audioVisualizer.enabled);
-        setEnabled(on);
+        const viz = (env && env.data && env.data.audioVisualizer) || {};
+        setEnabled(Boolean(viz.enabled));
+        return fillDevices(viz.device || "default");
       })
       .catch(() => {});
     const events = new EventSource("/api/events");
@@ -126,11 +181,13 @@
     if (box) {
       box.addEventListener("change", () => {
         setEnabled(box.checked);
-        fetch("/api/config", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ audioVisualizer: { enabled: box.checked } }),
-        }).catch(() => {});
+        saveViz({ enabled: box.checked });
+      });
+    }
+    const deviceSel = document.getElementById("vizDevice");
+    if (deviceSel) {
+      deviceSel.addEventListener("change", () => {
+        saveViz({ device: deviceSel.value || "default" });
       });
     }
     followEnabled();

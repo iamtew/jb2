@@ -77,6 +77,22 @@ fn default_overlay_grid() -> String {
     "center,thirds".to_string()
 }
 
+fn default_viz_y() -> i32 {
+    800
+}
+
+fn default_viz_w() -> i32 {
+    OVERLAY_CANVAS_1080.0
+}
+
+fn default_viz_h() -> i32 {
+    280
+}
+
+fn default_layers() -> String {
+    "overlay,viz".to_string()
+}
+
 fn default_viz_device() -> String {
     "default".to_string()
 }
@@ -211,6 +227,7 @@ const OVERLAY_SEEK_STYLES: [&str; 17] = [
 const OVERLAY_GRID_PARTS: [&str; 5] = ["center", "golden", "quad", "safe", "thirds"];
 const OVERLAY_PANEL_W_MIN: i32 = 280;
 const OVERLAY_PANEL_H_MIN: i32 = 80;
+const OVERLAY_VIZ_MIN: i32 = 80;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SeedPlaylist {
@@ -256,6 +273,17 @@ pub struct OverlayLayout {
     pub glass: bool,
     #[serde(default = "default_overlay_grid")]
     pub grid: String,
+    #[serde(rename = "vizX", default)]
+    pub viz_x: i32,
+    #[serde(rename = "vizY", default = "default_viz_y")]
+    pub viz_y: i32,
+    #[serde(rename = "vizW", default = "default_viz_w")]
+    pub viz_w: i32,
+    #[serde(rename = "vizH", default = "default_viz_h")]
+    pub viz_h: i32,
+    /// Front to back. First id paints above the other.
+    #[serde(default = "default_layers")]
+    pub layers: String,
 }
 
 impl Default for OverlayLayout {
@@ -274,6 +302,11 @@ impl Default for OverlayLayout {
             pulse: default_overlay_pulse(),
             glass: true,
             grid: default_overlay_grid(),
+            viz_x: 0,
+            viz_y: default_viz_y(),
+            viz_w: default_viz_w(),
+            viz_h: default_viz_h(),
+            layers: default_layers(),
         }
     }
 }
@@ -294,6 +327,11 @@ impl OverlayLayout {
             "pulse": self.pulse,
             "glass": self.glass,
             "grid": self.grid,
+            "vizX": self.viz_x,
+            "vizY": self.viz_y,
+            "vizW": self.viz_w,
+            "vizH": self.viz_h,
+            "layers": self.layers,
         })
     }
 }
@@ -373,7 +411,28 @@ pub fn normalize_overlay_layout(mut layout: OverlayLayout) -> OverlayLayout {
     };
     let max_y = (layout.canvas_h - panel_h).max(0);
     layout.y = layout.y.clamp(0, max_y);
+    layout.viz_w = layout.viz_w.clamp(OVERLAY_VIZ_MIN, layout.canvas_w);
+    layout.viz_h = layout.viz_h.clamp(OVERLAY_VIZ_MIN, layout.canvas_h);
+    layout.viz_x = layout.viz_x.clamp(0, (layout.canvas_w - layout.viz_w).max(0));
+    layout.viz_y = layout.viz_y.clamp(0, (layout.canvas_h - layout.viz_h).max(0));
+    layout.layers = normalize_layers(&layout.layers);
     layout
+}
+
+fn normalize_layers(value: &str) -> String {
+    let mut out = Vec::new();
+    for id in value.split(',') {
+        let id = id.trim();
+        if (id == "overlay" || id == "viz") && !out.contains(&id) {
+            out.push(id);
+        }
+    }
+    for id in ["overlay", "viz"] {
+        if !out.contains(&id) {
+            out.push(id);
+        }
+    }
+    out.join(",")
 }
 
 fn json_f32(v: &Value) -> Option<f32> {
@@ -420,6 +479,21 @@ pub fn overlay_layout_from_value(base: OverlayLayout, parsed: &Value) -> Overlay
     }
     if let Some(s) = parsed.get("grid").and_then(|v| v.as_str()) {
         layout.grid = s.to_string();
+    }
+    if let Some(n) = parsed.get("vizX").and_then(|v| v.as_i64()) {
+        layout.viz_x = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = parsed.get("vizY").and_then(|v| v.as_i64()) {
+        layout.viz_y = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = parsed.get("vizW").and_then(|v| v.as_i64()) {
+        layout.viz_w = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = parsed.get("vizH").and_then(|v| v.as_i64()) {
+        layout.viz_h = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(s) = parsed.get("layers").and_then(|v| v.as_str()) {
+        layout.layers = s.to_string();
     }
     normalize_overlay_layout(layout)
 }
@@ -1046,6 +1120,20 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(off.grid, "off");
+
+        let stacked = normalize_overlay_layout(OverlayLayout {
+            layers: "nope,viz".into(),
+            viz_w: 5000,
+            viz_h: 10,
+            viz_x: -5,
+            viz_y: 9000,
+            ..Default::default()
+        });
+        assert_eq!(stacked.layers, "viz,overlay");
+        assert_eq!(stacked.viz_w, OVERLAY_CANVAS_1080.0);
+        assert_eq!(stacked.viz_h, OVERLAY_VIZ_MIN);
+        assert_eq!(stacked.viz_x, 0);
+        assert_eq!(stacked.viz_y, OVERLAY_CANVAS_1080.1 - OVERLAY_VIZ_MIN);
     }
 
     #[test]

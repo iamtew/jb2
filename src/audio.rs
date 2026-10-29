@@ -13,7 +13,8 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const WINDOW: usize = 2048;
+const WINDOW: usize = 1024;
+const TICK_HZ: f32 = 60.0;
 const RING_CAP: usize = 131072;
 const FLOOR_DB: f32 = -60.0;
 const MAX_LISTENERS: usize = 8;
@@ -53,22 +54,23 @@ impl Ring {
         self.w.store(w, Ordering::Release);
     }
 
-    /// Last `n` samples. Slots are atomics, so a lap during the copy yields a newer sample, not a tear.
-    fn latest(&self, n: usize) -> Option<Vec<f32>> {
+    /// Last `n` samples into `out`. Slots are atomics, so a lap during the copy yields a newer sample, not a tear.
+    fn copy_latest(&self, n: usize, out: &mut Vec<f32>) -> bool {
+        out.clear();
         if n == 0 || n >= RING_CAP {
-            return None;
+            return false;
         }
         let w = self.w.load(Ordering::Acquire);
         if w < n as u64 {
-            return None;
+            return false;
         }
         let start = w - n as u64;
-        let mut out = Vec::with_capacity(n);
+        out.reserve(n);
         for i in 0..n {
             let idx = (start + i as u64) as usize & (RING_CAP - 1);
             out.push(f32::from_bits(self.buf[idx].load(Ordering::Relaxed)));
         }
-        Some(out)
+        true
     }
 }
 
@@ -125,7 +127,7 @@ impl Analyzer {
             rate: 0,
             band_count: 0,
             smoothing: viz.smoothing,
-            hz: viz.update_hz.max(1) as f32,
+            hz: TICK_HZ,
             bass_hz: viz.bass_hz,
             mid_hz: viz.mid_hz,
             treble_hz: viz.treble_hz,
@@ -162,7 +164,7 @@ impl Analyzer {
             || self.mid_hz != viz.mid_hz
             || self.treble_hz != viz.treble_hz;
         self.smoothing = viz.smoothing;
-        self.hz = viz.update_hz.max(1) as f32;
+        self.hz = TICK_HZ;
         self.bass_hz = viz.bass_hz;
         self.mid_hz = viz.mid_hz;
         self.treble_hz = viz.treble_hz;
@@ -228,26 +230,26 @@ impl Analyzer {
         }
         self.follow_peak(raw_peak);
 
-        let alpha = smooth_alpha(self.smoothing);
-        let vol_alpha = (alpha * 1.35).min(1.0);
-        self.volume = ema(self.volume, unit(volume_db, self.peak), vol_alpha);
-        self.bass = ema(self.bass, unit(bass_db, self.peak), alpha);
-        self.mid = ema(self.mid, unit(mid_db, self.peak), alpha);
-        self.treble = ema(self.treble, unit(treble_db, self.peak), alpha);
+        let release = smooth_alpha(self.smoothing);
+        let vol_release = (release * 1.35).min(1.0);
+        self.volume = follow(self.volume, unit(volume_db, self.peak), vol_release);
+        self.bass = follow(self.bass, unit(bass_db, self.peak), release);
+        self.mid = follow(self.mid, unit(mid_db, self.peak), release);
+        self.treble = follow(self.treble, unit(treble_db, self.peak), release);
         for (slot, db) in self.spectrum.iter_mut().zip(spec_db.iter()) {
-            *slot = ema(*slot, unit(*db, self.peak), alpha);
+            *slot = follow(*slot, unit(*db, self.peak), release);
         }
 
         let (left, right) = if ch >= 2 {
-            self.left = ema(
+            self.left = follow(
                 self.left,
                 unit(rms_db(acc_l / WINDOW as f32), self.peak),
-                vol_alpha,
+                vol_release,
             );
-            self.right = ema(
+            self.right = follow(
                 self.right,
                 unit(rms_db(acc_r / WINDOW as f32), self.peak),
-                vol_alpha,
+                vol_release,
             );
             (Some(q(self.left)), Some(q(self.right)))
         } else {
@@ -267,7 +269,7 @@ impl Analyzer {
             self.cool -= 1;
         }
         self.bass_env = ema(self.bass_env, raw_bass, 0.12);
-        self.beat_strength = ema(self.beat_strength, strength_now, alpha);
+        self.beat_strength = follow(self.beat_strength, strength_now, release);
 
         Some(Frame {
             volume: q(self.volume),
@@ -283,7 +285,7 @@ impl Analyzer {
     }
 
     fn follow_peak(&mut self, raw: f32) {
-        let drop = 12.0 / self.hz.max(1.0);
+        let drop = 48.0 / self.hz.max(1.0);
         if raw > self.peak {
             self.peak = raw;
         } else {
@@ -313,6 +315,15 @@ fn smooth_alpha(smoothing: f32) -> f32 {
 
 fn ema(prev: f32, sample: f32, alpha: f32) -> f32 {
     prev + alpha * (sample - prev)
+}
+
+/// Rise copies the sample. `release_alpha` only eases the fall (`smoothing` is that fall).
+fn follow(prev: f32, sample: f32, release_alpha: f32) -> f32 {
+    if sample > prev {
+        sample
+    } else {
+        ema(prev, sample, release_alpha)
+    }
 }
 
 fn rms_db(mean_square: f32) -> f32 {
@@ -535,16 +546,26 @@ fn unsupported_loop(shared: Arc<Shared>) {
 }
 
 #[cfg(windows)]
+#[link(name = "winmm")]
+extern "system" {
+    fn timeBeginPeriod(period: u32) -> u32;
+}
+
+#[cfg(windows)]
 fn capture_loop(shared: Arc<Shared>) {
-    // ponytail: poll the output name every 2s. WASAPI notifications if a hot-swap never errors the stream.
+    // ponytail: poll the default output name every 2s. A named device stays open until the stream errors; listing every output stalls the tick.
+    // ponytail: Windows sleeps in 15.6ms slices unless this process asks for 1ms. The 60Hz tick needs it.
+    unsafe { timeBeginPeriod(1) };
     let host = cpal::default_host();
     let ring = Arc::new(Ring::new());
     let mut live: Option<LiveStream> = None;
     let mut analyzer: Option<Analyzer> = None;
     let mut last_poll = Instant::now();
     let mut logged = String::new();
+    let mut samples = Vec::new();
 
     loop {
+        let tick = Instant::now();
         let settings = shared.settings.lock().expect("audio settings").clone();
         if !settings.enabled {
             live = None;
@@ -572,7 +593,9 @@ fn capture_loop(shared: Arc<Shared>) {
                     "capture stopped",
                     &open.name,
                 ));
-            } else if last_poll.elapsed() >= Duration::from_secs(2) {
+            } else if settings.device.trim().eq_ignore_ascii_case("default")
+                && last_poll.elapsed() >= Duration::from_secs(2)
+            {
                 last_poll = Instant::now();
                 match target_name(&host, &settings.device) {
                     Ok(name) if name != open.name => {
@@ -633,14 +656,15 @@ fn capture_loop(shared: Arc<Shared>) {
         if let (Some(open), Some(engine)) = (live.as_ref(), analyzer.as_mut()) {
             engine.retune(open.rate, &settings);
             let need = WINDOW * open.channels;
-            if let Some(samples) = open.ring.latest(need) {
+            if open.ring.copy_latest(need, &mut samples) {
                 if let Some(frame) = engine.push(&samples, open.channels) {
                     publish(&shared, frame_value(&frame));
                 }
             }
         }
 
-        let period = Duration::from_millis(1000 / settings.update_hz.max(1) as u64);
+        let frame = Duration::from_secs(1) / TICK_HZ as u32;
+        let period = frame.saturating_sub(tick.elapsed());
         let guard = shared.settings.lock().expect("audio settings");
         let _ = shared
             .ctrl
@@ -796,6 +820,35 @@ fn push_i32(ring: &Ring, data: &[i32]) {
     }
 }
 
+/// Output endpoints Stage can target. `default` marks the current default output.
+pub fn list_output_devices() -> Value {
+    #[cfg(windows)]
+    {
+        use cpal::traits::{DeviceTrait, HostTrait};
+        let host = cpal::default_host();
+        let default_name = host
+            .default_output_device()
+            .and_then(|device| device.name().ok())
+            .unwrap_or_default();
+        let mut devices = Vec::new();
+        if let Ok(list) = host.output_devices() {
+            for device in list {
+                let Ok(name) = device.name() else { continue };
+                if name.trim().is_empty() {
+                    continue;
+                }
+                let is_default = name == default_name;
+                devices.push(json!({ "name": name, "default": is_default }));
+            }
+        }
+        return json!({ "devices": devices });
+    }
+    #[cfg(not(windows))]
+    {
+        json!({ "devices": [] })
+    }
+}
+
 #[cfg(windows)]
 fn pick_device(host: &cpal::Host, want: &str) -> Result<(cpal::Device, String), String> {
     use cpal::traits::{DeviceTrait, HostTrait};
@@ -852,7 +905,16 @@ Transfer-Encoding: chunked\r\n\
 }
 
 fn sse_event(value: &Value) -> String {
-    format!("event: audio\ndata: {value}\n\n")
+    let mut s = format!("event: audio\ndata: {value}\n:\n");
+    // ponytail: tiny_http has no set_nodelay. Windows delayed-ACK holds a short
+    // write ~200ms. Pad to one full segment so the frame leaves now.
+    if s.len() < 1600 {
+        let extra = 1600 - s.len();
+        let at = s.len() - 1;
+        s.insert_str(at, &" ".repeat(extra));
+    }
+    s.push('\n');
+    s
 }
 
 fn sse_chunk<W: std::io::Write>(writer: &mut W, data: &[u8]) -> std::io::Result<()> {
@@ -918,6 +980,29 @@ mod tests {
         let silent = quiet.push(&zeros, 1).unwrap();
         assert!(silent.spectrum.iter().all(|v| *v < 0.05));
         assert!(silent.volume < 0.05);
+
+        let heavy = AudioVisualizer {
+            smoothing: 0.95,
+            ..viz
+        };
+        let mut slow = Analyzer::new(rate as u32, &heavy);
+        let held = slow.push(&zeros, 1).unwrap();
+        let jumped = slow
+            .push(&tone(snapped, rate, WINDOW, 0.9), 1)
+            .unwrap();
+        assert!(
+            jumped.spectrum[expect] > held.spectrum[expect] + 0.4,
+            "attack {} -> {}",
+            held.spectrum[expect],
+            jumped.spectrum[expect]
+        );
+    }
+
+    #[test]
+    fn sse_event_fills_a_segment() {
+        let event = sse_event(&json!({"type": "audio", "spectrum": [0.1, 0.2]}));
+        assert!(event.len() >= 1600, "{}", event.len());
+        assert!(event.ends_with("\n\n"));
     }
 
     #[test]

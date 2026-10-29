@@ -243,6 +243,9 @@ Transfer-Encoding: chunked\r\n\
             ("GET", "/api/ytmd") => self.ytmd_token(),
             ("GET", "/api/overlay") => self.overlay_get(),
             ("GET", "/api/audio") => Dispatch::Json(200, Envelope::ok_data(self.audio.snapshot())),
+            ("GET", "/api/audio/devices") => {
+                Dispatch::Json(200, Envelope::ok_data(audio::list_output_devices()))
+            }
             ("PUT", "/api/overlay") => self.overlay_put(body),
             ("GET", "/api/twitch") => self.twitch_status(),
             ("POST", "/api/twitch/connect") => self.twitch_connect(),

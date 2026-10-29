@@ -82,6 +82,11 @@ body {
   gap: 8px;
 }
 
+.stage-viz-status {
+  min-height: 1.2em;
+  color: #c8d0d6;
+}
+
 .stage-control select,
 .stage-control input[type="range"],
 .stage-grid-checks {
@@ -199,16 +204,8 @@ body {
   position: absolute;
   left: 50%;
   top: 50%;
-  background: #1a1a1a;
   overflow: hidden;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
-}
-
-.stage-grid {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
   background-color: #1a1a1a;
   background-image:
     linear-gradient(45deg, #333 25%, transparent 25%),
@@ -219,12 +216,52 @@ body {
   background-position: 0 0, 0 16px, 16px -16px, -16px 0;
 }
 
+.stage-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  /* Lines only. An opaque fill here hides the spectrum layer underneath. */
+  background: none;
+}
+
 .stage-grid svg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   overflow: visible;
+}
+
+.viz-box {
+  cursor: grab;
+  pointer-events: auto;
+  box-shadow: inset 0 0 0 1px rgba(0, 255, 255, 0.45);
+}
+
+.viz-box.is-dragging {
+  cursor: grabbing;
+}
+
+.stage-layers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stage-layers li {
+  padding: 6px 8px;
+  background: #222;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #eee;
+  cursor: grab;
+}
+
+.stage-layers li.is-over {
+  border-color: #0ff;
 }
 
 .overlay-box {

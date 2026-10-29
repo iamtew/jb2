@@ -19,10 +19,11 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | `GET /api/queue` | admin queue rows |
 | `/api/config` | blacklist, maxDuration, Twitch, command cooldowns, overlayLayout (`GET`, and `POST` or `PUT` to save) |
 | `GET /api/ytmd` | pear-desktop JWT for overlay/admin WebSocket (`data.accessToken`) |
-| `GET` / `PUT /api/overlay` | live overlay layout (`x`, `y`, `canvasW`, `canvasH`, `theme`, `seekStyle`, opacities, `panelW`/`panelH`, `pulse`, `glass`, `grid` comma list or `off`); `save: true` on PUT writes sqlite. See [Overlay Stage](stage.md) |
+| `GET` / `PUT /api/overlay` | live overlay layout (`x`, `y`, `canvasW`, `canvasH`, `theme`, `seekStyle`, opacities, `panelW`/`panelH`, `pulse`, `glass`, `grid` comma list or `off`, `vizX`/`vizY`/`vizW`/`vizH`, `layers` front-to-back `overlay,viz`); `save: true` on PUT writes sqlite. See [Overlay Stage](stage.md) |
 | `GET /sse/audio` | audio analysis SSE (`event: audio`). Frames are `{ "type": "audio", "volume", "bass", "mid", "treble", "spectrum", "beat", "beatStrength" }` plus `volumeLeft` / `volumeRight` when the device is stereo. Status frames are `{ "type": "status", "state": "capturing" \| "silent" \| "error" \| "device_changed" }`. Not mixed into `/api/events` |
 | `GET /api/audio` | one snapshot of the latest analysis frame or status |
-| `audioVisualizer` on `/api/config` | `enabled` (default false), `device` (`default` or an output name), `spectrumBands` (16 or 32), `updateHz` (30, 45, or 60), `smoothing` (0–1, higher is smoother), `bassHz` / `midHz` / `trebleHz` as `[low, high]`. Saving it emits `event: audioVisualizer` with `{ "enabled" }` on `/api/events` |
+| `GET /api/audio/devices` | output devices for the visualizer (`name`, `default`) |
+| `audioVisualizer` on `/api/config` | `enabled` (default false), `device` (`default` or an output name), `spectrumBands` (16 or 32), `updateHz` (stored, not the tick), `smoothing` (0–1, release only), `bassHz` / `midHz` / `trebleHz` as `[low, high]`. Frames are 60 Hz. Saving it emits `event: audioVisualizer` with `{ "enabled" }` on `/api/events` |
 | `POST /api/config/import` | merge a JB1 or JB2 JSON dump |
 | `/api/seed/*` `/cmd/jb/seed/*` | seed playlists. See [Seed](seed.md) |
 

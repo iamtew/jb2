@@ -147,6 +147,7 @@
     const s = w / BASE_W;
     ui.songInfo.style.transformOrigin = "0 0";
     ui.songInfo.style.transform = s === 1 ? "none" : `scale(${s})`;
+    applyVizFrame(layout);
     ui.songInfo.setAttribute("data-theme", layout.theme || "lcd-glass");
     ui.songInfo.setAttribute("data-seek", layout.seekStyle || "sesh-sofa");
     const playOp = Number(layout.playingOpacity);
@@ -165,6 +166,23 @@
       updateTextMarquee(ui.album, ui.albumWrap);
       updateMarker();
     });
+  }
+
+  function applyVizFrame(layout) {
+    const vizBox = document.getElementById("vizBox");
+    if (!vizBox || !layout) return;
+    const order = String(layout.layers || "overlay,viz").split(",");
+    const vizFront = order[0] === "viz";
+    const x = Number(layout.vizX);
+    const y = Number(layout.vizY);
+    const w = Number(layout.vizW);
+    const h = Number(layout.vizH);
+    vizBox.style.left = `${Number.isFinite(x) ? x : 0}px`;
+    vizBox.style.top = `${Number.isFinite(y) ? y : 0}px`;
+    vizBox.style.width = `${Number.isFinite(w) && w > 0 ? w : 1920}px`;
+    vizBox.style.height = `${Number.isFinite(h) && h > 0 ? h : 280}px`;
+    vizBox.style.zIndex = vizFront ? "3" : "1";
+    if (ui.songInfo) ui.songInfo.style.zIndex = vizFront ? "1" : "3";
   }
 
   function followOverlayLayout() {

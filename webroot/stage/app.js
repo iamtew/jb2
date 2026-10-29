@@ -3,6 +3,7 @@
   const PUT_MS = 100;
   const DEMO_DURATION = 180;
   const MIN_W = 280;
+  const MIN_VIZ = 80;
   const BASE_W = 500;
   const PREVIEW_MODES = ["cycle", "playing", "paused", "nosignal"];
   const PREVIEW_LABELS = {
@@ -15,6 +16,8 @@
   const canvas = document.getElementById("stageCanvas");
   const fit = document.getElementById("stageFit");
   const overlayBox = document.getElementById("overlayBox");
+  const vizBox = document.getElementById("vizBox");
+  const layerList = document.getElementById("layerList");
   const songInfo = document.getElementById("songInfo");
   const overlayState = document.getElementById("overlayState");
   const btn720 = document.getElementById("size720");
@@ -54,7 +57,12 @@
     pulse: 3,
     glass: true,
     grid: "center,thirds",
+    vizX: 0,
+    vizY: 800,
+    vizW: 1920,
+    vizH: 280,
   };
+  const layoutLayers = ["overlay", "viz"];
   const GRID_IDS = ["center", "golden", "quad", "safe", "thirds"];
   const GRID_CYAN = "rgba(0, 255, 255, 0.45)";
   const GRID_ORANGE = "rgba(255, 64, 0, 0.55)";
@@ -63,6 +71,7 @@
     y: 0,
     canvasW: 1920,
     canvasH: 1080,
+    layers: layoutLayers.slice(),
     ...DEFAULTS,
   };
   let drag = null;
@@ -340,6 +349,62 @@
     songInfo.style.transform = s === 1 ? "none" : `scale(${s})`;
     overlayBox.style.width = `${layout.panelW}px`;
     overlayBox.style.height = `${Math.round((songInfo.offsetHeight || 160) * s)}px`;
+    applyStack();
+  }
+
+  function applyStack() {
+    const front = layout.layers[0] === "viz" ? "viz" : "overlay";
+    overlayBox.style.zIndex = front === "overlay" ? "3" : "2";
+    if (vizBox) vizBox.style.zIndex = front === "viz" ? "3" : "2";
+  }
+
+  function applyVizBox() {
+    if (!vizBox) return;
+    vizBox.style.left = `${layout.vizX}px`;
+    vizBox.style.top = `${layout.vizY}px`;
+    vizBox.style.width = `${layout.vizW}px`;
+    vizBox.style.height = `${layout.vizH}px`;
+    applyStack();
+  }
+
+  function clampViz() {
+    layout.vizW = Math.max(MIN_VIZ, Math.min(layout.canvasW, Math.round(layout.vizW)));
+    layout.vizH = Math.max(MIN_VIZ, Math.min(layout.canvasH, Math.round(layout.vizH)));
+    layout.vizX = Math.max(0, Math.min(layout.canvasW - layout.vizW, Math.round(layout.vizX)));
+    layout.vizY = Math.max(0, Math.min(layout.canvasH - layout.vizH, Math.round(layout.vizY)));
+  }
+
+  function snapViz(x, y) {
+    return {
+      x: snapAxis(x, layout.vizW, layout.canvasW, gridLines(layout.canvasW)),
+      y: snapAxis(y, layout.vizH, layout.canvasH, gridLines(layout.canvasH)),
+    };
+  }
+
+  function parseLayers(value) {
+    const ids = [];
+    String(value || "")
+      .split(",")
+      .forEach((part) => {
+        const id = part.trim();
+        if ((id === "overlay" || id === "viz") && !ids.includes(id)) ids.push(id);
+      });
+    ["overlay", "viz"].forEach((id) => {
+      if (!ids.includes(id)) ids.push(id);
+    });
+    return ids;
+  }
+
+  function paintLayers() {
+    if (!layerList) return;
+    layerList.replaceChildren();
+    layout.layers.forEach((id) => {
+      const li = document.createElement("li");
+      li.draggable = true;
+      li.dataset.layer = id;
+      li.textContent = id === "viz" ? "Visualizer" : "Overlay";
+      layerList.appendChild(li);
+    });
   }
 
   function syncToolbar() {
@@ -354,6 +419,7 @@
       el.checked = selected.has(el.value);
     });
     paintGrid();
+    paintLayers();
   }
 
   function fitCanvas() {
@@ -395,6 +461,11 @@
       pulse: layout.pulse,
       glass: layout.glass,
       grid: layout.grid,
+      vizX: layout.vizX,
+      vizY: layout.vizY,
+      vizW: layout.vizW,
+      vizH: layout.vizH,
+      layers: layout.layers.join(","),
       save: Boolean(save),
     };
   }
@@ -436,13 +507,19 @@
     if (w === layout.canvasW && h === layout.canvasH) return;
     layout.x = Math.round((layout.x * w) / layout.canvasW);
     layout.y = Math.round((layout.y * h) / layout.canvasH);
+    layout.vizX = Math.round((layout.vizX * w) / layout.canvasW);
+    layout.vizY = Math.round((layout.vizY * h) / layout.canvasH);
+    layout.vizW = Math.round((layout.vizW * w) / layout.canvasW);
+    layout.vizH = Math.round((layout.vizH * h) / layout.canvasH);
     layout.canvasW = w;
     layout.canvasH = h;
     clampBox();
+    clampViz();
     const snapped = snapPanel(layout.x, layout.y);
     layout.x = snapped.x;
     layout.y = snapped.y;
     applyPanelBox();
+    applyVizBox();
     fitCanvas();
     saveNow();
   }
@@ -527,6 +604,7 @@
     if (!drag) return;
     drag = null;
     overlayBox.classList.remove("is-dragging");
+    if (vizBox) vizBox.classList.remove("is-dragging");
     saveNow();
     window.requestAnimationFrame(() => {
       updateTextMarquee(ui.title, ui.titleWrap);
@@ -538,6 +616,102 @@
 
   overlayBox.addEventListener("pointerup", endDrag);
   overlayBox.addEventListener("pointercancel", endDrag);
+
+  if (vizBox) {
+    vizBox.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      vizBox.setPointerCapture(ev.pointerId);
+      const p = pointerToCanvas(ev);
+      const handle = handleOf(ev.target);
+      if (handle) {
+        drag = {
+          kind: "viz-resize",
+          handle,
+          x: layout.vizX,
+          y: layout.vizY,
+          w: layout.vizW,
+          h: layout.vizH,
+          px: p.x,
+          py: p.y,
+        };
+      } else {
+        drag = { kind: "viz-move", dx: p.x - layout.vizX, dy: p.y - layout.vizY };
+      }
+      vizBox.classList.add("is-dragging");
+    });
+    vizBox.addEventListener("pointermove", (ev) => {
+      if (!drag || (drag.kind !== "viz-move" && drag.kind !== "viz-resize")) return;
+      const p = pointerToCanvas(ev);
+      if (drag.kind === "viz-move") {
+        const snapped = snapViz(p.x - drag.dx, p.y - drag.dy);
+        if (snapped.x === layout.vizX && snapped.y === layout.vizY) return;
+        layout.vizX = snapped.x;
+        layout.vizY = snapped.y;
+        applyVizBox();
+        scheduleLivePut();
+        return;
+      }
+      const handle = drag.handle;
+      let w = drag.w;
+      let h = drag.h;
+      let x = drag.x;
+      let y = drag.y;
+      const dx = p.x - drag.px;
+      const dy = p.y - drag.py;
+      if (handle.includes("e")) w = drag.w + dx;
+      if (handle.includes("w")) w = drag.w - dx;
+      if (handle.includes("s")) h = drag.h + dy;
+      if (handle.includes("n")) h = drag.h - dy;
+      w = Math.max(MIN_VIZ, Math.min(layout.canvasW, w));
+      h = Math.max(MIN_VIZ, Math.min(layout.canvasH, h));
+      if (handle.includes("w")) x = drag.x + drag.w - w;
+      if (handle.includes("n")) y = drag.y + drag.h - h;
+      x = Math.max(0, Math.min(layout.canvasW - w, x));
+      y = Math.max(0, Math.min(layout.canvasH - h, y));
+      layout.vizX = Math.round(x);
+      layout.vizY = Math.round(y);
+      layout.vizW = Math.round(w);
+      layout.vizH = Math.round(h);
+      applyVizBox();
+      scheduleLivePut();
+    });
+    vizBox.addEventListener("pointerup", endDrag);
+    vizBox.addEventListener("pointercancel", endDrag);
+  }
+
+  if (layerList) {
+    layerList.addEventListener("dragstart", (ev) => {
+      const li = ev.target.closest("li");
+      if (!li) return;
+      ev.dataTransfer.setData("text/plain", li.dataset.layer || "");
+      ev.dataTransfer.effectAllowed = "move";
+    });
+    layerList.addEventListener("dragover", (ev) => {
+      const li = ev.target.closest("li");
+      if (!li) return;
+      ev.preventDefault();
+      layerList.querySelectorAll("li").forEach((el) => el.classList.toggle("is-over", el === li));
+    });
+    layerList.addEventListener("dragleave", (ev) => {
+      const li = ev.target.closest("li");
+      if (li) li.classList.remove("is-over");
+    });
+    layerList.addEventListener("drop", (ev) => {
+      ev.preventDefault();
+      const li = ev.target.closest("li");
+      const from = ev.dataTransfer.getData("text/plain");
+      const to = li && li.dataset.layer;
+      layerList.querySelectorAll("li").forEach((el) => el.classList.remove("is-over"));
+      if (!from || !to || from === to) return;
+      const order = layout.layers.filter((id) => id !== from);
+      order.splice(Math.max(0, order.indexOf(to)), 0, from);
+      layout.layers = parseLayers(order.join(","));
+      paintLayers();
+      applyStack();
+      saveNow();
+    });
+  }
 
   btn720.addEventListener("click", () => setCanvasSize(1280, 720));
   btn1080.addEventListener("click", () => setCanvasSize(1920, 1080));
@@ -675,6 +849,11 @@
     if (data.pulse != null) layout.pulse = Number(data.pulse);
     if (typeof data.glass === "boolean") layout.glass = data.glass;
     if (data.grid) layout.grid = formatGrid(parseGrid(data.grid));
+    if (data.vizX != null) layout.vizX = Number(data.vizX) || 0;
+    if (data.vizY != null) layout.vizY = Number(data.vizY) || 0;
+    if (data.vizW != null) layout.vizW = Number(data.vizW) || MIN_VIZ;
+    if (data.vizH != null) layout.vizH = Number(data.vizH) || MIN_VIZ;
+    if (data.layers) layout.layers = parseLayers(data.layers);
   }
 
   if (window.JB2OverlayFx) {
@@ -682,6 +861,8 @@
   }
 
   applyLook();
+  applyVizBox();
+  paintLayers();
   setPreviewMode("cycle");
   setPaused(false);
 
@@ -711,6 +892,7 @@
       syncToolbar();
       applyLook();
       applyPanelBox();
+      applyVizBox();
       applyPreview();
       fitCanvas();
     });
