@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-pub const TWITCH_COMMAND_IDS: [&str; 3] = ["sr", "q", "si"];
+pub const TWITCH_COMMAND_IDS: [&str; 4] = ["sr", "q", "si", "jb"];
 const COOLDOWN_CAP_SECS: i32 = 86400;
 
 fn default_true() -> bool {

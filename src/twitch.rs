@@ -538,7 +538,7 @@ fn cmd_worker(app: Arc<App>) {
         if !cfg.twitch_commands_enabled {
             continue;
         }
-        let (reply, preview, ok) = run_chat_command(&app, &job.id, &job.args);
+        let (reply, preview, ok) = run_chat_command(&app, &job.id, &job.args, &job.nick);
         let reply = sanitize_privmsg(&reply);
         app.twitch
             .push_history(&job.nick, &job.id, &job.args, &reply, preview, ok);
@@ -548,8 +548,21 @@ fn cmd_worker(app: Arc<App>) {
     }
 }
 
-fn run_chat_command(app: &App, id: &str, args: &str) -> (String, Option<Value>, bool) {
+fn jb_reply(nick: &str) -> String {
+    let nick = nick.trim();
+    let mention = if nick.is_empty() {
+        String::new()
+    } else {
+        format!("@{nick} ")
+    };
+    format!(
+        "{mention}Jukeboks, request a song! !sr / !songrequest <song>, !q / !queue, !si / !songinfo"
+    )
+}
+
+fn run_chat_command(app: &App, id: &str, args: &str, nick: &str) -> (String, Option<Value>, bool) {
     match id {
+        "jb" => (jb_reply(nick), None, true),
         "sr" => {
             if args.is_empty() {
                 ("usage: !sr <song>".to_string(), None, false)
@@ -653,6 +666,7 @@ pub fn canonical_command(cmd: &str) -> Option<&'static str> {
         "songrequest" | "sr" => Some("sr"),
         "queue" | "q" => Some("q"),
         "songinfo" | "si" => Some("si"),
+        "jb" | "jukeboks" => Some("jb"),
         _ => None,
     }
 }
@@ -1496,7 +1510,13 @@ mod tests {
         assert_eq!(canonical_command("queue"), Some("q"));
         assert_eq!(canonical_command("si"), Some("si"));
         assert_eq!(canonical_command("songinfo"), Some("si"));
+        assert_eq!(canonical_command("jb"), Some("jb"));
+        assert_eq!(canonical_command("jukeboks"), Some("jb"));
         assert_eq!(canonical_command("help"), None);
+        assert_eq!(
+            jb_reply("tew020"),
+            "@tew020 Jukeboks, request a song! !sr / !songrequest <song>, !q / !queue, !si / !songinfo"
+        );
     }
 
     #[test]

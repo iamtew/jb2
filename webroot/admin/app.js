@@ -30,6 +30,7 @@ const CHAT_COMMAND_ROWS = [
   { id: 'sr', aliases: '!sr / !songrequest' },
   { id: 'q', aliases: '!q / !queue' },
   { id: 'si', aliases: '!si / !songinfo' },
+  { id: 'jb', aliases: '!jb / !jukeboks' },
 ];
 
 const select = document.getElementById('commandSelect');
@@ -633,7 +634,7 @@ function setCmdFeedback(text) {
 }
 
 function isChatCommandText(text) {
-  return /^(?:!sr|!songrequest|!q|!queue|!si|!songinfo)(?:\s|$)/i.test(String(text || '').trim());
+  return /^(?:!sr|!songrequest|!q|!queue|!si|!songinfo|!jb|!jukeboks)(?:\s|$)/i.test(String(text || '').trim());
 }
 
 function safeHttpsUrl(value) {
