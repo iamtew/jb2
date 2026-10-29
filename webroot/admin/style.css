@@ -1039,11 +1039,8 @@ input[type="file"] {
 }
 
 .twitch-log__line--cmd {
-  margin-left: -8px;
-  margin-right: -8px;
-  padding: 2px 8px;
   background: rgba(62, 200, 255, 0.12);
-  border-left: 3px solid var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .twitch-log__nick {
