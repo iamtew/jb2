@@ -76,6 +76,7 @@ struct CmdHistory {
     cmd: String,
     args: String,
     reply: String,
+    ok: bool,
     preview: Option<Value>,
 }
 
@@ -463,6 +464,7 @@ impl Hub {
                     "cmd": e.cmd,
                     "args": e.args,
                     "reply": e.reply,
+                    "ok": e.ok,
                 });
                 if let Some(preview) = &e.preview {
                     row["preview"] = preview.clone();
@@ -473,7 +475,15 @@ impl Hub {
         json!({ "entries": entries })
     }
 
-    fn push_history(&self, nick: &str, cmd: &str, args: &str, reply: &str, preview: Option<Value>) {
+    fn push_history(
+        &self,
+        nick: &str,
+        cmd: &str,
+        args: &str,
+        reply: &str,
+        preview: Option<Value>,
+        ok: bool,
+    ) {
         {
             let mut s = self.inner.lock().expect("twitch");
             let id = s.next_id;
@@ -485,6 +495,7 @@ impl Hub {
                 cmd: cmd.to_string(),
                 args: args.to_string(),
                 reply: reply.to_string(),
+                ok,
                 preview,
             });
             while s.history.len() > HISTORY_CAP {
@@ -527,30 +538,39 @@ fn cmd_worker(app: Arc<App>) {
         if !cfg.twitch_commands_enabled {
             continue;
         }
-        let (reply, preview) = run_chat_command(&app, &job.id, &job.args);
+        let (reply, preview, ok) = run_chat_command(&app, &job.id, &job.args);
         let reply = sanitize_privmsg(&reply);
         app.twitch
-            .push_history(&job.nick, &job.id, &job.args, &reply, preview);
+            .push_history(&job.nick, &job.id, &job.args, &reply, preview, ok);
         if !reply.is_empty() {
             let _ = app.twitch.enqueue_send(&reply);
         }
     }
 }
 
-fn run_chat_command(app: &App, id: &str, args: &str) -> (String, Option<Value>) {
+fn run_chat_command(app: &App, id: &str, args: &str) -> (String, Option<Value>, bool) {
     match id {
         "sr" => {
             if args.is_empty() {
-                ("usage: !sr <song>".to_string(), None)
+                ("usage: !sr <song>".to_string(), None, false)
             } else {
                 let env = app.song_request(args, false).envelope();
+                let ok = env.exit_code == 0;
                 let preview = sr_preview(args, &env);
-                (envelope_text(env), preview)
+                (envelope_text(env), preview, ok)
             }
         }
-        "q" => (envelope_text(app.queue_info().envelope()), None),
-        "si" => (envelope_text(app.song_info().envelope()), None),
-        _ => (String::new(), None),
+        "q" => {
+            let env = app.queue_info().envelope();
+            let ok = env.exit_code == 0;
+            (envelope_text(env), None, ok)
+        }
+        "si" => {
+            let env = app.song_info().envelope();
+            let ok = env.exit_code == 0;
+            (envelope_text(env), None, ok)
+        }
+        _ => (String::new(), None, false),
     }
 }
 
@@ -1359,25 +1379,28 @@ mod tests {
     #[test]
     fn history_json_newest_first_with_preview() {
         let hub = Hub::with_events(EventBus::new());
-        hub.push_history("Alice", "sr", "never gonna", "Added to queue: x.", None);
+        hub.push_history("Alice", "sr", "never gonna", "Added to queue: x.", None, true);
         hub.push_history(
             "Bob",
             "sr",
             "https://youtu.be/dQw4w9WgXcQ",
-            "Added to queue: Rick — Astley.",
+            "bad video: not playable on YouTube Music",
             Some(json!({
                 "title": "Rick",
                 "artist": "Astley",
                 "thumb": "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
                 "url": "https://youtu.be/dQw4w9WgXcQ"
             })),
+            false,
         );
         let payload = hub.history_json();
         let entries = payload["entries"].as_array().unwrap();
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0]["nick"], "Bob");
         assert_eq!(entries[0]["cmd"], "sr");
+        assert_eq!(entries[0]["ok"], false);
         assert_eq!(entries[0]["preview"]["title"], "Rick");
+        assert_eq!(entries[1]["ok"], true);
         assert_eq!(entries[1]["nick"], "Alice");
         assert!(entries[1].get("preview").is_none());
     }
@@ -1391,6 +1414,21 @@ mod tests {
         let p = sr_preview("https://youtu.be/dQw4w9WgXcQ", &env).unwrap();
         assert_eq!(p["thumb"], "https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg");
         assert_eq!(p["title"], "Song");
+    }
+
+    #[test]
+    fn sr_preview_youtube_fail_shows_title_and_channel() {
+        let env = Envelope::fail_data(
+            "bad video: not playable on YouTube Music",
+            json!({
+                "linkTitle": "The X-Files Opening Credits",
+                "linkArtist": "Emily Hinnekens",
+                "thumbnail": "https://i.ytimg.com/vi/v4-GcS1UQyg/mqdefault.jpg"
+            }),
+        );
+        let p = sr_preview("https://www.youtube.com/watch?v=v4-GcS1UQyg", &env).unwrap();
+        assert_eq!(p["title"], "The X-Files Opening Credits");
+        assert_eq!(p["artist"], "Emily Hinnekens");
     }
 
     #[test]

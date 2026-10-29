@@ -652,8 +652,15 @@ function renderCmdHistory(entries) {
     const args = e.args ? ` ${escapeHtml(e.args)}` : '';
     const reply = e.reply ? `<div class="cmd-history__reply">${escapeHtml(e.reply)}</div>` : '';
     const p = e.preview || null;
+    const outcome = e.ok === true ? 'ok' : e.ok === false ? 'deny' : '';
+    const cardClass = outcome
+      ? `cmd-history__card cmd-history__card--${outcome}`
+      : 'cmd-history__card';
+    const rowClass = outcome
+      ? `cmd-history__row cmd-history__row--${outcome}`
+      : 'cmd-history__row';
     let card = '';
-    if (p && (p.title || p.artist || p.thumb)) {
+    if (p && (p.title || p.artist || p.thumb || p.url)) {
       const title = escapeHtml(p.title || '');
       const artist = escapeHtml(p.artist || '');
       const meta = [title, artist].filter(Boolean).join(' — ');
@@ -664,10 +671,10 @@ function renderCmdHistory(entries) {
       const inner = `${img}<span class="cmd-history__meta">${meta}</span>`;
       const url = safeHttpsUrl(p.url);
       card = url
-        ? `<a class="cmd-history__card" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
-        : `<div class="cmd-history__card">${inner}</div>`;
+        ? `<a class="${cardClass}" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
+        : `<div class="${cardClass}">${inner}</div>`;
     }
-    return `<div class="cmd-history__row">
+    return `<div class="${rowClass}">
       <div class="cmd-history__head"><span class="cmd-history__nick">${nick}</span>!${cmd}${args}</div>
       ${card}
       ${reply}

@@ -587,10 +587,28 @@ body {
   align-items: center;
   gap: 8px;
   margin: 4px 0;
-  padding: 4px;
+  padding: 4px 4px 4px 8px;
   background: var(--row);
   color: inherit;
   text-decoration: none;
+}
+
+.cmd-history__row--ok .cmd-history__card--ok {
+  background: rgba(62, 200, 255, 0.16);
+  box-shadow: inset 4px 0 0 var(--cyan);
+}
+
+.cmd-history__row--deny .cmd-history__card--deny {
+  background: rgba(255, 122, 26, 0.22);
+  box-shadow: inset 4px 0 0 var(--orange);
+}
+
+.cmd-history__row--ok .cmd-history__reply {
+  color: var(--cyan);
+}
+
+.cmd-history__row--deny .cmd-history__reply {
+  color: var(--orange);
 }
 
 .cmd-history__thumb {

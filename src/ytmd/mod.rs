@@ -286,9 +286,7 @@ pub fn lookup_spotify_track_query(track_url: &str) -> Result<SpotifyOembed, Stri
     let payload: Value = resp
         .into_json()
         .map_err(|e| format!("spotify oEmbed: {e}"))?;
-    let title = as_string(payload.get("title").unwrap_or(&Value::Null));
-    let author = as_string(payload.get("author_name").unwrap_or(&Value::Null));
-    let thumbnail = as_string(payload.get("thumbnail_url").unwrap_or(&Value::Null));
+    let (title, author, thumbnail) = oembed_title_author_thumb(&payload);
     let query = format!("{title} {author}").trim().to_string();
     if query.is_empty() {
         return Err("spotify oEmbed: empty title and artist".into());
@@ -299,6 +297,42 @@ pub fn lookup_spotify_track_query(track_url: &str) -> Result<SpotifyOembed, Stri
         artist: author,
         thumbnail,
     })
+}
+
+/// Watch-page title/channel for the command-log card. Does not decide playability.
+pub fn lookup_youtube_oembed(video_id: &str) -> Option<(String, String, String)> {
+    let video_id = video_id.trim();
+    if video_id.is_empty() {
+        return None;
+    }
+    let watch = format!("https://www.youtube.com/watch?v={video_id}");
+    let oembed = format!(
+        "https://www.youtube.com/oembed?format=json&url={}",
+        url::form_urlencoded::byte_serialize(watch.as_bytes()).collect::<String>()
+    );
+    let resp = ureq::get(&oembed)
+        .set("Accept", "application/json")
+        .set("User-Agent", INNERTUBE_UA)
+        .timeout(DEFAULT_TIMEOUT)
+        .call()
+        .ok()?;
+    if resp.status() != 200 {
+        return None;
+    }
+    let payload: Value = resp.into_json().ok()?;
+    let (title, author, thumbnail) = oembed_title_author_thumb(&payload);
+    if title.is_empty() && author.is_empty() {
+        return None;
+    }
+    Some((title, author, thumbnail))
+}
+
+fn oembed_title_author_thumb(payload: &Value) -> (String, String, String) {
+    (
+        as_string(payload.get("title").unwrap_or(&Value::Null)),
+        as_string(payload.get("author_name").unwrap_or(&Value::Null)),
+        as_string(payload.get("thumbnail_url").unwrap_or(&Value::Null)),
+    )
 }
 
 fn innertube_client_version() -> String {
@@ -436,4 +470,22 @@ fn lookup_playlist_via_ytmd_search(
     Err(format!(
         "search returned no tracks for playlist \"{playlist_id}\""
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn oembed_reads_title_author_thumb() {
+        let (title, author, thumb) = oembed_title_author_thumb(&json!({
+            "title": "The X-Files Opening Credits",
+            "author_name": "Emily Hinnekens",
+            "thumbnail_url": "https://i.ytimg.com/vi/v4-GcS1UQyg/hqdefault.jpg"
+        }));
+        assert_eq!(title, "The X-Files Opening Credits");
+        assert_eq!(author, "Emily Hinnekens");
+        assert!(thumb.contains("v4-GcS1UQyg"));
+    }
 }

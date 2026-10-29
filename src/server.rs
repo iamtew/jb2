@@ -338,9 +338,24 @@ Transfer-Encoding: chunked\r\n\
                 if url_like {
                     link_thumb = format!("https://i.ytimg.com/vi/{video_id}/mqdefault.jpg");
                 }
-                let lookup = ytmd::lookup_song_by_video_id(&self.ytmd, &video_id)
-                    .unwrap_or_default();
-                (video_id, lookup)
+                if let Some((title, channel, thumb)) = ytmd::lookup_youtube_oembed(&video_id) {
+                    link_title = title;
+                    link_artist = channel;
+                    if !thumb.is_empty() {
+                        link_thumb = thumb;
+                    }
+                }
+                match ytmd::lookup_song_by_video_id(&self.ytmd, &video_id) {
+                    Some(lookup) => (video_id, lookup),
+                    None => {
+                        return fail_link(
+                            BAD_VIDEO_MSG,
+                            &link_thumb,
+                            &link_title,
+                            &link_artist,
+                        );
+                    }
+                }
             } else if url_like {
                 return Dispatch::Json(200, Envelope::fail("unsupported or invalid YouTube URL"));
             } else {
