@@ -75,6 +75,17 @@
     ui.songInfo.style.webkitBackdropFilter = "none";
   }
 
+  function syncFx() {
+    const fx = window.JB2OverlayFx;
+    if (!fx || !ui.songInfo) return;
+    fx.set({
+      theme: ui.songInfo.getAttribute("data-theme") || "lcd-glass",
+      pulse: pulseSpeed(),
+      glass: useGlass(),
+      playing: state.hasSignal && !state.isPaused,
+    });
+  }
+
   function setStatus(kind) {
     if (!ui.songInfo) return;
     if (!kind) {
@@ -92,6 +103,7 @@
       if (ui.playState) ui.playState.textContent = "⏸";
       setSongInfoOpacity(state.playingOpacity, duration);
       stopGlowPulse();
+      syncFx();
       return;
     }
     if (state.isPaused) {
@@ -99,12 +111,14 @@
       if (ui.playState) ui.playState.textContent = "⏸";
       setSongInfoOpacity(state.pausedOpacity, duration);
       stopGlowPulse();
+      syncFx();
       return;
     }
     setStatus(null);
     if (ui.playState) ui.playState.textContent = "⏵";
     setSongInfoOpacity(state.playingOpacity, duration);
     startGlowPulse();
+    syncFx();
   }
 
   const BASE_W = 500;
@@ -133,6 +147,7 @@
     state.glass = layout.glass !== false;
     applyChrome();
     applyVisual({ duration: 0 });
+    syncFx();
     window.requestAnimationFrame(() => {
       updateTextMarquee(ui.title, ui.titleWrap);
       updateTextMarquee(ui.artist, ui.artistWrap);
@@ -402,6 +417,10 @@
 
   applyChrome();
   applyVisual({ duration: 0 });
+
+  if (window.JB2OverlayFx) {
+    window.JB2OverlayFx.init(document.querySelector(".overlay-stage"));
+  }
 
   connect();
   followOverlayLayout();

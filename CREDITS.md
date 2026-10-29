@@ -54,6 +54,16 @@ Catalog and who paints them: [Typography](docs/md/typography.md). Overlay loads 
 
 CDNFonts redistributes faces from various foundries. Copies here are for offline OBS and GitHub Pages. If a foundry license is stricter than this project's needs, replace that face. CDNFonts Better VCR (artdzyk) is not the FontStruct face also named Better VCR (Petro Birov, SIL Open Font License 1.1).
 
+## Overlay runtime
+
+Vendored for Overlay and Overlay Stage (`webroot/`). License text sits next to the file.
+
+| File | Version | License |
+|---|---|---|
+| `webroot/vendor/pixi.min.js` | PixiJS 8.22.0 | MIT, Mathew Groves and Chad Engler. `webroot/vendor/pixi.LICENSE` |
+
+Same bundle as the docs hero. Overlay uses it for a transparent FX layer behind the now-playing widget.
+
 ## Docs site
 
 Vendored for the pages in `docs/`. Not part of the JB2 process. License texts sit next to the files.

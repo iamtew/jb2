@@ -112,6 +112,20 @@
     if (ui.totalTime) ui.totalTime.textContent = formatTime(DEMO_DURATION - demoPos);
   }
 
+  function syncFx() {
+    const fx = window.JB2OverlayFx;
+    if (!fx) return;
+    const playing =
+      previewMode !== "nosignal" &&
+      !(previewMode === "paused" || (previewMode === "cycle" && demoPaused));
+    fx.set({
+      theme: layout.theme,
+      pulse: layout.pulse,
+      glass: layout.glass,
+      playing,
+    });
+  }
+
   function applyLook() {
     songInfo.setAttribute("data-theme", layout.theme);
     songInfo.setAttribute("data-seek", layout.seekStyle);
@@ -124,6 +138,7 @@
       songInfo.style.setProperty("--glow-duration", `${(2 / speedScale).toFixed(2)}s`);
       songInfo.classList.add("is-glowing");
     }
+    syncFx();
   }
 
   function applyPreview() {
@@ -136,6 +151,7 @@
       songInfo.style.opacity = String(layout.playingOpacity);
       if (ui.playState) ui.playState.textContent = "⏸";
       songInfo.classList.remove("is-glowing");
+      syncFx();
       return;
     }
     if (paused) {
@@ -145,6 +161,7 @@
       songInfo.style.opacity = String(layout.pausedOpacity);
       if (ui.playState) ui.playState.textContent = "⏸";
       songInfo.classList.remove("is-glowing");
+      syncFx();
       return;
     }
     songInfo.classList.remove("is-status");
@@ -531,6 +548,10 @@
     if (data.pulse != null) layout.pulse = Number(data.pulse);
     if (typeof data.glass === "boolean") layout.glass = data.glass;
     if (data.grid) layout.grid = data.grid;
+  }
+
+  if (window.JB2OverlayFx) {
+    window.JB2OverlayFx.init(overlayBox);
   }
 
   applyLook();

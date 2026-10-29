@@ -282,6 +282,7 @@ body {
   cursor: grab;
   user-select: none;
   touch-action: none;
+  overflow: visible;
 }
 
 .overlay-box.is-dragging {

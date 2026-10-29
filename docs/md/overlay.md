@@ -6,6 +6,8 @@ Use it as an OBS browser source. It shows play/pause state, artist, title, album
 
 Look (theme, seek style, opacities, size, pulse, glass) comes from JB2 `overlayLayout`, same as position. Overlay Stage writes it; this page applies `GET /api/overlay` then `event: overlay` on `GET /api/events`. Set the OBS browser source to the same canvas size (1920×1080 or 1280×720). See [Overlay Stage](stage.md).
 
+Each theme paints a small PixiJS FX layer behind the widget (scan, motes, neon, and so on). Type and the seek bar stay HTML. Text-only (`glass` off or `?bg=0`) hides the FX. If WebGL fails, the canvas is removed and CSS look still works.
+
 Playback does not come from JB2. The page opens a WebSocket to [pear-desktop](https://github.com/pear-devs/pear-desktop):
 
 `ws://<host>:26538/api/v1/ws`

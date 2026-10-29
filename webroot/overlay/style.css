@@ -55,6 +55,14 @@ body.dev .dev-checkerboard {
     display: block;
 }
 
+#overlayFx {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
 #output {
     position: relative;
     z-index: 1;
@@ -85,6 +93,14 @@ body.dev .dev-checkerboard {
     animation: overlay-glow var(--glow-duration, 2s) ease-in-out infinite;
 }
 
+#songInfo.is-glowing[data-theme="lower-third"] {
+    animation: overlay-glow-lower-third var(--glow-duration, 2s) ease-in-out infinite;
+}
+
+#songInfo.is-glowing[data-theme="amber-terminal"] {
+    animation: overlay-glow-amber var(--glow-duration, 2s) ease-in-out infinite;
+}
+
 #songInfo.is-glowing[data-theme="crypt"] {
     animation: overlay-glow-crypt var(--glow-duration, 2s) ease-in-out infinite;
 }
@@ -111,6 +127,38 @@ body.dev .dev-checkerboard {
 
 #songInfo.is-glowing[data-theme="poster"] {
     animation: overlay-glow-poster var(--glow-duration, 2s) ease-in-out infinite;
+}
+
+@keyframes overlay-glow-lower-third {
+    0%,
+    100% {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.12),
+            -4px 0 12px rgba(255, 26, 26, 0.25),
+            0 10px 28px rgba(0, 0, 0, 0.5);
+    }
+    50% {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.18),
+            -6px 0 22px rgba(255, 40, 40, 0.7),
+            0 10px 28px rgba(0, 0, 0, 0.5);
+    }
+}
+
+@keyframes overlay-glow-amber {
+    0%,
+    100% {
+        box-shadow:
+            0 0 0 1px #3a2200,
+            inset 0 0 36px rgba(255, 176, 0, 0.2),
+            0 0 12px rgba(255, 176, 0, 0.2);
+    }
+    50% {
+        box-shadow:
+            0 0 0 1px #3a2200,
+            inset 0 0 48px rgba(255, 176, 0, 0.38),
+            0 0 26px rgba(255, 176, 0, 0.45);
+    }
 }
 
 @keyframes overlay-glow {
@@ -358,14 +406,17 @@ body.dev .dev-checkerboard {
 #songInfo[data-theme="lcd-glass"] {
     font-family: 'Better VCR', sans-serif;
     color: #e0fefe;
-    background: linear-gradient(135deg,
-        rgba(14, 34, 62, 0.66),
-        rgba(48, 92, 144, 0.33));
-    border: 1px solid rgba(170, 220, 255, 0.28);
+    background: linear-gradient(160deg,
+        rgba(28, 62, 110, 0.72) 0%,
+        rgba(14, 34, 62, 0.58) 42%,
+        rgba(48, 92, 144, 0.38) 100%);
+    border: 1px solid rgba(190, 236, 255, 0.42);
     border-radius: 16px;
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.2),
-        0 10px 30px rgba(0, 0, 0, 0.28);
+        inset 0 1px 0 rgba(255, 255, 255, 0.38),
+        inset 0 -10px 22px rgba(0, 40, 80, 0.22),
+        0 0 0 1px rgba(80, 180, 255, 0.12),
+        0 14px 34px rgba(0, 0, 0, 0.32);
     text-shadow: none;
 }
 
@@ -374,11 +425,13 @@ body.dev .dev-checkerboard {
     color: #f4f4f4;
     gap: 4px;
     padding: 14px 18px 14px 22px;
-    background: #1a1a1a;
+    background: linear-gradient(180deg, #2a2a2a 0%, #161616 55%, #101010 100%);
     border: 0;
     border-radius: 0;
-    border-left: 6px solid #e11;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    border-left: 6px solid #ff1a1a;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 10px 28px rgba(0, 0, 0, 0.5);
     text-shadow: none;
 }
 
@@ -407,7 +460,8 @@ body.dev .dev-checkerboard {
     border-radius: 0;
     box-shadow:
         0 0 0 1px #3a2200,
-        inset 0 0 24px rgba(255, 176, 0, 0.12);
+        inset 0 0 36px rgba(255, 176, 0, 0.2),
+        0 0 18px rgba(255, 176, 0, 0.18);
     text-shadow: 0 0 8px rgba(255, 176, 0, 0.45);
 }
 
@@ -427,10 +481,12 @@ body.dev .dev-checkerboard {
 #songInfo[data-theme="crypt"] {
     font-family: 'Flapdoodle', sans-serif;
     color: #e8c8c8;
-    background: #120404;
-    border: 1px solid #6a1010;
+    background: radial-gradient(ellipse at 50% 0%, #2a0808 0%, #120404 55%, #070202 100%);
+    border: 1px solid #8a1818;
     border-radius: 4px;
-    box-shadow: inset 0 0 28px rgba(80, 0, 0, 0.55);
+    box-shadow:
+        inset 0 0 32px rgba(80, 0, 0, 0.7),
+        0 0 0 1px #3a0808;
     text-shadow: 0 0 6px rgba(120, 8, 8, 0.5);
 }
 
@@ -449,10 +505,13 @@ body.dev .dev-checkerboard {
 #songInfo[data-theme="fraktur"] {
     font-family: 'Germania One', serif;
     color: #3a2410;
-    background: #efe4c8;
+    background: linear-gradient(180deg, #f6edd4 0%, #efe4c8 40%, #e4d4ae 100%);
     border: 2px solid #8a6a20;
     border-radius: 2px;
-    box-shadow: 0 0 0 1px #c9b070;
+    box-shadow:
+        0 0 0 1px #c9b070,
+        inset 0 1px 0 rgba(255, 255, 255, 0.55),
+        0 8px 18px rgba(90, 60, 10, 0.18);
     text-shadow: none;
 }
 
@@ -474,8 +533,8 @@ body.dev .dev-checkerboard {
     background: #111;
     border: 0;
     border-radius: 0;
-    border-left: 10px solid #c00;
-    box-shadow: none;
+    border-left: 12px solid #c00;
+    box-shadow: 12px 12px 0 #1a1a1a;
     text-shadow: none;
 }
 
@@ -501,6 +560,8 @@ body.dev .dev-checkerboard {
     color: #39ff14;
     background: #141416;
     border: 1px solid #ff2bd6;
+    outline: 1px solid #39ff14;
+    outline-offset: -3px;
     border-radius: 0;
     box-shadow: none;
     text-shadow: 0 0 4px #39ff14;
@@ -521,12 +582,15 @@ body.dev .dev-checkerboard {
 #songInfo[data-theme="drop"] {
     font-family: 'Lemondrop', cursive;
     color: #5a2040;
-    background: linear-gradient(135deg,
-        rgba(255, 230, 90, 0.85),
-        rgba(255, 140, 190, 0.7));
-    border: 2px solid rgba(255, 255, 255, 0.65);
+    background: linear-gradient(160deg,
+        rgba(255, 250, 180, 0.95) 0%,
+        rgba(255, 230, 90, 0.88) 40%,
+        rgba(255, 140, 190, 0.78) 100%);
+    border: 2px solid rgba(255, 255, 255, 0.8);
     border-radius: 28px;
-    box-shadow: 0 8px 20px rgba(255, 120, 180, 0.2);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.85),
+        0 10px 24px rgba(255, 120, 180, 0.28);
     text-shadow: none;
 }
 
@@ -546,10 +610,12 @@ body.dev .dev-checkerboard {
 #songInfo[data-theme="capsule"] {
     font-family: 'Pill Gothic 600mg', sans-serif;
     color: #0f4a42;
-    background: #d8f4ee;
+    background: radial-gradient(ellipse at 30% 20%, #f2fffc 0%, #d8f4ee 45%, #bfe8de 100%);
     border: 2px solid #3cb89a;
     border-radius: 999px;
-    box-shadow: inset 0 0 10px rgba(80, 200, 170, 0.25);
+    box-shadow:
+        inset 0 0 18px rgba(80, 200, 170, 0.35),
+        inset 0 -8px 16px rgba(20, 100, 90, 0.08);
     text-shadow: none;
 }
 
@@ -569,10 +635,12 @@ body.dev .dev-checkerboard {
 #songInfo[data-theme="poster"] {
     font-family: 'Londrina Solid', sans-serif;
     color: #fff4e0;
-    background: #e85d04;
+    background: linear-gradient(180deg, #ff7a1a 0%, #e85d04 55%, #c44a00 100%);
     border: 4px solid #00c8ff;
     border-radius: 12px;
-    box-shadow: 6px 6px 0 #00c8ff;
+    box-shadow:
+        8px 8px 0 #00c8ff,
+        8px 8px 0 2px #003848;
     text-shadow: 0 0 6px rgba(0, 220, 255, 0.35);
 }
 
@@ -596,6 +664,7 @@ body.dev .dev-checkerboard {
     background: transparent;
     border-color: transparent;
     box-shadow: none;
+    outline: none;
 }
 
 #songInfo[data-seek="sesh-sofa"] #fill,
