@@ -28,6 +28,7 @@
   const gridChecks = document.querySelectorAll('input[name="grid"]');
   const gridSvg = document.getElementById("stageGridLines");
   const previewBtn = document.getElementById("previewBtn");
+  const copyOverlayUrl = document.getElementById("copyOverlayUrl");
   const ui = {
     artist: document.getElementById("artist"),
     artistWrap: document.getElementById("artistWrap"),
@@ -590,6 +591,49 @@
   previewBtn.addEventListener("click", () => {
     const i = PREVIEW_MODES.indexOf(previewMode);
     setPreviewMode(PREVIEW_MODES[(i + 1) % PREVIEW_MODES.length]);
+  });
+  // execCommand in the click itself. Off-screen nodes often return false;
+  // writeText after await loses the user gesture.
+  function copyNow(text) {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.setAttribute("readonly", "");
+    el.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0";
+    document.body.appendChild(el);
+    el.focus();
+    el.select();
+    el.setSelectionRange(0, text.length);
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch (_) {
+      /* fall through */
+    }
+    el.remove();
+    return ok;
+  }
+  copyOverlayUrl.addEventListener("click", () => {
+    const text = `${window.location.origin}/overlay/`;
+    const original = copyOverlayUrl.textContent;
+    function flash(ok) {
+      copyOverlayUrl.textContent = ok ? "Copied!" : "Copy failed";
+      window.setTimeout(() => {
+        copyOverlayUrl.textContent = original;
+      }, 1200);
+    }
+    if (copyNow(text)) {
+      flash(true);
+      return;
+    }
+    window.focus();
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => flash(true),
+        () => flash(false)
+      );
+      return;
+    }
+    flash(false);
   });
   document.querySelectorAll("[data-reset]").forEach((btn) => {
     btn.addEventListener("click", () => {

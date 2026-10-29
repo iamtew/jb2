@@ -2,7 +2,7 @@
 
 `http://localhost:42420/stage/`
 
-Composer for placing the now-playing panel on a 16:9 canvas. Open it from the landing page or the tray **Open Overlay Stage**. OBS still uses [`/overlay/`](overlay.md) as a browser source.
+Composer for placing the now-playing panel on a 16:9 canvas. Open it from the landing page or the tray **Open Overlay Stage**. OBS still uses [`/overlay/`](overlay.md) as a browser source. **Copy Overlay URL** on Stage and in the tray copies that URL.
 
 JB2 owns the layout (`overlayLayout` in `jb2.sqlite`). Dragging or resizing the panel live-updates `/overlay/` over `GET /api/events` (`event: overlay`). Releasing the pointer writes the layout. Look settings save immediately. Stage uses placeholder track text; the preview button cycles play, pause, no-signal, and an 8s auto loop.
 

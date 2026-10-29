@@ -3,8 +3,12 @@
 use crate::httpctl;
 use std::mem::size_of;
 use windows::core::{w, PCWSTR};
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{GlobalFree, HANDLE, HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::System::DataExchange::{
+    CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::Shell::{
     ExtractIconExW, ShellExecuteW, Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD,
@@ -24,6 +28,7 @@ const ID_OPEN_HOME: usize = 1001;
 const ID_OPEN_ADMIN: usize = 1002;
 const ID_OPEN_OVERLAY: usize = 1003;
 const ID_OPEN_STAGE: usize = 1007;
+const ID_COPY_OVERLAY: usize = 1008;
 const ID_ABOUT: usize = 1004;
 const ID_RESTART: usize = 1005;
 const ID_QUIT: usize = 1006;
@@ -120,6 +125,7 @@ fn show_menu(hwnd: HWND) {
         let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_HOME, w!("Open Home"));
         let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_ADMIN, w!("Open Admin"));
         let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_OVERLAY, w!("Open Overlay"));
+        let _ = AppendMenuW(menu, MF_STRING, ID_COPY_OVERLAY, w!("Copy Overlay URL"));
         let _ = AppendMenuW(menu, MF_STRING, ID_OPEN_STAGE, w!("Open Overlay Stage"));
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         let _ = AppendMenuW(menu, MF_STRING, ID_ABOUT, w!("About"));
@@ -144,6 +150,7 @@ fn show_menu(hwnd: HWND) {
             ID_OPEN_HOME => open_url(&httpctl::serving_url("/")),
             ID_OPEN_ADMIN => open_url(&httpctl::serving_url("/admin/")),
             ID_OPEN_OVERLAY => open_url(&httpctl::serving_url("/overlay/")),
+            ID_COPY_OVERLAY => copy_text(hwnd, &httpctl::serving_url("/overlay/")),
             ID_OPEN_STAGE => open_url(&httpctl::serving_url("/stage/")),
             ID_ABOUT => show_about(hwnd),
             ID_RESTART => httpctl::restart(),
@@ -193,6 +200,47 @@ fn show_about(hwnd: HWND) {
             &HSTRING::from("About"),
             MB_OK | MB_ICONINFORMATION,
         );
+    }
+}
+
+fn copy_text(hwnd: HWND, text: &str) {
+    let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+    let bytes = wide.len() * size_of::<u16>();
+    unsafe {
+        // Another process can hold the clipboard for a few ms.
+        let mut opened = OpenClipboard(hwnd).is_ok();
+        if !opened {
+            for _ in 0..8 {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                if OpenClipboard(hwnd).is_ok() {
+                    opened = true;
+                    break;
+                }
+            }
+        }
+        if !opened {
+            return;
+        }
+        let _ = EmptyClipboard();
+        let Ok(hmem) = GlobalAlloc(GMEM_MOVEABLE, bytes) else {
+            let _ = CloseClipboard();
+            return;
+        };
+        let ptr = GlobalLock(hmem);
+        if ptr.is_null() {
+            let _ = GlobalFree(hmem);
+            let _ = CloseClipboard();
+            return;
+        }
+        std::ptr::copy_nonoverlapping(wide.as_ptr(), ptr.cast::<u16>(), wide.len());
+        let _ = GlobalUnlock(hmem);
+        // 13 = CF_UNICODETEXT
+        if SetClipboardData(13, HANDLE(hmem.0)).is_err() {
+            let _ = GlobalFree(hmem);
+            let _ = CloseClipboard();
+            return;
+        }
+        let _ = CloseClipboard();
     }
 }
 
