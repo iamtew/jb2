@@ -1,0 +1,166 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #111;
+  color: #eee;
+  font-family: "Better VCR", sans-serif;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.stage-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px 20px;
+  padding: 12px 16px;
+  background: #171717;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stage-bar h1 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.stage-hint {
+  margin: 0;
+  flex: 1 1 240px;
+  color: #99aab5;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.stage-hint code {
+  color: #0ff;
+}
+
+.stage-sizes {
+  display: flex;
+  gap: 8px;
+}
+
+.stage-size {
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #eee;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.stage-size.is-active {
+  border-color: #0ff;
+  color: #0ff;
+}
+
+.stage-fit {
+  flex: 1 1 auto;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.stage-canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: #1a1a1a;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.stage-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: #1a1a1a;
+  background-image:
+    linear-gradient(45deg, #333 25%, transparent 25%),
+    linear-gradient(-45deg, #333 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #333 75%),
+    linear-gradient(-45deg, transparent 75%, #333 75%),
+    linear-gradient(
+      to right,
+      transparent calc(33.333% - 0.5px),
+      rgba(0, 255, 255, 0.45) calc(33.333% - 0.5px),
+      rgba(0, 255, 255, 0.45) calc(33.333% + 0.5px),
+      transparent calc(33.333% + 0.5px)
+    ),
+    linear-gradient(
+      to right,
+      transparent calc(66.666% - 0.5px),
+      rgba(0, 255, 255, 0.45) calc(66.666% - 0.5px),
+      rgba(0, 255, 255, 0.45) calc(66.666% + 0.5px),
+      transparent calc(66.666% + 0.5px)
+    ),
+    linear-gradient(
+      to right,
+      transparent calc(50% - 0.5px),
+      rgba(255, 64, 0, 0.55) calc(50% - 0.5px),
+      rgba(255, 64, 0, 0.55) calc(50% + 0.5px),
+      transparent calc(50% + 0.5px)
+    ),
+    linear-gradient(
+      to bottom,
+      transparent calc(33.333% - 0.5px),
+      rgba(0, 255, 255, 0.45) calc(33.333% - 0.5px),
+      rgba(0, 255, 255, 0.45) calc(33.333% + 0.5px),
+      transparent calc(33.333% + 0.5px)
+    ),
+    linear-gradient(
+      to bottom,
+      transparent calc(66.666% - 0.5px),
+      rgba(0, 255, 255, 0.45) calc(66.666% - 0.5px),
+      rgba(0, 255, 255, 0.45) calc(66.666% + 0.5px),
+      transparent calc(66.666% + 0.5px)
+    ),
+    linear-gradient(
+      to bottom,
+      transparent calc(50% - 0.5px),
+      rgba(255, 64, 0, 0.55) calc(50% - 0.5px),
+      rgba(255, 64, 0, 0.55) calc(50% + 0.5px),
+      transparent calc(50% + 0.5px)
+    );
+  background-size:
+    32px 32px,
+    32px 32px,
+    32px 32px,
+    32px 32px,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%;
+  background-position:
+    0 0,
+    0 16px,
+    16px -16px,
+    -16px 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0;
+}
+
+#songInfo {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+#songInfo.is-dragging {
+  cursor: grabbing;
+}

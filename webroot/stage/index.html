@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Overlay Stage</title>
+    <link rel="icon" href="/img/jukeboks.png" />
+    <link rel="stylesheet" href="/overlay/style.css?v=20261029s" />
+    <link rel="stylesheet" href="/stage/style.css?v=20261029s" />
+  </head>
+  <body>
+    <header class="stage-bar">
+      <h1>Overlay Stage</h1>
+      <p class="stage-hint">Drag the overlay. OBS at <code>/overlay/</code> follows live. Snap to thirds and center.</p>
+      <div class="stage-sizes" role="group" aria-label="Canvas size">
+        <button type="button" id="size720" class="stage-size">720p</button>
+        <button type="button" id="size1080" class="stage-size">1080p</button>
+      </div>
+    </header>
+    <div class="stage-fit" id="stageFit">
+      <div class="stage-canvas" id="stageCanvas">
+        <div class="stage-grid" aria-hidden="true"></div>
+        <div id="songInfo">
+          <div id="infoRow">
+            <div id="playState">⏵</div>
+            <div id="textBlock">
+              <div id="artistWrap">
+                <div id="artist"><span class="overlay-marquee-track">Placeholder Artist Name That Overflows</span></div>
+              </div>
+              <div id="titleWrap">
+                <div id="title"><span class="overlay-marquee-track">A Very Long Placeholder Title For Marquee</span></div>
+              </div>
+              <div id="albumWrap">
+                <div id="album"><span class="overlay-marquee-track">Placeholder Album Title Overflow Example</span></div>
+              </div>
+            </div>
+          </div>
+          <div id="progress">
+            <span id="currentTime">00:00</span>
+            <div id="bar">
+              <div id="fill"></div>
+              <div id="marker"></div>
+            </div>
+            <span id="totalTime">03:00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="/stage/app.js?v=20261029s"></script>
+  </body>
+</html>
