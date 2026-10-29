@@ -522,12 +522,12 @@ Transfer-Encoding: chunked\r\n\
             queue_payload = fresh;
         }
         self.seed.sync_from_queue(&queue_payload, &current_video_id);
-        let mut env = ytmd::build_song_request_response(&video_id, &queue_payload, &lookup);
-        if play_now {
-            if let Some(msg) = env.message.as_mut() {
-                *msg = msg.replacen("Added to queue:", "Playing now:", 1);
-            }
-        }
+        let env = ytmd::build_song_request_response(
+            &video_id,
+            &queue_payload,
+            &lookup,
+            Some(&song_payload),
+        );
         self.emit_queue();
         self.emit_seed();
         Dispatch::Json(
@@ -548,6 +548,7 @@ Transfer-Encoding: chunked\r\n\
                 video_id,
                 &queue_payload,
                 lookup,
+                None,
             )));
         }
         let idx = ytmd::queue_index_for_video_id(&queue_payload, video_id, true);
@@ -564,6 +565,7 @@ Transfer-Encoding: chunked\r\n\
                 video_id,
                 &queue_payload,
                 lookup,
+                None,
             )));
         }
         self.ytmd.post_json(
@@ -581,7 +583,7 @@ Transfer-Encoding: chunked\r\n\
         }
         self.seed.sync_from_queue(&fresh, video_id);
         Ok(playing_now(ytmd::build_song_request_response(
-            video_id, &fresh, lookup,
+            video_id, &fresh, lookup, None,
         )))
     }
 

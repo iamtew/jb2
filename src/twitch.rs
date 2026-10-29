@@ -548,15 +548,19 @@ fn cmd_worker(app: Arc<App>) {
     }
 }
 
-fn jb_reply(nick: &str) -> String {
+fn mention(nick: &str) -> String {
     let nick = nick.trim();
-    let mention = if nick.is_empty() {
+    if nick.is_empty() {
         String::new()
     } else {
         format!("@{nick} ")
-    };
+    }
+}
+
+fn jb_reply(nick: &str) -> String {
     format!(
-        "{mention}Jukeboks, request a song! !sr / !songrequest <song>, !q / !queue, !si / !songinfo"
+        "{}Jukeboks, request a song! !sr / !songrequest <song>, !q / !queue, !si / !songinfo",
+        mention(nick)
     )
 }
 
@@ -570,7 +574,11 @@ fn run_chat_command(app: &App, id: &str, args: &str, nick: &str) -> (String, Opt
                 let env = app.song_request(args, false).envelope();
                 let ok = env.exit_code == 0;
                 let preview = sr_preview(args, &env);
-                (envelope_text(env), preview, ok)
+                let mut text = envelope_text(env);
+                if ok {
+                    text = format!("{}{text}", mention(nick));
+                }
+                (text, preview, ok)
             }
         }
         "q" => {
@@ -1516,6 +1524,13 @@ mod tests {
         assert_eq!(
             jb_reply("tew020"),
             "@tew020 Jukeboks, request a song! !sr / !songrequest <song>, !q / !queue, !si / !songinfo"
+        );
+        assert_eq!(
+            format!(
+                "{}Added to queue: Artist - Title. #3 in queue ~4:20 until play.",
+                mention("user")
+            ),
+            "@user Added to queue: Artist - Title. #3 in queue ~4:20 until play."
         );
     }
 

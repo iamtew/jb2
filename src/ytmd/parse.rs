@@ -1056,6 +1056,7 @@ pub fn build_song_request_response(
     video_id: &str,
     queue_payload: &Value,
     lookup: &SongLookup,
+    song_payload: Option<&Value>,
 ) -> Envelope {
     let mut data = json!({"videoId": video_id});
     let mut title = lookup.title.clone();
@@ -1095,14 +1096,71 @@ pub fn build_song_request_response(
     if !artist.is_empty() {
         data["artist"] = json!(artist);
     }
-    let message = if !title.is_empty() && !artist.is_empty() {
-        format!("Added to queue: {title} — {artist}.")
+    let mut message = if !artist.is_empty() && !title.is_empty() {
+        format!("Added to queue: {artist} - {title}.")
     } else if !title.is_empty() {
         format!("Added to queue: {title}.")
     } else {
         format!("Added to queue: {video_id}.")
     };
+    if let Some(song) = song_payload {
+        if let Some((pos, wait)) = queue_position_and_wait(queue_payload, song, video_id) {
+            message.push_str(&format!(
+                " #{pos} in queue ~{} until play.",
+                format_wait(wait)
+            ));
+        }
+    }
     Envelope::ok_msg(message, data)
+}
+
+/// 1-based index from the current track, plus seconds until `video_id` starts.
+/// None if the video is current or not in the remaining queue.
+fn queue_position_and_wait(
+    queue_payload: &Value,
+    song_payload: &Value,
+    video_id: &str,
+) -> Option<(usize, i32)> {
+    let video_id = video_id.trim();
+    if video_id.is_empty() {
+        return None;
+    }
+    let song_data = flatten_song_payload(song_payload);
+    let mut entries = collect_queue_entries_for_command(queue_payload);
+    entries = reorder_queue_entries_from_current_song(entries, &song_data);
+    let mut found = None;
+    for (i, e) in entries.iter().enumerate() {
+        if e.video_id.eq_ignore_ascii_case(video_id) {
+            found = Some(i);
+        }
+    }
+    let idx = found?;
+    if idx == 0 {
+        return None;
+    }
+    let mut wait = current_remaining_seconds(&song_data, entries.first());
+    // ponytail: missing lengths count as 0, so ETA can be short; add when YTMD always sends durations.
+    for e in &entries[1..idx] {
+        wait += e.duration_seconds;
+    }
+    Some((idx + 1, wait))
+}
+
+fn current_remaining_seconds(song_data: &Value, current: Option<&QueueEntrySummary>) -> i32 {
+    let duration = as_f64(song_data.get("songDuration").unwrap_or(&Value::Null))
+        .map(|n| n as i32)
+        .filter(|n| *n > 0)
+        .or_else(|| current.map(|e| e.duration_seconds).filter(|n| *n > 0))
+        .unwrap_or(0);
+    let elapsed = as_f64(song_data.get("elapsedSeconds").unwrap_or(&Value::Null))
+        .map(|n| n as i32)
+        .unwrap_or(0);
+    (duration - elapsed).max(0)
+}
+
+fn format_wait(total_seconds: i32) -> String {
+    let s = total_seconds.max(0);
+    format!("{}:{:02}", s / 60, s % 60)
 }
 
 fn extract_song_metadata(payload: &Value) -> (String, String) {
@@ -1974,6 +2032,32 @@ mod tests {
                 .map(|t| t.video_id.as_str())
                 .collect::<Vec<_>>(),
             ["q1", "q2"]
+        );
+    }
+
+    #[test]
+    fn song_request_reply_includes_position_and_wait() {
+        let queue = json!({
+            "items": [
+                { "videoId": "cur", "title": "Now", "artist": "A", "duration": "3:00" },
+                { "videoId": "mid", "title": "Mid", "artist": "B", "duration": "2:00" },
+                { "videoId": "new", "title": "Title", "artist": "Artist", "duration": "3:33" }
+            ]
+        });
+        let song = json!({
+            "videoId": "cur",
+            "elapsedSeconds": 40,
+            "songDuration": 180
+        });
+        let lookup = SongLookup {
+            title: "Title".into(),
+            artist: "Artist".into(),
+            duration: 213,
+        };
+        let env = build_song_request_response("new", &queue, &lookup, Some(&song));
+        assert_eq!(
+            env.message.as_deref(),
+            Some("Added to queue: Artist - Title. #3 in queue ~4:20 until play.")
         );
     }
 }
