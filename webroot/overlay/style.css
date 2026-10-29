@@ -1,6 +1,14 @@
 /* Import Better VCR font FIRST */
 @import url('https://fonts.cdnfonts.com/css/better-vcr');
 
+@font-face {
+    font-family: Geist;
+    src: url("../vendor/Geist-Variable.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* Global reset for the OBS overlay canvas. */
 html,
 body {
@@ -64,33 +72,25 @@ body.dev .dev-checkerboard {
     padding: 20px;
 }
 
-/* LCD glass: translucent fill. Tune these alphas to change see-through amount. */
+/* Structure only. Theme rules paint fill, type, and chrome. */
 #songInfo {
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: 6px;
     padding: 20px;
     font-size: 1.2em;
-    color: #e0fefe;
     width: 500px;
     position: absolute;
     left: 0;
     top: 0;
     z-index: 2;
     opacity: 1;
+    transform-origin: 0 0;
     transition: opacity 180ms ease;
-    background: linear-gradient(135deg,
-        rgba(14, 34, 62, 0.66),
-        rgba(48, 92, 144, 0.33));
-    border: 1px solid rgba(170, 220, 255, 0.28);
-    border-radius: 16px;
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.2),
-        0 10px 30px rgba(0, 0, 0, 0.28);
-    text-shadow: none;
 }
 
-#songInfo.is-glowing {
+#songInfo.is-glowing[data-theme="lcd-glass"] {
     animation: overlay-glow var(--glow-duration, 2s) ease-in-out infinite;
 }
 
@@ -182,7 +182,6 @@ body.dev .dev-checkerboard {
     100% { transform: translateX(calc(-1 * var(--marquee-distance, 0px))); }
 }
 
-/* Progress bar — original yellow/red indicator gradient. */
 #progress {
     display: flex;
     align-items: center;
@@ -200,7 +199,8 @@ body.dev .dev-checkerboard {
 
 #bar {
     position: relative;
-    width: 500px;
+    flex: 1;
+    min-width: 0;
     height: 24px;
     background: rgba(255, 255, 255, 0.2);
     border-radius: 12px;
@@ -213,12 +213,7 @@ body.dev .dev-checkerboard {
     left: 0;
     height: 100%;
     width: 0;
-    background: linear-gradient(to right,
-        #E5F20D,
-        #F20D0D,
-        #E5F20D);
     background-size: 200% 100%;
-    box-shadow: 0 0 8px #F20D0D, 0 0 12px #E5F20D;
     transition: width 0.15s linear;
 }
 
@@ -231,4 +226,124 @@ body.dev .dev-checkerboard {
     background: #eee;
     transform: translateX(0);
     z-index: 2;
+}
+
+#overlayState {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    font-size: 2em;
+    letter-spacing: 0.12em;
+    pointer-events: none;
+}
+
+#songInfo.is-status #infoRow,
+#songInfo.is-status #progress {
+    visibility: hidden;
+}
+
+#songInfo.is-status #overlayState {
+    display: flex;
+}
+
+/* LCD Glass — default look. */
+#songInfo,
+#songInfo[data-theme="lcd-glass"] {
+    font-family: 'Better VCR', sans-serif;
+    color: #e0fefe;
+    background: linear-gradient(135deg,
+        rgba(14, 34, 62, 0.66),
+        rgba(48, 92, 144, 0.33));
+    border: 1px solid rgba(170, 220, 255, 0.28);
+    border-radius: 16px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        0 10px 30px rgba(0, 0, 0, 0.28);
+    text-shadow: none;
+}
+
+#songInfo[data-theme="lower-third"] {
+    font-family: Geist, system-ui, sans-serif;
+    color: #f4f4f4;
+    gap: 4px;
+    padding: 14px 18px 14px 22px;
+    background: #1a1a1a;
+    border: 0;
+    border-radius: 0;
+    border-left: 6px solid #e11;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    text-shadow: none;
+}
+
+#songInfo[data-theme="lower-third"] #title {
+    font-weight: 650;
+    letter-spacing: 0.01em;
+}
+
+#songInfo[data-theme="lower-third"] #bar {
+    height: 6px;
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.16);
+}
+
+#songInfo[data-theme="lower-third"] #marker {
+    width: 2px;
+    height: 6px;
+    background: #fff;
+}
+
+#songInfo[data-theme="amber-terminal"] {
+    font-family: 'Better VCR', ui-monospace, monospace;
+    color: #ffb000;
+    background: #050505;
+    border: 2px solid #ffb000;
+    border-radius: 0;
+    box-shadow:
+        0 0 0 1px #3a2200,
+        inset 0 0 24px rgba(255, 176, 0, 0.12);
+    text-shadow: 0 0 8px rgba(255, 176, 0, 0.45);
+}
+
+#songInfo[data-theme="amber-terminal"] #bar {
+    height: 10px;
+    border-radius: 0;
+    background: #1a1200;
+    box-shadow: inset 0 0 0 1px #ffb000;
+}
+
+#songInfo[data-theme="amber-terminal"] #marker {
+    width: 8px;
+    height: 10px;
+    background: #ffb000;
+}
+
+#songInfo.is-text-only {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+}
+
+#songInfo[data-seek="sesh-sofs"] #fill,
+#songInfo:not([data-seek]) #fill {
+    background: linear-gradient(to right, #E5F20D, #F20D0D, #E5F20D);
+    box-shadow: 0 0 8px #F20D0D, 0 0 12px #E5F20D;
+}
+
+#songInfo[data-seek="ice"] #fill {
+    background: linear-gradient(to right, #8ef6ff, #e8ffff, #3ad0ff);
+    box-shadow: 0 0 8px #3ad0ff;
+}
+
+#songInfo[data-seek="magenta"] #fill {
+    background: linear-gradient(to right, #ff4dce, #9b5cff, #ff4dce);
+    box-shadow: 0 0 8px #ff4dce;
+}
+
+#songInfo[data-seek="white"] #fill {
+    background: #eee;
+    box-shadow: none;
 }

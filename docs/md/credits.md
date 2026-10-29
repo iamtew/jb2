@@ -33,7 +33,7 @@ Compiled into `jb2`. Versions are the ones locked in `Cargo.lock`.
 
 ## Fonts
 
-[Geist Sans](https://github.com/vercel/geist-font) variable, v1.8.2, SIL Open Font License 1.1, The Geist Project Authors (Vercel). Vendored as `webroot/vendor/Geist-Variable.woff2` and `docs/vendor/Geist-Variable.woff2`. License text sits next to each file as `Geist.LICENSE`. Admin, Overlay Stage, the local landing page, and this docs site load it for body copy.
+[Geist Sans](https://github.com/vercel/geist-font) variable, v1.8.2, SIL Open Font License 1.1, The Geist Project Authors (Vercel). Vendored as `webroot/vendor/Geist-Variable.woff2` and `docs/vendor/Geist-Variable.woff2`. License text sits next to each file as `Geist.LICENSE`. Admin, Overlay Stage, the local landing page, this docs site, and the overlay Lower Third theme load it.
 
 Better VCR is not in the repo. Headings on the landing pages and Overlay Stage, plus the OBS overlay, load it at runtime from `https://fonts.cdnfonts.com/css/better-vcr` (`webroot/style.css`, `webroot/overlay/style.css`, `docs/style.css`). Overlay Stage gets that import because it also loads overlay CSS.
 

@@ -3,6 +3,7 @@
 
   const ui = {
     songInfo: document.getElementById("songInfo"),
+    overlayState: document.getElementById("overlayState"),
     artist: document.getElementById("artist"),
     artistWrap: document.getElementById("artistWrap"),
     title: document.getElementById("title"),
@@ -23,7 +24,12 @@
     pauseFadeTimer: null,
     progressStallTimer: null,
     isPaused: true,
+    hasSignal: false,
     fadeGeneration: 0,
+    playingOpacity: 1,
+    pausedOpacity: 0.25,
+    pulse: 3,
+    glass: true,
   };
 
   const timings = {
@@ -40,10 +46,10 @@
   const host = params.get("host") || window.location.hostname || "localhost";
   const port = params.get("port") || "26538";
   const pulseParam = params.get("pulse");
-  const pulseSpeed = pulseParam === null ? 3 : Math.max(0, Math.min(10, Number(pulseParam) || 0));
+  const pulseOverride =
+    pulseParam === null ? null : Math.max(0, Math.min(10, Number(pulseParam) || 0));
   const bgParam = params.get("bg");
-  // Default glass on; ?bg=0 / false for text-only.
-  const useGlass = !(bgParam === "0" || bgParam === "false");
+  const glassOverride = bgParam === "0" || bgParam === "false" ? false : null;
   const WS_URL = `${protocol}://${host}:${port}/api/v1/ws`;
 
   if (devMode) {
@@ -54,38 +60,85 @@
     output.style.display = "none";
   }
 
-  // Glass = translucent fill (alpha). That is what shows checkerboard/OBS through.
-  // Do not use backdrop-filter here: when it can't sample, Chromium paints an opaque slab.
-  function applyGlass() {
+  function pulseSpeed() {
+    return pulseOverride === null ? state.pulse : pulseOverride;
+  }
+
+  function useGlass() {
+    return glassOverride === null ? state.glass : glassOverride;
+  }
+
+  function applyChrome() {
     if (!ui.songInfo) return;
-
-    if (!useGlass) {
-      ui.songInfo.style.background = "transparent";
-      ui.songInfo.style.borderColor = "transparent";
-      ui.songInfo.style.boxShadow = "none";
-      ui.songInfo.style.backdropFilter = "none";
-      ui.songInfo.style.webkitBackdropFilter = "none";
-      return;
-    }
-
-    ui.songInfo.style.background = `linear-gradient(135deg,
-      rgba(14, 34, 62, 0.66),
-      rgba(48, 92, 144, 0.33))`;
-    ui.songInfo.style.borderColor = "rgba(170, 220, 255, 0.28)";
-    ui.songInfo.style.boxShadow =
-      "inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 10px 30px rgba(0, 0, 0, 0.28)";
+    ui.songInfo.classList.toggle("is-text-only", !useGlass());
     ui.songInfo.style.backdropFilter = "none";
     ui.songInfo.style.webkitBackdropFilter = "none";
   }
 
-  applyGlass();
+  function setStatus(kind) {
+    if (!ui.songInfo) return;
+    if (!kind) {
+      ui.songInfo.classList.remove("is-status");
+      return;
+    }
+    if (ui.overlayState) ui.overlayState.textContent = kind === "nosignal" ? "NO SIGNAL" : "PAUSED";
+    ui.songInfo.classList.add("is-status");
+  }
+
+  function applyVisual(opts) {
+    const duration = opts && Number.isFinite(opts.duration) ? opts.duration : 0;
+    if (!state.hasSignal) {
+      setStatus("nosignal");
+      if (ui.playState) ui.playState.textContent = "⏸";
+      setSongInfoOpacity(state.playingOpacity, duration);
+      stopGlowPulse();
+      return;
+    }
+    if (state.isPaused) {
+      setStatus("paused");
+      if (ui.playState) ui.playState.textContent = "⏸";
+      setSongInfoOpacity(state.pausedOpacity, duration);
+      stopGlowPulse();
+      return;
+    }
+    setStatus(null);
+    if (ui.playState) ui.playState.textContent = "⏵";
+    setSongInfoOpacity(state.playingOpacity, duration);
+    startGlowPulse();
+  }
+
+  const BASE_W = 500;
 
   function applyLayout(layout) {
     if (!ui.songInfo || !layout) return;
     const x = Number(layout.x);
     const y = Number(layout.y);
+    const panelW = Number(layout.panelW);
     ui.songInfo.style.left = `${Number.isFinite(x) ? x : 0}px`;
     ui.songInfo.style.top = `${Number.isFinite(y) ? y : 0}px`;
+    ui.songInfo.style.width = `${BASE_W}px`;
+    ui.songInfo.style.removeProperty("height");
+    const w = Number.isFinite(panelW) && panelW > 0 ? panelW : BASE_W;
+    const s = w / BASE_W;
+    ui.songInfo.style.transformOrigin = "0 0";
+    ui.songInfo.style.transform = s === 1 ? "none" : `scale(${s})`;
+    ui.songInfo.setAttribute("data-theme", layout.theme || "lcd-glass");
+    ui.songInfo.setAttribute("data-seek", layout.seekStyle || "sesh-sofs");
+    const playOp = Number(layout.playingOpacity);
+    const pauseOp = Number(layout.pausedOpacity);
+    state.playingOpacity = Number.isFinite(playOp) ? playOp : 1;
+    state.pausedOpacity = Number.isFinite(pauseOp) ? pauseOp : 0.25;
+    const pulse = Number(layout.pulse);
+    state.pulse = Number.isFinite(pulse) ? pulse : 3;
+    state.glass = layout.glass !== false;
+    applyChrome();
+    applyVisual({ duration: 0 });
+    window.requestAnimationFrame(() => {
+      updateTextMarquee(ui.title, ui.titleWrap);
+      updateTextMarquee(ui.artist, ui.artistWrap);
+      updateTextMarquee(ui.album, ui.albumWrap);
+      updateMarker();
+    });
   }
 
   function followOverlayLayout() {
@@ -120,11 +173,12 @@
 
   function startGlowPulse() {
     if (!ui.songInfo) return;
-    if (pulseSpeed <= 0) {
+    const speed = pulseSpeed();
+    if (speed <= 0) {
       ui.songInfo.classList.remove("is-glowing");
       return;
     }
-    const speedScale = Math.max(0.1, pulseSpeed / 5);
+    const speedScale = Math.max(0.1, speed / 5);
     ui.songInfo.style.setProperty("--glow-duration", `${(2 / speedScale).toFixed(2)}s`);
     ui.songInfo.classList.add("is-glowing");
   }
@@ -133,30 +187,38 @@
     ui.songInfo?.classList.remove("is-glowing");
   }
 
-  // Paused → fade. Playing → full opacity.
+  // Paused → fade + PAUSED cover. Playing → track. No WS → NO SIGNAL.
   function handlePlaybackState(isPaused) {
     const next = Boolean(isPaused);
-    if (state.isPaused === next) {
+    if (state.hasSignal && state.isPaused === next) {
       if (ui.playState) ui.playState.textContent = next ? "⏸" : "⏵";
       return;
     }
     state.isPaused = next;
-    if (ui.playState) ui.playState.textContent = next ? "⏸" : "⏵";
     resetPauseFade();
     state.fadeGeneration += 1;
     const generation = state.fadeGeneration;
 
+    if (!state.hasSignal) {
+      applyVisual({ duration: 0 });
+      return;
+    }
+
     if (next) {
       state.pauseFadeTimer = window.setTimeout(() => {
         if (generation !== state.fadeGeneration) return;
-        setSongInfoOpacity(0.25, timings.fadeOutDuration);
-        stopGlowPulse();
+        applyVisual({ duration: timings.fadeOutDuration });
       }, timings.fadeOutDelay);
       return;
     }
 
-    setSongInfoOpacity(1, timings.fadeInDuration);
-    startGlowPulse();
+    applyVisual({ duration: timings.fadeInDuration });
+  }
+
+  function setHasSignal(ok) {
+    state.hasSignal = Boolean(ok);
+    resetPauseFade();
+    applyVisual({ duration: ok ? timings.fadeInDuration : 0 });
   }
 
   // YTMD sends POSITION_CHANGED while playing and stops when paused — that is the truth signal.
@@ -202,12 +264,13 @@
   function getMarqueeTrack(textEl) {
     if (!textEl) return null;
     let track = textEl.querySelector(".overlay-marquee-track");
-    if (track) return track;
-    track = document.createElement("span");
-    track.className = "overlay-marquee-track";
-    track.textContent = textEl.textContent || "";
-    textEl.textContent = "";
-    textEl.appendChild(track);
+    if (!track) {
+      track = document.createElement("span");
+      track.className = "overlay-marquee-track";
+      track.textContent = textEl.textContent || "";
+      textEl.textContent = "";
+      textEl.appendChild(track);
+    }
     return track;
   }
 
@@ -248,6 +311,8 @@
 
     ws.onopen = () => {
       log({ status: "connected", url: WS_URL });
+      setHasSignal(true);
+      handlePlaybackState(true);
     };
 
     ws.onmessage = (msg) => {
@@ -313,6 +378,7 @@
 
     ws.onclose = () => {
       log({ status: "disconnected" });
+      setHasSignal(false);
       setTimeout(connect, 2000);
     };
 
@@ -331,12 +397,11 @@
     updateTextMarquee(ui.title, ui.titleWrap);
     updateTextMarquee(ui.artist, ui.artistWrap);
     updateTextMarquee(ui.album, ui.albumWrap);
+    updateMarker();
   });
 
-  // Assume paused until position advances (matches admin; avoids stale isPaused).
-  if (ui.playState) ui.playState.textContent = "⏸";
-  setSongInfoOpacity(0.25, 0);
-  stopGlowPulse();
+  applyChrome();
+  applyVisual({ duration: 0 });
 
   connect();
   followOverlayLayout();
