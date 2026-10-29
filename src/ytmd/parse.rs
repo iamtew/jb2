@@ -41,6 +41,8 @@ pub struct AdminQueueItem {
     #[serde(rename = "queueIndex")]
     pub queue_index: i32,
     pub kind: String,
+    /// Track length in seconds. `0` means the player did not send one.
+    pub duration: i32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1234,6 +1236,7 @@ pub fn normalize_admin_queue(
             video_id: entry.video_id,
             queue_index: index as i32,
             kind: kind.into(),
+            duration: entry.duration_seconds,
         });
     }
     if items.is_empty() {

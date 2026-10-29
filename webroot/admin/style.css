@@ -1060,6 +1060,14 @@ body.is-queue-dragging .queue-drag-handle {
   font-weight: 650;
 }
 
+.queue-duration {
+  flex-shrink: 0;
+  margin-right: 8px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
 .queue-actions {
   display: flex;
   gap: 0;

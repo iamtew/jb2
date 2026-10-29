@@ -1668,11 +1668,19 @@ function renderQueue() {
     const dragHandle = canDrag
       ? `<span class="queue-drag-handle" draggable="true" title="Drag to reorder" aria-label="Drag to reorder">${icon('grip-vertical')}</span>`
       : '';
+    let duration = Number(item?.duration);
+    if (!(duration > 0) && kind === 'current') {
+      duration = Number(playbackState.duration);
+    }
+    const durationMarkup = duration > 0
+      ? `<span class="queue-duration">${formatTime(duration)}</span>`
+      : '';
     return `
       <div class="${classes}"${dragAttrs}>
         <div class="queue-row">
           ${dragHandle}
           <div class="queue-meta">${displayText || 'Untitled'}</div>
+          ${durationMarkup}
           <div class="queue-actions">
             <button class="queue-action-btn queue-action-btn--play" type="button" data-queue-action="play" data-queue-index="${queueIndex}" aria-label="Play from queue"${actionsDisabled ? ' disabled' : ''}>${icon('player-play')}</button>
             <button class="queue-action-btn queue-action-btn--delete" type="button" data-queue-action="delete" data-queue-index="${queueIndex}" aria-label="Delete from queue"${actionsDisabled ? ' disabled' : ''}>${icon('x')}</button>
