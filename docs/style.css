@@ -1,3 +1,11 @@
+@font-face {
+  font-family: Geist;
+  src: url("vendor/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --page-bg: #07080b;
   --panel-bg: #1a2230;
@@ -18,7 +26,7 @@ html, body {
   min-height: 100%;
   background: var(--page-bg);
   color: var(--text);
-  font-family: system-ui, "Segoe UI", sans-serif;
+  font-family: Geist, system-ui, sans-serif;
 }
 
 a { color: var(--cyan); }
