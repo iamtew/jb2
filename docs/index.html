@@ -8,36 +8,36 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body class="landing">
-    <div class="deck" id="deck">
-      <button type="button" id="deckPlay" aria-label="Play">
-        <svg class="icon" aria-hidden="true"><use id="deckPlayIcon" href="icons.svg#player-play"></use></svg>
-      </button>
-      <label class="deck-track">
-        <span class="visually-hidden">Track</span>
-        <select id="deckTrack">
-          <option value="snd/tew020-game_time_game_boi.mp3">Game Time Game Boi</option>
-          <option value="snd/tew020-music_makers.mp3">Music Makers</option>
-          <option value="snd/tew020-space_invade_space.mp3">Space Invade Space</option>
-        </select>
-      </label>
-      <div class="deck-vol" id="deckVolWrap">
-        <button type="button" id="deckVolBtn" aria-label="Volume" aria-expanded="false" aria-controls="deckVolPop">
-          <svg class="icon" aria-hidden="true"><use href="icons.svg#volume"></use></svg>
-        </button>
-        <div class="deck-vol-pop" id="deckVolPop">
-          <label>
-            <span class="visually-hidden">Volume</span>
-            <input id="deckVol" type="range" min="0" max="1" step="0.01" value="0.6" />
-          </label>
-        </div>
-      </div>
-      <audio id="deckAudio" preload="none"></audio>
-    </div>
     <div id="stage"></div>
     <img id="logoFallback" class="logo-fallback" src="img/jukeboks.png" alt="" />
     <main class="landing-copy">
       <p class="eyebrow">Twitch · YouTube Music · OBS</p>
       <h1>JB2</h1>
+      <div class="deck" id="deck">
+        <button type="button" id="deckPlay" aria-label="Play">
+          <svg class="icon" aria-hidden="true"><use id="deckPlayIcon" href="icons.svg#player-play"></use></svg>
+        </button>
+        <label class="deck-track">
+          <span class="visually-hidden">Track</span>
+          <select id="deckTrack">
+            <option value="snd/tew020-game_time_game_boi.mp3">Game Time Game Boi</option>
+            <option value="snd/tew020-music_makers.mp3">Music Makers</option>
+            <option value="snd/tew020-space_invade_space.mp3">Space Invade Space</option>
+          </select>
+        </label>
+        <div class="deck-vol" id="deckVolWrap">
+          <button type="button" id="deckVolBtn" aria-label="Volume" aria-expanded="false" aria-controls="deckVolPop">
+            <svg class="icon" aria-hidden="true"><use href="icons.svg#volume"></use></svg>
+          </button>
+          <div class="deck-vol-pop" id="deckVolPop">
+            <label>
+              <span class="visually-hidden">Volume</span>
+              <input id="deckVol" type="range" min="0" max="1" step="0.01" value="0.6" />
+            </label>
+          </div>
+        </div>
+        <audio id="deckAudio" preload="none"></audio>
+      </div>
       <p>
         Local control plane for YouTube Music Desktop: Twitch song requests, an OBS overlay,
         and an admin dock. For <a href="https://github.com/pear-devs/pear-desktop">pear-desktop</a>,

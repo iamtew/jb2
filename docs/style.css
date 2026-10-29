@@ -30,13 +30,10 @@ img { image-rendering: pixelated; image-rendering: crisp-edges; }
 .landing { min-height: 100vh; }
 
 .deck {
-  position: fixed;
-  z-index: 2;
-  right: 24px;
-  bottom: 22vh;
   display: flex;
   align-items: center;
   gap: 8px;
+  margin: 0 0 16px;
 }
 
 .deck button {
@@ -141,7 +138,7 @@ img { image-rendering: pixelated; image-rendering: crisp-edges; }
   pointer-events: none;
 }
 
-.landing-copy a, .landing-copy .actions { pointer-events: auto; }
+.landing-copy a, .landing-copy .actions, .landing-copy .deck { pointer-events: auto; }
 
 .eyebrow {
   margin: 0 0 8px;
