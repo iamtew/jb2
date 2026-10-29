@@ -568,12 +568,31 @@ body {
   width: 5.5rem;
 }
 
+.page-commands.active {
+  overflow: hidden;
+}
+
+.page-commands.active > .panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cmd-history-block {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .cmd-history {
   margin: 4px 0 0;
   padding: 6px 8px;
   background: var(--field);
   border: 1px solid var(--border);
-  max-height: 40vh;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   font-size: 0.85rem;
   line-height: 1.25;
