@@ -1003,7 +1003,7 @@ function scheduleQueueRefreshFromWS(delayMs = 800) {
 }
 
 function icon(name) {
-  return `<svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#${name}"></use></svg>`;
+  return `<svg class="icon" aria-hidden="true"><use href="#${name}"></use></svg>`;
 }
 
 // Copy in the click itself: clipboard.writeText() is async and loses the
