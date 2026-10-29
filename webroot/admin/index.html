@@ -110,9 +110,10 @@
               <input id="chatCmdsEnabled" type="checkbox" checked />
               Twitch chat commands
             </label>
-            <p class="muted">Off still logs chat. Admin Add/Now and HTTP songrequest stay live. Streamer.bot: <code>/cmd/jb/commands/on</code> and <code>/cmd/jb/commands/off</code>.</p>
           </div>
-          <div class="settings-block">
+          <details class="settings-block cmd-fold">
+            <summary>Cooldowns</summary>
+            <p class="muted">Off still logs chat. Admin Add/Now and HTTP songrequest stay live. Streamer.bot: <code>/cmd/jb/commands/on</code> and <code>/cmd/jb/commands/off</code>.</p>
             <table class="cmd-table">
               <thead>
                 <tr>
@@ -127,7 +128,7 @@
               <button id="saveCmdCooldowns" type="button"><svg class="icon" aria-hidden="true"><use href="/admin/icons.svg#device-floppy"></use></svg>Save cooldowns</button>
             </div>
             <p id="cmdFeedback" class="muted"></p>
-          </div>
+          </details>
           <div class="settings-block">
             <h4>History</h4>
             <p class="muted">Accepted chat commands this session. Restart clears.</p>

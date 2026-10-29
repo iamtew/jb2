@@ -541,6 +541,16 @@ body {
   flex: 0 0 auto;
 }
 
+.cmd-fold > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
 .cmd-table {
   width: 100%;
   border-collapse: collapse;
