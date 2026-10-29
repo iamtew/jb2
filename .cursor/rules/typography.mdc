@@ -1,0 +1,46 @@
+---
+description: Font catalog index stability and preferred-font resolution for overlays
+globs: seshbanner/**/*.{js,css,html},trbanner/**/*.{js,css,html},themes/**/*.{js,json}
+alwaysApply: false
+---
+
+# Typography
+
+Catalog: [`docs/TYPOGRAPHY.md`](../../docs/TYPOGRAPHY.md).
+
+## Indices are a URL contract
+
+The catalog order is the persisted numeric index for `titleFont`, `messageFont`,
+`userFont`, and `prefixFont` — Display faces first, then Regular.
+
+- **Append new faces only.** Never reorder without URL migration logic, or old meat-bag
+  bookmarks wake up wearing the wrong typeface.
+- Persist the **index**, not the family name. Legacy family-name URLs are still accepted
+  and rewritten to indices.
+- Adding a face means updating the table in `docs/TYPOGRAPHY.md` and importing it in the
+  banner stylesheets before the picker is shown.
+
+## Usage
+
+Quote family names and always give a generic fallback:
+
+```css
+font-family: 'Better VCR', monospace;
+```
+
+The settings menu is always **Better VCR**; overlay fields may use any catalog entry.
+These are third-party CDN fonts — if the CDN is down, browser fallbacks render the
+overlay. Never block startup waiting for a font.
+
+## Preferred fonts from the active theme
+
+When a font param is absent, a font control is reset, the theme changes, or on
+**Reset all**, resolve from the active theme's catalog entry before falling back to
+Better VCR:
+
+| Field role | Source |
+|------------|--------|
+| Title, prefix, user | theme `preferredDisplay` |
+| Message | theme `preferredRegular` |
+
+Meat bags can still pick any catalog face in the Fonts section.
