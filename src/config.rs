@@ -49,6 +49,48 @@ fn default_canvas_h() -> i32 {
     OVERLAY_CANVAS_1080.1
 }
 
+fn default_overlay_theme() -> String {
+    "lcd-glass".to_string()
+}
+
+fn default_seek_style() -> String {
+    "sesh-sofs".to_string()
+}
+
+fn default_playing_opacity() -> f32 {
+    1.0
+}
+
+fn default_paused_opacity() -> f32 {
+    0.25
+}
+
+fn default_panel_w() -> i32 {
+    500
+}
+
+fn default_overlay_pulse() -> i32 {
+    3
+}
+
+fn default_overlay_grid() -> String {
+    "thirds-center".to_string()
+}
+
+const OVERLAY_THEMES: [&str; 3] = ["lcd-glass", "lower-third", "amber-terminal"];
+const OVERLAY_SEEK_STYLES: [&str; 4] = ["sesh-sofs", "ice", "magenta", "white"];
+const OVERLAY_GRIDS: [&str; 7] = [
+    "thirds-center",
+    "thirds",
+    "center",
+    "golden",
+    "safe",
+    "quad",
+    "off",
+];
+const OVERLAY_PANEL_W_MIN: i32 = 280;
+const OVERLAY_PANEL_H_MIN: i32 = 80;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SeedPlaylist {
     pub id: String,
@@ -75,6 +117,24 @@ pub struct OverlayLayout {
     pub canvas_w: i32,
     #[serde(rename = "canvasH", default = "default_canvas_h")]
     pub canvas_h: i32,
+    #[serde(default = "default_overlay_theme")]
+    pub theme: String,
+    #[serde(rename = "seekStyle", default = "default_seek_style")]
+    pub seek_style: String,
+    #[serde(rename = "playingOpacity", default = "default_playing_opacity")]
+    pub playing_opacity: f32,
+    #[serde(rename = "pausedOpacity", default = "default_paused_opacity")]
+    pub paused_opacity: f32,
+    #[serde(rename = "panelW", default = "default_panel_w")]
+    pub panel_w: i32,
+    #[serde(rename = "panelH", default)]
+    pub panel_h: i32,
+    #[serde(default = "default_overlay_pulse")]
+    pub pulse: i32,
+    #[serde(default = "default_true")]
+    pub glass: bool,
+    #[serde(default = "default_overlay_grid")]
+    pub grid: String,
 }
 
 impl Default for OverlayLayout {
@@ -84,6 +144,15 @@ impl Default for OverlayLayout {
             y: 0,
             canvas_w: OVERLAY_CANVAS_1080.0,
             canvas_h: OVERLAY_CANVAS_1080.1,
+            theme: default_overlay_theme(),
+            seek_style: default_seek_style(),
+            playing_opacity: default_playing_opacity(),
+            paused_opacity: default_paused_opacity(),
+            panel_w: default_panel_w(),
+            panel_h: 0,
+            pulse: default_overlay_pulse(),
+            glass: true,
+            grid: default_overlay_grid(),
         }
     }
 }
@@ -95,7 +164,24 @@ impl OverlayLayout {
             "y": self.y,
             "canvasW": self.canvas_w,
             "canvasH": self.canvas_h,
+            "theme": self.theme,
+            "seekStyle": self.seek_style,
+            "playingOpacity": self.playing_opacity,
+            "pausedOpacity": self.paused_opacity,
+            "panelW": self.panel_w,
+            "panelH": self.panel_h,
+            "pulse": self.pulse,
+            "glass": self.glass,
+            "grid": self.grid,
         })
+    }
+}
+
+fn pick_allowed(value: &str, allowed: &[&str], fallback: &str) -> String {
+    if allowed.iter().any(|id| *id == value) {
+        value.to_string()
+    } else {
+        fallback.to_string()
     }
 }
 
@@ -112,9 +198,38 @@ pub fn normalize_overlay_layout(mut layout: OverlayLayout) -> OverlayLayout {
             layout.canvas_h = OVERLAY_CANVAS_1080.1;
         }
     }
-    layout.x = layout.x.clamp(0, layout.canvas_w);
-    layout.y = layout.y.clamp(0, layout.canvas_h);
+    layout.theme = pick_allowed(&layout.theme, &OVERLAY_THEMES, "lcd-glass");
+    layout.seek_style = pick_allowed(&layout.seek_style, &OVERLAY_SEEK_STYLES, "sesh-sofs");
+    layout.grid = pick_allowed(&layout.grid, &OVERLAY_GRIDS, "thirds-center");
+    if !layout.playing_opacity.is_finite() {
+        layout.playing_opacity = 1.0;
+    }
+    if !layout.paused_opacity.is_finite() {
+        layout.paused_opacity = 0.25;
+    }
+    layout.playing_opacity = layout.playing_opacity.clamp(0.0, 1.0);
+    layout.paused_opacity = layout.paused_opacity.clamp(0.0, 1.0);
+    layout.pulse = layout.pulse.clamp(0, 10);
+    layout.panel_w = layout.panel_w.clamp(OVERLAY_PANEL_W_MIN, layout.canvas_w);
+    if layout.panel_h < 0 {
+        layout.panel_h = 0;
+    } else if layout.panel_h > 0 {
+        layout.panel_h = layout.panel_h.clamp(OVERLAY_PANEL_H_MIN, layout.canvas_h);
+    }
+    let max_x = (layout.canvas_w - layout.panel_w).max(0);
+    layout.x = layout.x.clamp(0, max_x);
+    let panel_h = if layout.panel_h > 0 {
+        layout.panel_h
+    } else {
+        OVERLAY_PANEL_H_MIN
+    };
+    let max_y = (layout.canvas_h - panel_h).max(0);
+    layout.y = layout.y.clamp(0, max_y);
     layout
+}
+
+fn json_f32(v: &Value) -> Option<f32> {
+    v.as_f64().map(|n| n as f32)
 }
 
 pub fn overlay_layout_from_value(base: OverlayLayout, parsed: &Value) -> OverlayLayout {
@@ -130,6 +245,33 @@ pub fn overlay_layout_from_value(base: OverlayLayout, parsed: &Value) -> Overlay
     }
     if let Some(n) = parsed.get("canvasH").and_then(|v| v.as_i64()) {
         layout.canvas_h = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(s) = parsed.get("theme").and_then(|v| v.as_str()) {
+        layout.theme = s.to_string();
+    }
+    if let Some(s) = parsed.get("seekStyle").and_then(|v| v.as_str()) {
+        layout.seek_style = s.to_string();
+    }
+    if let Some(n) = parsed.get("playingOpacity").and_then(json_f32) {
+        layout.playing_opacity = n;
+    }
+    if let Some(n) = parsed.get("pausedOpacity").and_then(json_f32) {
+        layout.paused_opacity = n;
+    }
+    if let Some(n) = parsed.get("panelW").and_then(|v| v.as_i64()) {
+        layout.panel_w = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = parsed.get("panelH").and_then(|v| v.as_i64()) {
+        layout.panel_h = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = parsed.get("pulse").and_then(|v| v.as_i64()) {
+        layout.pulse = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(b) = parsed.get("glass").and_then(|v| v.as_bool()) {
+        layout.glass = b;
+    }
+    if let Some(s) = parsed.get("grid").and_then(|v| v.as_str()) {
+        layout.grid = s.to_string();
     }
     normalize_overlay_layout(layout)
 }
@@ -619,17 +761,33 @@ mod tests {
             y: 9000,
             canvas_w: 800,
             canvas_h: 600,
+            theme: "nope".into(),
+            seek_style: "nope".into(),
+            playing_opacity: 4.0,
+            paused_opacity: -1.0,
+            panel_w: 40,
+            pulse: 99,
+            grid: "nope".into(),
+            ..Default::default()
         });
         assert_eq!(bogus.canvas_w, OVERLAY_CANVAS_1080.0);
         assert_eq!(bogus.canvas_h, OVERLAY_CANVAS_1080.1);
         assert_eq!(bogus.x, 0);
-        assert_eq!(bogus.y, OVERLAY_CANVAS_1080.1);
+        assert_eq!(bogus.y, OVERLAY_CANVAS_1080.1 - OVERLAY_PANEL_H_MIN);
+        assert_eq!(bogus.theme, "lcd-glass");
+        assert_eq!(bogus.seek_style, "sesh-sofs");
+        assert_eq!(bogus.grid, "thirds-center");
+        assert_eq!(bogus.playing_opacity, 1.0);
+        assert_eq!(bogus.paused_opacity, 0.0);
+        assert_eq!(bogus.panel_w, OVERLAY_PANEL_W_MIN);
+        assert_eq!(bogus.pulse, 10);
 
         let hinted = normalize_overlay_layout(OverlayLayout {
             x: 10,
             y: 20,
             canvas_w: 1280,
             canvas_h: 1,
+            ..Default::default()
         });
         assert_eq!(hinted.canvas_w, OVERLAY_CANVAS_720.0);
         assert_eq!(hinted.canvas_h, OVERLAY_CANVAS_720.1);
@@ -640,11 +798,32 @@ mod tests {
         apply_patch(
             &mut cfg,
             &json!({
-                "overlayLayout": { "x": 50, "y": 60, "canvasW": 1280, "canvasH": 720 }
+                "overlayLayout": {
+                    "x": 50,
+                    "y": 60,
+                    "canvasW": 1280,
+                    "canvasH": 720,
+                    "theme": "amber-terminal",
+                    "seekStyle": "ice",
+                    "playingOpacity": 0.8,
+                    "pausedOpacity": 0.1,
+                    "panelW": 400,
+                    "pulse": 0,
+                    "glass": false,
+                    "grid": "safe"
+                }
             }),
         );
         let cfg = normalize(cfg);
         assert_eq!(cfg.overlay_layout.x, 50);
         assert_eq!(cfg.overlay_layout.canvas_w, 1280);
+        assert_eq!(cfg.overlay_layout.theme, "amber-terminal");
+        assert_eq!(cfg.overlay_layout.seek_style, "ice");
+        assert!((cfg.overlay_layout.playing_opacity - 0.8).abs() < 0.001);
+        assert!((cfg.overlay_layout.paused_opacity - 0.1).abs() < 0.001);
+        assert_eq!(cfg.overlay_layout.panel_w, 400);
+        assert_eq!(cfg.overlay_layout.pulse, 0);
+        assert!(!cfg.overlay_layout.glass);
+        assert_eq!(cfg.overlay_layout.grid, "safe");
     }
 }
