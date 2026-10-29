@@ -211,6 +211,7 @@
     .then(function (texture) {
       if (texture.source) texture.source.scaleMode = "nearest";
 
+      var sky = new PIXI.Graphics();
       var grid = new PIXI.Graphics();
       var glow = new PIXI.Graphics();
       var bars = new PIXI.Graphics();
@@ -236,6 +237,7 @@
       logo.anchor.set(0.5);
       logo.roundPixels = true;
 
+      app.stage.addChild(sky);
       app.stage.addChild(grid);
       app.stage.addChild(vignette);
       app.stage.addChild(glow);
@@ -250,8 +252,31 @@
       var notes = [];
       var shown = [];
       var avg = [];
+      var stars = [];
       for (var n = 0; n < 42; n++) {
         notes.push({ x: 0, y: 0, v: 40, life: 0, color: CYAN });
+      }
+      for (var st = 0; st < 50; st++) {
+        stars.push({
+          x: Math.random(),
+          y: Math.random() * 0.55,
+          size: st % 7 === 0 ? 3 : 2,
+          phase: Math.random() * Math.PI * 2,
+          color: st % 5 === 0 ? ORANGE : CYAN,
+        });
+      }
+      var city = [];
+      var cx = 0;
+      while (cx < 1) {
+        var bw = 0.01 + Math.random() * 0.028;
+        var mid = cx > 0.38 && cx < 0.62;
+        city.push({
+          x: cx,
+          w: bw,
+          h: mid ? 0.018 + Math.random() * 0.03 : 0.05 + Math.random() * 0.14,
+          lit: !mid && Math.random() > 0.4,
+        });
+        cx += bw + 0.003;
       }
       var noteCursor = 0;
       var layout = { scale: 1, x: 0, y: 0 };
@@ -323,6 +348,38 @@
         }
 
         var horizon = y + logoH * 0.55;
+        sky.clear();
+        for (var band = 0; band < 8; band++) {
+          var t0 = band / 8;
+          sky.rect(0, t0 * horizon, w, horizon / 8 + 1).fill({
+            color: CYAN,
+            alpha: 0.055 * (1 - t0),
+          });
+        }
+        sky.rect(0, horizon - 2, w, 3).fill({ color: ORANGE, alpha: 0.12 });
+        for (var si = 0; si < stars.length; si++) {
+          var star = stars[si];
+          var tw = reduced
+            ? 0.4
+            : 0.22 + 0.32 * (0.5 + 0.5 * Math.sin(time * 2.4 + star.phase)) + kick * 0.18;
+          sky.rect(star.x * w, star.y * h, star.size, star.size).fill({
+            color: star.color,
+            alpha: tw,
+          });
+        }
+        for (var ci = 0; ci < city.length; ci++) {
+          var block = city[ci];
+          var bx = block.x * w;
+          var bwpx = Math.max(4, block.w * w);
+          var bh = block.h * h;
+          sky.rect(bx, horizon - bh, bwpx, bh).fill({ color: 0x05070c, alpha: 1 });
+          if (block.lit) {
+            sky.rect(bx + 2, horizon - bh + 5, 2, 2).fill({
+              color: ci % 3 === 0 ? ORANGE : CYAN,
+              alpha: 0.4 + kick * 0.45,
+            });
+          }
+        }
         grid.clear();
         var scroll = reduced ? 0.4 : (time * 0.55) % 1;
         for (var row = 0; row < 16; row++) {
