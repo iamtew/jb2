@@ -38,6 +38,16 @@ pub const DEFAULT_BLACKLIST_ENTRY: &str = "Rick Astley";
 pub const DEFAULT_MAX_DURATION: i32 = 600;
 const MAX_DURATION_CAP: i32 = 86400;
 const KV_CONFIG: &str = "config";
+pub const OVERLAY_CANVAS_1080: (i32, i32) = (1920, 1080);
+pub const OVERLAY_CANVAS_720: (i32, i32) = (1280, 720);
+
+fn default_canvas_w() -> i32 {
+    OVERLAY_CANVAS_1080.0
+}
+
+fn default_canvas_h() -> i32 {
+    OVERLAY_CANVAS_1080.1
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SeedPlaylist {
@@ -53,6 +63,75 @@ pub struct CommandCooldown {
     pub gcd: i32,
     #[serde(default)]
     pub ucd: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OverlayLayout {
+    #[serde(default)]
+    pub x: i32,
+    #[serde(default)]
+    pub y: i32,
+    #[serde(rename = "canvasW", default = "default_canvas_w")]
+    pub canvas_w: i32,
+    #[serde(rename = "canvasH", default = "default_canvas_h")]
+    pub canvas_h: i32,
+}
+
+impl Default for OverlayLayout {
+    fn default() -> Self {
+        Self {
+            x: 0,
+            y: 0,
+            canvas_w: OVERLAY_CANVAS_1080.0,
+            canvas_h: OVERLAY_CANVAS_1080.1,
+        }
+    }
+}
+
+impl OverlayLayout {
+    pub fn to_json(&self) -> Value {
+        serde_json::json!({
+            "x": self.x,
+            "y": self.y,
+            "canvasW": self.canvas_w,
+            "canvasH": self.canvas_h,
+        })
+    }
+}
+
+pub fn normalize_overlay_layout(mut layout: OverlayLayout) -> OverlayLayout {
+    let is_720 = layout.canvas_w == OVERLAY_CANVAS_720.0 && layout.canvas_h == OVERLAY_CANVAS_720.1;
+    let is_1080 =
+        layout.canvas_w == OVERLAY_CANVAS_1080.0 && layout.canvas_h == OVERLAY_CANVAS_1080.1;
+    if !is_720 && !is_1080 {
+        if layout.canvas_w == OVERLAY_CANVAS_720.0 || layout.canvas_h == OVERLAY_CANVAS_720.1 {
+            layout.canvas_w = OVERLAY_CANVAS_720.0;
+            layout.canvas_h = OVERLAY_CANVAS_720.1;
+        } else {
+            layout.canvas_w = OVERLAY_CANVAS_1080.0;
+            layout.canvas_h = OVERLAY_CANVAS_1080.1;
+        }
+    }
+    layout.x = layout.x.clamp(0, layout.canvas_w);
+    layout.y = layout.y.clamp(0, layout.canvas_h);
+    layout
+}
+
+pub fn overlay_layout_from_value(base: OverlayLayout, parsed: &Value) -> OverlayLayout {
+    let mut layout = base;
+    if let Some(n) = parsed.get("x").and_then(|v| v.as_i64()) {
+        layout.x = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = parsed.get("y").and_then(|v| v.as_i64()) {
+        layout.y = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = parsed.get("canvasW").and_then(|v| v.as_i64()) {
+        layout.canvas_w = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = parsed.get("canvasH").and_then(|v| v.as_i64()) {
+        layout.canvas_h = i32::try_from(n).unwrap_or(0);
+    }
+    normalize_overlay_layout(layout)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -82,6 +161,8 @@ pub struct Config {
     pub twitch_commands_enabled: bool,
     #[serde(rename = "twitchCommands", default = "default_twitch_commands")]
     pub twitch_commands: BTreeMap<String, CommandCooldown>,
+    #[serde(rename = "overlayLayout", default)]
+    pub overlay_layout: OverlayLayout,
 }
 
 impl Default for Config {
@@ -100,6 +181,7 @@ impl Default for Config {
             twitch_oauth_expires_at: 0,
             twitch_commands_enabled: true,
             twitch_commands: default_twitch_commands(),
+            overlay_layout: OverlayLayout::default(),
         }
     }
 }
@@ -167,6 +249,7 @@ pub fn normalize(mut cfg: Config) -> Config {
     }
     cfg.seed_playlists = seeds;
     cfg.twitch_commands = filled_twitch_commands(cfg.twitch_commands);
+    cfg.overlay_layout = normalize_overlay_layout(cfg.overlay_layout);
     cfg
 }
 
@@ -287,6 +370,9 @@ pub fn apply_patch(cfg: &mut Config, parsed: &Value) {
             }
             cfg.twitch_commands.insert((*id).to_string(), cd);
         }
+    }
+    if let Some(v) = parsed.get("overlayLayout") {
+        cfg.overlay_layout = overlay_layout_from_value(cfg.overlay_layout.clone(), v);
     }
 }
 
@@ -524,5 +610,41 @@ mod tests {
         assert_eq!(cfg.twitch_commands["sr"].gcd, 12);
         assert_eq!(cfg.twitch_commands["sr"].ucd, 0);
         assert!(!cfg.twitch_commands.contains_key("nope"));
+    }
+
+    #[test]
+    fn overlay_layout_normalize_clamps_and_fixes_canvas() {
+        let bogus = normalize_overlay_layout(OverlayLayout {
+            x: -40,
+            y: 9000,
+            canvas_w: 800,
+            canvas_h: 600,
+        });
+        assert_eq!(bogus.canvas_w, OVERLAY_CANVAS_1080.0);
+        assert_eq!(bogus.canvas_h, OVERLAY_CANVAS_1080.1);
+        assert_eq!(bogus.x, 0);
+        assert_eq!(bogus.y, OVERLAY_CANVAS_1080.1);
+
+        let hinted = normalize_overlay_layout(OverlayLayout {
+            x: 10,
+            y: 20,
+            canvas_w: 1280,
+            canvas_h: 1,
+        });
+        assert_eq!(hinted.canvas_w, OVERLAY_CANVAS_720.0);
+        assert_eq!(hinted.canvas_h, OVERLAY_CANVAS_720.1);
+        assert_eq!(hinted.x, 10);
+        assert_eq!(hinted.y, 20);
+
+        let mut cfg = Config::default();
+        apply_patch(
+            &mut cfg,
+            &json!({
+                "overlayLayout": { "x": 50, "y": 60, "canvasW": 1280, "canvasH": 720 }
+            }),
+        );
+        let cfg = normalize(cfg);
+        assert_eq!(cfg.overlay_layout.x, 50);
+        assert_eq!(cfg.overlay_layout.canvas_w, 1280);
     }
 }

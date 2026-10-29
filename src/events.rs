@@ -1,9 +1,13 @@
 use serde_json::Value;
-use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 
-/// ponytail: one bus for every Admin dock; raise if a LAN ever needs more than a handful.
-const MAX_SUBSCRIBERS: usize = 8;
+fn keep_client(result: Result<(), TrySendError<String>>) -> bool {
+    !matches!(result, Err(TrySendError::Disconnected(_)))
+}
+
+/// ponytail: overlay + Stage + a handful of Admin docks.
+const MAX_SUBSCRIBERS: usize = 16;
 const CLIENT_BUF: usize = 8;
 
 #[derive(Clone)]
@@ -21,12 +25,12 @@ impl EventBus {
     pub fn emit(&self, kind: &str, data: &Value) {
         let frame = format!("event: {kind}\ndata: {data}\n\n");
         let mut clients = self.clients.lock().expect("events");
-        clients.retain(|tx| tx.try_send(frame.clone()).is_ok());
+        clients.retain(|tx| keep_client(tx.try_send(frame.clone())));
     }
 
     pub fn subscribe(&self) -> Option<Receiver<String>> {
         let mut clients = self.clients.lock().expect("events");
-        clients.retain(|tx| tx.try_send(": \n\n".into()).is_ok());
+        clients.retain(|tx| keep_client(tx.try_send(": \n\n".into())));
         if clients.len() >= MAX_SUBSCRIBERS {
             return None;
         }

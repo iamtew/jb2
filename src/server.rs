@@ -1,4 +1,4 @@
-use crate::config::{self, Config, SeedPlaylist, Store};
+use crate::config::{self, Config, OverlayLayout, SeedPlaylist, Store};
 use crate::envelope::Envelope;
 use crate::events::EventBus;
 use crate::jsonutil::{mime_for, parse_query, percent_decode, query_get, split_url};
@@ -28,6 +28,8 @@ pub struct App {
     pub seed: State,
     pub twitch: twitch::Hub,
     pub events: EventBus,
+    /// Live overlay position. SQLite is updated only when Stage saves (pointer up).
+    overlay_live: Mutex<OverlayLayout>,
     /// ponytail: one lock for every queue write. Split if a long purge blocks admin drags.
     queue_lock: Mutex<()>,
 }
@@ -35,6 +37,7 @@ pub struct App {
 impl App {
     pub fn new(store: Store, ytmd: Client, webroot: PathBuf) -> Arc<Self> {
         let events = EventBus::new();
+        let overlay_live = store.get().map(|c| c.overlay_layout).unwrap_or_default();
         Arc::new(Self {
             store,
             ytmd,
@@ -42,6 +45,7 @@ impl App {
             seed: State::new(),
             twitch: twitch::Hub::with_events(events.clone()),
             events,
+            overlay_live: Mutex::new(overlay_live),
             queue_lock: Mutex::new(()),
         })
     }
@@ -180,6 +184,8 @@ Transfer-Encoding: chunked\r\n\
             ("GET", "/api/config") => self.config_get(),
             ("POST" | "PUT", "/api/config") => self.config_save(body),
             ("POST", "/api/config/import") => self.config_import(body),
+            ("GET", "/api/overlay") => self.overlay_get(),
+            ("PUT", "/api/overlay") => self.overlay_put(body),
             ("GET", "/api/twitch") => self.twitch_status(),
             ("POST", "/api/twitch/connect") => self.twitch_connect(),
             ("POST", "/api/twitch/disconnect") => self.twitch_disconnect(),
@@ -584,6 +590,48 @@ Transfer-Encoding: chunked\r\n\
         }
     }
 
+    fn overlay_live(&self) -> OverlayLayout {
+        self.overlay_live.lock().expect("overlay").clone()
+    }
+
+    fn publish_overlay(&self, layout: OverlayLayout, save: bool) -> Result<OverlayLayout, String> {
+        let layout = config::normalize_overlay_layout(layout);
+        *self.overlay_live.lock().expect("overlay") = layout.clone();
+        if save {
+            self.store.update(|cfg| {
+                cfg.overlay_layout = layout.clone();
+                Ok(())
+            })?;
+        }
+        self.emit("overlay", layout.to_json());
+        Ok(layout)
+    }
+
+    fn overlay_get(&self) -> Dispatch {
+        Dispatch::Json(200, Envelope::ok_data(self.overlay_live().to_json()))
+    }
+
+    fn overlay_put(&self, body: &[u8]) -> Dispatch {
+        let parsed: Value = match serde_json::from_slice(body) {
+            Ok(v) => v,
+            Err(e) => {
+                return Dispatch::Json(
+                    200,
+                    Envelope::fail(format!("failed to decode overlay: {e}")),
+                )
+            }
+        };
+        let save = parsed
+            .get("save")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let layout = config::overlay_layout_from_value(self.overlay_live(), &parsed);
+        match self.publish_overlay(layout, save) {
+            Ok(layout) => Dispatch::Json(200, Envelope::ok_data(layout.to_json())),
+            Err(e) => Dispatch::Json(200, Envelope::fail(format!("failed to save overlay: {e}"))),
+        }
+    }
+
     fn config_save(&self, body: &[u8]) -> Dispatch {
         let parsed: Value = match serde_json::from_slice(body) {
             Ok(v) => v,
@@ -610,6 +658,9 @@ Transfer-Encoding: chunked\r\n\
         self.emit_commands_enabled(saved.twitch_commands_enabled);
         if parsed.get("clearQueueOnRequest").is_some() || parsed.get("seedPlaylists").is_some() {
             self.emit_seed();
+        }
+        if parsed.get("overlayLayout").is_some() {
+            let _ = self.publish_overlay(saved.overlay_layout.clone(), false);
         }
         Dispatch::Json(
             200,
@@ -646,6 +697,9 @@ Transfer-Encoding: chunked\r\n\
         }
         self.emit_commands_enabled(saved.twitch_commands_enabled);
         self.emit_seed();
+        if parsed.get("overlayLayout").is_some() {
+            let _ = self.publish_overlay(saved.overlay_layout.clone(), false);
+        }
         let mut data = config::public_json(&saved);
         if let Some(obj) = data.as_object_mut() {
             obj.insert("source".into(), json!(source.as_str()));
@@ -1168,7 +1222,10 @@ Transfer-Encoding: chunked\r\n\
     fn alias_ytmd(&self, method: &str, endpoint: &str) -> Dispatch {
         match self.ytmd.request_json(method, endpoint, None) {
             Ok(data) => Dispatch::Json(200, Envelope::ok_data(data)),
-            Err(e) => Dispatch::Json(502, Envelope::fail(format!("failed to reach pear-desktop: {e}"))),
+            Err(e) => Dispatch::Json(
+                502,
+                Envelope::fail(format!("failed to reach pear-desktop: {e}")),
+            ),
         }
     }
 
@@ -1246,7 +1303,10 @@ Transfer-Encoding: chunked\r\n\
                 respond_json(
                     request,
                     502,
-                    &Envelope::fail(format!("failed to reach pear-desktop at {}: {e}", self.ytmd.base)),
+                    &Envelope::fail(format!(
+                        "failed to reach pear-desktop at {}: {e}",
+                        self.ytmd.base
+                    )),
                 );
             }
         }
@@ -1648,6 +1708,9 @@ fn queue_mutating(method: &str, path: &str) -> bool {
 }
 
 fn is_quiet_poll_get(method: &str, path: &str) -> bool {
+    if path == "/api/overlay" && matches!(method, "GET" | "PUT") {
+        return true;
+    }
     method == "GET"
         && matches!(
             path,
@@ -1781,6 +1844,9 @@ mod tests {
         assert!(is_quiet_poll_get("GET", "/cmd/ytmd/shuffle/get"));
         assert!(!is_quiet_poll_get("POST", "/api/twitch/chat"));
         assert!(!is_quiet_poll_get("GET", "/cmd/jb/songrequest"));
+        assert!(is_quiet_poll_get("GET", "/api/overlay"));
+        assert!(is_quiet_poll_get("PUT", "/api/overlay"));
+        assert!(!is_quiet_poll_get("POST", "/api/overlay"));
     }
 
     #[test]
