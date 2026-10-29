@@ -119,7 +119,13 @@
       if (was) playSelected();
     });
     audio.addEventListener("ended", function () {
-      stop();
+      if (!trackSel.options.length) {
+        stop();
+        return;
+      }
+      trackSel.selectedIndex = (trackSel.selectedIndex + 1) % trackSel.options.length;
+      sound.file = "";
+      playSelected();
     });
   }
 
