@@ -1002,9 +1002,31 @@ function scheduleQueueRefreshFromWS(delayMs = 800) {
   }, delayMs);
 }
 
-function icon(name) {
-  return `<svg class="icon" aria-hidden="true"><use href="#${name}"></use></svg>`;
+const iconBodies = new Map();
+
+function iconBody(name) {
+  let body = iconBodies.get(name);
+  if (body == null) {
+    const sym = document.getElementById(name);
+    body = sym ? sym.innerHTML : '';
+    iconBodies.set(name, body);
+  }
+  return body;
 }
+
+function icon(name) {
+  return `<svg class="icon" data-icon="${name}" viewBox="0 0 24 24" aria-hidden="true">${iconBody(name)}</svg>`;
+}
+
+function fillIcons(root = document) {
+  root.querySelectorAll('svg.icon[data-icon]').forEach((svg) => {
+    if (svg.querySelector('path')) return;
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.innerHTML = iconBody(svg.dataset.icon);
+  });
+}
+
+fillIcons();
 
 // Copy in the click itself: clipboard.writeText() is async and loses the
 // user gesture, and it throws if the document is not focused (OBS dock).
@@ -1028,8 +1050,10 @@ async function copyText(text, input) {
 
 function setPlayGlyph(paused) {
   if (!playState) return;
-  playState.innerHTML = icon(paused ? 'player-pause' : 'player-play');
+  const name = paused ? 'player-pause' : 'player-play';
   playState.setAttribute('aria-label', paused ? 'Paused' : 'Playing');
+  if (playState.querySelector('[data-icon]')?.dataset.icon === name) return;
+  playState.innerHTML = icon(name);
 }
 
 function escapeHtml(value) {
@@ -1554,8 +1578,11 @@ function updatePlaybackButtons() {
     playerButtons.pause.classList.toggle('is-active', isPlayingNow);
   }
   if (compactPlay) {
-    compactPlay.innerHTML = icon(isPlayingNow ? 'player-pause' : 'player-play');
+    const name = isPlayingNow ? 'player-pause' : 'player-play';
     compactPlay.setAttribute('aria-label', isPlayingNow ? 'Pause' : 'Play');
+    if (compactPlay.querySelector('[data-icon]')?.dataset.icon !== name) {
+      compactPlay.innerHTML = icon(name);
+    }
   }
   document.body.classList.toggle('is-playing', isPlayingNow);
   setToggleButtonState(playerButtons.shuffle, playbackState.shuffle);

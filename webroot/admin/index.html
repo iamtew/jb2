@@ -161,7 +161,7 @@
           <div class="now-playing__meta">
             <div class="now-playing__row">
               <div class="now-playing__state">
-                <span id="playState" class="play-state-pill" aria-label="Paused"><svg class="icon" aria-hidden="true"><use href="#player-pause"></use></svg></span>
+                <span id="playState" class="play-state-pill" aria-label="Paused"><svg class="icon" data-icon="player-pause" aria-hidden="true"></svg></span>
                 <span class="time-pill">
                   <span id="currentTime">00:00</span>
                   <span class="time-divider">/</span>
@@ -169,12 +169,12 @@
                 </span>
               </div>
               <div class="dock-compact-controls" aria-label="Playback controls">
-                <button id="compactPrev" class="control-btn" type="button" aria-label="Previous"><svg class="icon" aria-hidden="true"><use href="#player-skip-back"></use></svg></button>
-                <button id="compactPlay" class="control-btn primary" type="button" aria-label="Play"><svg class="icon" aria-hidden="true"><use href="#player-play"></use></svg></button>
-                <button id="compactNext" class="control-btn" type="button" aria-label="Next"><svg class="icon" aria-hidden="true"><use href="#player-skip-forward"></use></svg></button>
+                <button id="compactPrev" class="control-btn" type="button" aria-label="Previous"><svg class="icon" data-icon="player-skip-back" aria-hidden="true"></svg></button>
+                <button id="compactPlay" class="control-btn primary" type="button" aria-label="Play"><svg class="icon" data-icon="player-play" aria-hidden="true"></svg></button>
+                <button id="compactNext" class="control-btn" type="button" aria-label="Next"><svg class="icon" data-icon="player-skip-forward" aria-hidden="true"></svg></button>
               </div>
-              <button id="chatCmdsPill" class="cmd-pill is-on" type="button" aria-pressed="true" aria-label="Twitch chat commands"><svg class="icon cmd-pill__icon" aria-hidden="true"><use href="#message-circle"></use></svg><span class="cmd-pill__label">Chat cmds ON</span></button>
-              <button id="dockFold" class="dock-fold" type="button" aria-expanded="true" aria-label="Fold player"><svg class="icon" aria-hidden="true"><use href="#chevron-down"></use></svg></button>
+              <button id="chatCmdsPill" class="cmd-pill is-on" type="button" aria-pressed="true" aria-label="Twitch chat commands"><svg class="icon cmd-pill__icon" data-icon="message-circle" aria-hidden="true"></svg><span class="cmd-pill__label">Chat cmds ON</span></button>
+              <button id="dockFold" class="dock-fold" type="button" aria-expanded="true" aria-label="Fold player"><svg class="icon" data-icon="chevron-down" aria-hidden="true"></svg></button>
             </div>
             <div class="now-playing__headline"><span id="currentMeta"><span class="now-playing__headline-track">Waiting for YTMD…</span></span></div>
             <div class="progress-row">
@@ -184,22 +184,22 @@
         </section>
 
         <section class="player-controls" aria-label="Playback controls">
-          <button id="prevButton" class="control-btn" type="button" aria-label="Previous"><svg class="icon" aria-hidden="true"><use href="#player-skip-back"></use></svg></button>
-          <button id="backButton" class="control-btn" type="button" aria-label="Back 10 seconds"><svg class="icon" aria-hidden="true"><use href="#rewind-backward-10"></use></svg></button>
-          <button id="playButton" class="control-btn primary" type="button" aria-label="Play"><svg class="icon" aria-hidden="true"><use href="#player-play"></use></svg></button>
-          <button id="pauseButton" class="control-btn" type="button" aria-label="Pause"><svg class="icon" aria-hidden="true"><use href="#player-pause"></use></svg></button>
-          <button id="forwardButton" class="control-btn" type="button" aria-label="Forward 10 seconds"><svg class="icon" aria-hidden="true"><use href="#rewind-forward-10"></use></svg></button>
-          <button id="nextButton" class="control-btn" type="button" aria-label="Next"><svg class="icon" aria-hidden="true"><use href="#player-skip-forward"></use></svg></button>
+          <button id="prevButton" class="control-btn" type="button" aria-label="Previous"><svg class="icon" data-icon="player-skip-back" aria-hidden="true"></svg></button>
+          <button id="backButton" class="control-btn" type="button" aria-label="Back 10 seconds"><svg class="icon" data-icon="rewind-backward-10" aria-hidden="true"></svg></button>
+          <button id="playButton" class="control-btn primary" type="button" aria-label="Play"><svg class="icon" data-icon="player-play" aria-hidden="true"></svg></button>
+          <button id="pauseButton" class="control-btn" type="button" aria-label="Pause"><svg class="icon" data-icon="player-pause" aria-hidden="true"></svg></button>
+          <button id="forwardButton" class="control-btn" type="button" aria-label="Forward 10 seconds"><svg class="icon" data-icon="rewind-forward-10" aria-hidden="true"></svg></button>
+          <button id="nextButton" class="control-btn" type="button" aria-label="Next"><svg class="icon" data-icon="player-skip-forward" aria-hidden="true"></svg></button>
         </section>
         <section class="player-toggles" aria-label="Playback modes">
-          <button id="shuffleButton" class="control-btn" type="button" aria-label="Shuffle" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#arrows-shuffle"></use></svg></button>
+          <button id="shuffleButton" class="control-btn" type="button" aria-label="Shuffle" aria-pressed="false"><svg class="icon" data-icon="arrows-shuffle" aria-hidden="true"></svg></button>
           <form id="songRequestForm" class="player-toggles__form" action="#">
             <div class="search-wrap">
               <input id="songRequestInput" class="player-toggles__input" type="search" placeholder="Request song…" aria-label="Song request" autocomplete="off" aria-autocomplete="list" aria-controls="songSearchPopup" />
               <ul id="songSearchPopup" class="search-popup" role="listbox" hidden></ul>
             </div>
-            <button id="songRequestAdd" class="player-toggles__btn" type="submit"><svg class="icon" aria-hidden="true"><use href="#plus"></use></svg>Add</button>
-            <button id="songRequestNow" class="player-toggles__btn" type="button"><svg class="icon" aria-hidden="true"><use href="#player-play"></use></svg>Now</button>
+            <button id="songRequestAdd" class="player-toggles__btn" type="submit"><svg class="icon" data-icon="plus" aria-hidden="true"></svg>Add</button>
+            <button id="songRequestNow" class="player-toggles__btn" type="button"><svg class="icon" data-icon="player-play" aria-hidden="true"></svg>Now</button>
           </form>
         </section>
 
@@ -209,8 +209,8 @@
         <div class="panel">
           <div class="queue-toolbar">
             <h2 class="queue-title">Queue <span id="queueCount">(0)</span></h2>
-            <button id="previousToggle" class="queue-toggle" type="button" data-toggle="previous" hidden aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#chevron-right"></use></svg><span>Previous</span></button>
-            <button id="clearQueueButton" class="queue-toolbar-btn" type="button"><svg class="icon" aria-hidden="true"><use href="#trash"></use></svg>Clear</button>
+            <button id="previousToggle" class="queue-toggle" type="button" data-toggle="previous" hidden aria-expanded="false"><svg class="icon" data-icon="chevron-right" aria-hidden="true"></svg><span>Previous</span></button>
+            <button id="clearQueueButton" class="queue-toolbar-btn" type="button"><svg class="icon" data-icon="trash" aria-hidden="true"></svg>Clear</button>
           </div>
           <div id="queueList" class="queue-list"></div>
         </div>
@@ -223,7 +223,7 @@
             <label for="seedPlaylistInput">Add seed playlist</label>
             <div class="url-row">
               <input id="seedPlaylistInput" type="text" placeholder="Playlist URL or ID" />
-              <button id="addSeedPlaylistButton" type="button"><svg class="icon" aria-hidden="true"><use href="#plus"></use></svg>Add</button>
+              <button id="addSeedPlaylistButton" type="button"><svg class="icon" data-icon="plus" aria-hidden="true"></svg>Add</button>
             </div>
             <p id="seedInputFeedback" class="muted"></p>
           </div>
@@ -244,7 +244,7 @@
           <div id="twitchChatLog" class="twitch-log" aria-live="polite"></div>
           <form id="twitchChatForm" class="url-row chat-composer" action="#">
             <input id="twitchChatInput" type="text" placeholder="Send as bot nick…" autocomplete="off" />
-            <button id="twitchChatSend" type="submit"><svg class="icon" aria-hidden="true"><use href="#send"></use></svg>Send</button>
+            <button id="twitchChatSend" type="submit"><svg class="icon" data-icon="send" aria-hidden="true"></svg>Send</button>
           </form>
           <p id="chatFormFeedback" class="muted"></p>
         </div>
@@ -272,7 +272,7 @@
               <tbody id="cmdCooldownRows"></tbody>
             </table>
             <div class="url-row">
-              <button id="saveCmdCooldowns" type="button"><svg class="icon" aria-hidden="true"><use href="#device-floppy"></use></svg>Save cooldowns</button>
+              <button id="saveCmdCooldowns" type="button"><svg class="icon" data-icon="device-floppy" aria-hidden="true"></svg>Save cooldowns</button>
             </div>
             <p id="cmdFeedback" class="muted"></p>
           </details>
@@ -297,10 +297,10 @@
           </div>
           <div class="settings-block">
             <div class="url-row action-row">
-              <button id="twitchSaveButton" type="button"><svg class="icon" aria-hidden="true"><use href="#device-floppy"></use></svg>Save</button>
-              <button id="twitchLoginButton" type="button" aria-label="Login with Twitch"><svg class="icon" aria-hidden="true"><use href="#login"></use></svg>Login</button>
-              <button id="twitchConnectButton" type="button"><svg class="icon" aria-hidden="true"><use href="#plug"></use></svg>Connect</button>
-              <button id="twitchDisconnectButton" type="button"><svg class="icon" aria-hidden="true"><use href="#plug-off"></use></svg>Disconnect</button>
+              <button id="twitchSaveButton" type="button"><svg class="icon" data-icon="device-floppy" aria-hidden="true"></svg>Save</button>
+              <button id="twitchLoginButton" type="button" aria-label="Login with Twitch"><svg class="icon" data-icon="login" aria-hidden="true"></svg>Login</button>
+              <button id="twitchConnectButton" type="button"><svg class="icon" data-icon="plug" aria-hidden="true"></svg>Connect</button>
+              <button id="twitchDisconnectButton" type="button"><svg class="icon" data-icon="plug-off" aria-hidden="true"></svg>Disconnect</button>
             </div>
             <p id="twitchFormFeedback" class="muted"></p>
           </div>
@@ -313,13 +313,13 @@
             <label for="commandSelect">Command</label>
             <select id="commandSelect"></select>
             <input id="argInput" type="text" placeholder="Optional params, e.g. seconds=10" />
-            <button id="runCommand" type="button"><svg class="icon" aria-hidden="true"><use href="#player-play"></use></svg>Run</button>
+            <button id="runCommand" type="button"><svg class="icon" data-icon="player-play" aria-hidden="true"></svg>Run</button>
           </div>
           <div class="url-box">
             <label for="commandUrl">Manual URL</label>
             <div class="url-row">
               <input id="commandUrl" type="text" readonly value="Select a command" />
-              <button id="copyUrl" type="button" aria-label="Copy"><svg class="icon" aria-hidden="true"><use href="#copy"></use></svg></button>
+              <button id="copyUrl" type="button" aria-label="Copy"><svg class="icon" data-icon="copy" aria-hidden="true"></svg></button>
             </div>
           </div>
           <pre id="commandOutput">Waiting for a command…</pre>
@@ -332,14 +332,14 @@
             <label for="maxDurationInput">maxDuration</label>
             <div class="url-row">
               <input id="maxDurationInput" type="number" min="1" step="1" value="600" />
-              <button id="saveMaxDurationButton" type="button"><svg class="icon" aria-hidden="true"><use href="#device-floppy"></use></svg>Save</button>
+              <button id="saveMaxDurationButton" type="button"><svg class="icon" data-icon="device-floppy" aria-hidden="true"></svg>Save</button>
             </div>
           </div>
           <div class="settings-block">
             <label for="blacklistInput">Add blacklist entry</label>
             <div class="url-row">
               <input id="blacklistInput" type="text" placeholder="Artist or title" />
-              <button id="addBlacklistButton" type="button"><svg class="icon" aria-hidden="true"><use href="#plus"></use></svg>Add</button>
+              <button id="addBlacklistButton" type="button"><svg class="icon" data-icon="plus" aria-hidden="true"></svg>Add</button>
             </div>
           </div>
           <div class="settings-block">
@@ -351,7 +351,7 @@
             <label for="importFileInput">Config JSON</label>
             <div class="url-row">
               <input id="importFileInput" type="file" accept=".json,application/json" />
-              <button id="importConfigButton" type="button"><svg class="icon" aria-hidden="true"><use href="#file-import"></use></svg>Import</button>
+              <button id="importConfigButton" type="button"><svg class="icon" data-icon="file-import" aria-hidden="true"></svg>Import</button>
             </div>
             <p id="importFeedback" class="muted"></p>
           </div>
@@ -372,14 +372,14 @@
       </section>
 
       <nav class="tabs" aria-label="Admin sections">
-        <button class="tab active" data-page="queue" type="button"><svg class="icon" aria-hidden="true"><use href="#playlist"></use></svg><span>Queue</span></button>
-        <button class="tab" data-page="seed" type="button"><svg class="icon" aria-hidden="true"><use href="#plant"></use></svg><span>Seed</span></button>
-        <button class="tab" data-page="chat" type="button"><svg class="icon" aria-hidden="true"><use href="#message-circle"></use></svg><span>Chat</span></button>
-        <button class="tab" data-page="commands" type="button"><svg class="icon" aria-hidden="true"><use href="#terminal-2"></use></svg><span>Commands</span></button>
-        <button class="tab" data-page="twitch" type="button"><svg class="icon" aria-hidden="true"><use href="#brand-twitch"></use></svg><span>Twitch</span></button>
-        <button class="tab" data-page="settings" type="button"><svg class="icon" aria-hidden="true"><use href="#settings"></use></svg><span>Settings</span></button>
-        <button class="tab" data-page="system" type="button"><svg class="icon" aria-hidden="true"><use href="#api"></use></svg><span>API</span></button>
-        <button class="tab" data-page="about" type="button"><svg class="icon" aria-hidden="true"><use href="#alert-circle"></use></svg><span>About</span></button>
+        <button class="tab active" data-page="queue" type="button"><svg class="icon" data-icon="playlist" aria-hidden="true"></svg><span>Queue</span></button>
+        <button class="tab" data-page="seed" type="button"><svg class="icon" data-icon="plant" aria-hidden="true"></svg><span>Seed</span></button>
+        <button class="tab" data-page="chat" type="button"><svg class="icon" data-icon="message-circle" aria-hidden="true"></svg><span>Chat</span></button>
+        <button class="tab" data-page="commands" type="button"><svg class="icon" data-icon="terminal-2" aria-hidden="true"></svg><span>Commands</span></button>
+        <button class="tab" data-page="twitch" type="button"><svg class="icon" data-icon="brand-twitch" aria-hidden="true"></svg><span>Twitch</span></button>
+        <button class="tab" data-page="settings" type="button"><svg class="icon" data-icon="settings" aria-hidden="true"></svg><span>Settings</span></button>
+        <button class="tab" data-page="system" type="button"><svg class="icon" data-icon="api" aria-hidden="true"></svg><span>API</span></button>
+        <button class="tab" data-page="about" type="button"><svg class="icon" data-icon="alert-circle" aria-hidden="true"></svg><span>About</span></button>
       </nav>
     </main>
 
