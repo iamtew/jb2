@@ -5,47 +5,149 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Overlay Stage</title>
     <link rel="icon" href="/img/jukeboks.png" />
-    <link rel="stylesheet" href="/overlay/style.css?v=20261029s" />
-    <link rel="stylesheet" href="/stage/style.css?v=20261029g" />
+    <link rel="stylesheet" href="/overlay/style.css?v=20261029v" />
+    <link rel="stylesheet" href="/stage/style.css?v=20261029v" />
   </head>
   <body>
+    <!-- Tabler Icons (outline), MIT. https://github.com/tabler/tabler-icons -->
+    <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+      <symbol id="refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
+        <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
+      </symbol>
+    </svg>
     <header class="stage-bar">
       <h1>Overlay Stage</h1>
-      <p class="stage-hint">Drag the overlay. OBS at <code>/overlay/</code> follows live. Snap to thirds and center.</p>
+      <p class="stage-hint">Drag or resize. OBS at <code>/overlay/</code> follows live.</p>
       <div class="stage-sizes" role="group" aria-label="Canvas size">
         <button type="button" id="size720" class="stage-size">720p</button>
         <button type="button" id="size1080" class="stage-size">1080p</button>
       </div>
+      <button type="button" id="previewBtn" class="stage-size">Preview: cycle</button>
     </header>
-    <div class="stage-fit" id="stageFit">
-      <div class="stage-canvas" id="stageCanvas">
-        <div class="stage-grid" aria-hidden="true"></div>
-        <div id="songInfo">
-          <div id="infoRow">
-            <div id="playState">⏵</div>
-            <div id="textBlock">
-              <div id="artistWrap">
-                <div id="artist"><span class="overlay-marquee-track">Placeholder Artist Name That Overflows</span></div>
+    <div class="stage-body">
+      <aside class="stage-side">
+        <label class="stage-field">Theme
+          <span class="stage-control">
+            <select id="themeSelect">
+              <option value="lcd-glass">LCD Glass</option>
+              <option value="lower-third">Lower Third</option>
+              <option value="amber-terminal">Amber Terminal</option>
+            </select>
+            <button type="button" class="stage-reset" data-reset="theme" aria-label="Reset theme">
+              <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+            </button>
+          </span>
+        </label>
+        <label class="stage-field">Seek
+          <span class="stage-control">
+            <select id="seekSelect">
+              <option value="sesh-sofs">Sesh Sofs</option>
+              <option value="ice">Ice</option>
+              <option value="magenta">Magenta</option>
+              <option value="white">White</option>
+            </select>
+            <button type="button" class="stage-reset" data-reset="seekStyle" aria-label="Reset seek">
+              <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+            </button>
+          </span>
+        </label>
+        <label class="stage-field">Playing
+          <span class="stage-control">
+            <input id="playingOpacity" type="range" min="0" max="1" step="0.05" value="1" />
+            <button type="button" class="stage-reset" data-reset="playingOpacity" aria-label="Reset playing opacity">
+              <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+            </button>
+          </span>
+        </label>
+        <label class="stage-field">Paused
+          <span class="stage-control">
+            <input id="pausedOpacity" type="range" min="0" max="1" step="0.05" value="0.25" />
+            <button type="button" class="stage-reset" data-reset="pausedOpacity" aria-label="Reset paused opacity">
+              <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+            </button>
+          </span>
+        </label>
+        <label class="stage-field">Pulse
+          <span class="stage-control">
+            <input id="pulseInput" type="range" min="0" max="10" step="1" value="3" />
+            <button type="button" class="stage-reset" data-reset="pulse" aria-label="Reset pulse">
+              <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+            </button>
+          </span>
+        </label>
+        <label class="stage-check">
+          <span class="stage-control">
+            <input id="glassInput" type="checkbox" checked /> Glass
+            <button type="button" class="stage-reset" data-reset="glass" aria-label="Reset glass">
+              <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+            </button>
+          </span>
+        </label>
+        <label class="stage-field">Grid
+          <span class="stage-control">
+            <select id="gridSelect">
+              <option value="thirds-center">Thirds + center</option>
+              <option value="thirds">Thirds</option>
+              <option value="center">Center</option>
+              <option value="golden">Golden</option>
+              <option value="safe">Safe areas</option>
+              <option value="quad">4×4</option>
+              <option value="off">Off</option>
+            </select>
+            <button type="button" class="stage-reset" data-reset="grid" aria-label="Reset grid">
+              <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+            </button>
+          </span>
+        </label>
+        <button type="button" class="stage-reset stage-reset-size" data-reset="size" aria-label="Reset size">
+          <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+          Size
+        </button>
+      </aside>
+      <div class="stage-fit" id="stageFit">
+        <div class="stage-canvas" id="stageCanvas" data-grid="thirds-center">
+          <div class="stage-grid" aria-hidden="true"></div>
+          <div class="overlay-box" id="overlayBox">
+            <div id="songInfo" data-theme="lcd-glass" data-seek="sesh-sofs">
+              <p id="overlayState">PAUSED</p>
+              <div id="infoRow">
+                <div id="playState">⏵</div>
+                <div id="textBlock">
+                  <div id="artistWrap">
+                    <div id="artist"><span class="overlay-marquee-track">Placeholder Artist Name That Overflows</span></div>
+                  </div>
+                  <div id="titleWrap">
+                    <div id="title"><span class="overlay-marquee-track">A Very Long Placeholder Title For Marquee</span></div>
+                  </div>
+                  <div id="albumWrap">
+                    <div id="album"><span class="overlay-marquee-track">Placeholder Album Title Overflow Example</span></div>
+                  </div>
+                </div>
               </div>
-              <div id="titleWrap">
-                <div id="title"><span class="overlay-marquee-track">A Very Long Placeholder Title For Marquee</span></div>
-              </div>
-              <div id="albumWrap">
-                <div id="album"><span class="overlay-marquee-track">Placeholder Album Title Overflow Example</span></div>
+              <div id="progress">
+                <span id="currentTime">00:00</span>
+                <div id="bar">
+                  <div id="fill"></div>
+                  <div id="marker"></div>
+                </div>
+                <span id="totalTime">03:00</span>
               </div>
             </div>
-          </div>
-          <div id="progress">
-            <span id="currentTime">00:00</span>
-            <div id="bar">
-              <div id="fill"></div>
-              <div id="marker"></div>
+            <div class="overlay-handles" aria-hidden="true">
+              <span class="overlay-handle" data-handle="n"></span>
+              <span class="overlay-handle" data-handle="s"></span>
+              <span class="overlay-handle" data-handle="e"></span>
+              <span class="overlay-handle" data-handle="w"></span>
+              <span class="overlay-handle" data-handle="ne"></span>
+              <span class="overlay-handle" data-handle="nw"></span>
+              <span class="overlay-handle" data-handle="se"></span>
+              <span class="overlay-handle" data-handle="sw"></span>
             </div>
-            <span id="totalTime">03:00</span>
           </div>
         </div>
       </div>
     </div>
-    <script src="/stage/app.js?v=20261029s"></script>
+    <script src="/stage/app.js?v=20261029v"></script>
   </body>
 </html>

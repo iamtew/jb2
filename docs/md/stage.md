@@ -2,9 +2,9 @@
 
 `http://localhost:42420/stage/`
 
-Composer for placing the now-playing glass on a 16:9 canvas. Open it from the landing page or the tray **Open Overlay Stage**. OBS still uses [`/overlay/`](overlay.md) as the browser source.
+Composer for placing the now-playing panel on a 16:9 canvas. Open it from the landing page or the tray **Open Overlay Stage**. OBS still uses [`/overlay/`](overlay.md) as a browser source.
 
-JB2 owns the layout (`overlayLayout` in `jb2.sqlite`). Dragging the panel live-updates `/overlay/` over `GET /api/events` (`event: overlay`). Releasing the pointer writes the layout. Stage itself uses placeholder track text and loops play/pause, glow, marquee, and progress so you can see the glass without pear-desktop.
+JB2 owns the layout (`overlayLayout` in `jb2.sqlite`). Dragging or resizing the panel live-updates `/overlay/` over `GET /api/events` (`event: overlay`). Releasing the pointer writes the layout. Look settings save immediately. Stage uses placeholder track text; the preview button cycles play, pause, no-signal, and an 8s auto loop.
 
 ## Canvas
 
@@ -15,13 +15,27 @@ JB2 owns the layout (`overlayLayout` in `jb2.sqlite`). Dragging the panel live-u
 
 The composer scales that canvas to the window. Pointer math stays in canvas pixels. Set the OBS browser source to the same size so the overlay lands where Stage shows it.
 
-Framing lines are thirds (cyan) and center (orange). The panel snaps edges and center to those lines. The grid is Stage-only; it is not drawn in OBS.
+The top bar picks 720p/1080p and preview. Look settings sit in the left sidebar.
+
+## Look
+
+Theme, seek style, playing/paused opacity, pulse, glass, and framing grid. Each has a refresh control back to default, plus reset size. Resize **scales** the whole panel from a 500px design width so type, padding, and the seek bar stay in proportion. Themes change look only (colors, type, fill); the widget structure stays artist / title / album / seek bar.
+
+| Theme | Look |
+|---|---|
+| LCD Glass | Translucent blue glass, Better VCR |
+| Lower Third | Opaque charcoal chyron |
+| Amber Terminal | Black slab, amber type |
+
+Seek styles: Sesh Sofs (yellow/red), Ice, Magenta, White.
+
+Framing grids are Stage-only (not drawn in OBS): thirds+center, thirds, center, golden, broadcast safe (action ~90% / title ~80%), 4×4, off. The panel snaps to the selected grid.
 
 ## HTTP
 
 | Path | Role |
 |---|---|
-| `GET /api/overlay` | live layout `{ x, y, canvasW, canvasH }` |
+| `GET /api/overlay` | live layout |
 | `PUT /api/overlay` | same fields; `save: true` persists to sqlite. Omit or `false` while dragging. |
 
-A look-and-feel toolbar is not in this page yet. Pulse and glass still come from overlay query params. See [Overlay](overlay.md).
+Layout fields: `{ x, y, canvasW, canvasH, theme, seekStyle, playingOpacity, pausedOpacity, panelW, panelH, pulse, glass, grid }`. `panelW` is the visual width; the widget is always 500px internally and scaled. `panelH` is unused for paint (height follows content × scale). Overlay query `?pulse=` and `?bg=0` still override pulse and glass when present.

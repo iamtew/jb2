@@ -13,6 +13,7 @@ body {
   overflow: hidden;
   background: #111;
   color: #eee;
+  color-scheme: dark;
   font-family: Geist, system-ui, sans-serif;
 }
 
@@ -25,9 +26,9 @@ body {
   flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 12px 20px;
-  padding: 12px 16px;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 16px;
   background: #171717;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -38,14 +39,9 @@ body {
   font-family: "Better VCR", sans-serif;
 }
 
-/* Overlay widget stays on Better VCR; overlay/style.css is not the cascade winner here. */
-#songInfo {
-  font-family: "Better VCR", sans-serif;
-}
-
 .stage-hint {
   margin: 0;
-  flex: 1 1 240px;
+  flex: 1 1 180px;
   color: #99aab5;
   font-size: 0.8rem;
   line-height: 1.4;
@@ -57,7 +53,113 @@ body {
 
 .stage-sizes {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.stage-body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.stage-side {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  overflow: auto;
+  background: #171717;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stage-field,
+.stage-check {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #99aab5;
+}
+
+.stage-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stage-control select,
+.stage-control input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.stage-field select,
+.stage-field input[type="range"] {
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: #eee;
+  background: #1c1c1c;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+}
+
+/* Native list is OS-themed; light scheme + dark type so options stay readable. */
+.stage-field select {
+  padding: 4px 8px;
+  color: #111;
+  background: #eee;
+  color-scheme: light;
+}
+
+.stage-field select option {
+  color: #111;
+  background: #fff;
+}
+
+.stage-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: #99aab5;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.stage-reset .icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.stage-reset:hover {
+  color: #eee;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.stage-reset-size {
+  align-self: flex-start;
+  padding: 4px 8px;
+}
+
+.stage-field input[type="range"] {
+  width: 88px;
+  accent-color: #0ff;
 }
 
 .stage-size {
@@ -102,79 +204,140 @@ body {
     linear-gradient(45deg, #333 25%, transparent 25%),
     linear-gradient(-45deg, #333 25%, transparent 25%),
     linear-gradient(45deg, transparent 75%, #333 75%),
-    linear-gradient(-45deg, transparent 75%, #333 75%),
-    linear-gradient(
-      to right,
-      transparent calc(33.333% - 0.5px),
-      rgba(0, 255, 255, 0.45) calc(33.333% - 0.5px),
-      rgba(0, 255, 255, 0.45) calc(33.333% + 0.5px),
-      transparent calc(33.333% + 0.5px)
-    ),
-    linear-gradient(
-      to right,
-      transparent calc(66.666% - 0.5px),
-      rgba(0, 255, 255, 0.45) calc(66.666% - 0.5px),
-      rgba(0, 255, 255, 0.45) calc(66.666% + 0.5px),
-      transparent calc(66.666% + 0.5px)
-    ),
-    linear-gradient(
-      to right,
-      transparent calc(50% - 0.5px),
-      rgba(255, 64, 0, 0.55) calc(50% - 0.5px),
-      rgba(255, 64, 0, 0.55) calc(50% + 0.5px),
-      transparent calc(50% + 0.5px)
-    ),
-    linear-gradient(
-      to bottom,
-      transparent calc(33.333% - 0.5px),
-      rgba(0, 255, 255, 0.45) calc(33.333% - 0.5px),
-      rgba(0, 255, 255, 0.45) calc(33.333% + 0.5px),
-      transparent calc(33.333% + 0.5px)
-    ),
-    linear-gradient(
-      to bottom,
-      transparent calc(66.666% - 0.5px),
-      rgba(0, 255, 255, 0.45) calc(66.666% - 0.5px),
-      rgba(0, 255, 255, 0.45) calc(66.666% + 0.5px),
-      transparent calc(66.666% + 0.5px)
-    ),
-    linear-gradient(
-      to bottom,
-      transparent calc(50% - 0.5px),
-      rgba(255, 64, 0, 0.55) calc(50% - 0.5px),
-      rgba(255, 64, 0, 0.55) calc(50% + 0.5px),
-      transparent calc(50% + 0.5px)
-    );
-  background-size:
-    32px 32px,
-    32px 32px,
-    32px 32px,
-    32px 32px,
-    100% 100%,
-    100% 100%,
-    100% 100%,
-    100% 100%,
-    100% 100%,
-    100% 100%;
-  background-position:
-    0 0,
-    0 16px,
-    16px -16px,
-    -16px 0,
-    0 0,
-    0 0,
-    0 0,
-    0 0,
-    0 0,
-    0 0;
+    linear-gradient(-45deg, transparent 75%, #333 75%);
+  background-size: 32px 32px;
+  background-position: 0 0, 0 16px, 16px -16px, -16px 0;
 }
 
-#songInfo {
+.stage-grid::before,
+.stage-grid::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stage-canvas[data-grid="off"] .stage-grid::before,
+.stage-canvas[data-grid="off"] .stage-grid::after {
+  content: none;
+}
+
+.stage-canvas[data-grid="thirds-center"] .stage-grid::before,
+.stage-canvas[data-grid="thirds"] .stage-grid::before {
+  background-image:
+    linear-gradient(to right, transparent calc(33.333% - 0.5px), rgba(0, 255, 255, 0.45) calc(33.333% - 0.5px), rgba(0, 255, 255, 0.45) calc(33.333% + 0.5px), transparent calc(33.333% + 0.5px)),
+    linear-gradient(to right, transparent calc(66.666% - 0.5px), rgba(0, 255, 255, 0.45) calc(66.666% - 0.5px), rgba(0, 255, 255, 0.45) calc(66.666% + 0.5px), transparent calc(66.666% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(33.333% - 0.5px), rgba(0, 255, 255, 0.45) calc(33.333% - 0.5px), rgba(0, 255, 255, 0.45) calc(33.333% + 0.5px), transparent calc(33.333% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(66.666% - 0.5px), rgba(0, 255, 255, 0.45) calc(66.666% - 0.5px), rgba(0, 255, 255, 0.45) calc(66.666% + 0.5px), transparent calc(66.666% + 0.5px));
+}
+
+.stage-canvas[data-grid="thirds-center"] .stage-grid::after,
+.stage-canvas[data-grid="center"] .stage-grid::after {
+  background-image:
+    linear-gradient(to right, transparent calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+}
+
+.stage-canvas[data-grid="center"] .stage-grid::before {
+  content: none;
+}
+
+.stage-canvas[data-grid="thirds"] .stage-grid::after {
+  content: none;
+}
+
+.stage-canvas[data-grid="golden"] .stage-grid::before {
+  background-image:
+    linear-gradient(to right, transparent calc(38.2% - 0.5px), rgba(0, 255, 255, 0.45) calc(38.2% - 0.5px), rgba(0, 255, 255, 0.45) calc(38.2% + 0.5px), transparent calc(38.2% + 0.5px)),
+    linear-gradient(to right, transparent calc(61.8% - 0.5px), rgba(0, 255, 255, 0.45) calc(61.8% - 0.5px), rgba(0, 255, 255, 0.45) calc(61.8% + 0.5px), transparent calc(61.8% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(38.2% - 0.5px), rgba(0, 255, 255, 0.45) calc(38.2% - 0.5px), rgba(0, 255, 255, 0.45) calc(38.2% + 0.5px), transparent calc(38.2% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(61.8% - 0.5px), rgba(0, 255, 255, 0.45) calc(61.8% - 0.5px), rgba(0, 255, 255, 0.45) calc(61.8% + 0.5px), transparent calc(61.8% + 0.5px));
+}
+
+.stage-canvas[data-grid="golden"] .stage-grid::after {
+  content: none;
+}
+
+.stage-canvas[data-grid="quad"] .stage-grid::before {
+  background-image:
+    linear-gradient(to right, transparent calc(25% - 0.5px), rgba(0, 255, 255, 0.4) calc(25% - 0.5px), rgba(0, 255, 255, 0.4) calc(25% + 0.5px), transparent calc(25% + 0.5px)),
+    linear-gradient(to right, transparent calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to right, transparent calc(75% - 0.5px), rgba(0, 255, 255, 0.4) calc(75% - 0.5px), rgba(0, 255, 255, 0.4) calc(75% + 0.5px), transparent calc(75% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(25% - 0.5px), rgba(0, 255, 255, 0.4) calc(25% - 0.5px), rgba(0, 255, 255, 0.4) calc(25% + 0.5px), transparent calc(25% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% - 0.5px), rgba(255, 64, 0, 0.55) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(75% - 0.5px), rgba(0, 255, 255, 0.4) calc(75% - 0.5px), rgba(0, 255, 255, 0.4) calc(75% + 0.5px), transparent calc(75% + 0.5px));
+}
+
+.stage-canvas[data-grid="quad"] .stage-grid::after {
+  content: none;
+}
+
+.stage-canvas[data-grid="safe"] .stage-grid::before {
+  inset: 5%;
+  border: 1px solid rgba(255, 64, 0, 0.55);
+  background: none;
+}
+
+.stage-canvas[data-grid="safe"] .stage-grid::after {
+  inset: 10%;
+  border: 1px solid rgba(0, 255, 255, 0.45);
+  background: none;
+}
+
+.overlay-box {
+  position: absolute;
+  z-index: 2;
   cursor: grab;
   user-select: none;
   touch-action: none;
 }
 
-#songInfo.is-dragging {
+.overlay-box.is-dragging {
   cursor: grabbing;
 }
+
+#songInfo {
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+.overlay-handles {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.overlay-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #0ff;
+  border: 1px solid #111;
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.overlay-handle[data-handle="n"],
+.overlay-handle[data-handle="s"] {
+  left: 50%;
+  margin-left: -5px;
+  cursor: ns-resize;
+}
+
+.overlay-handle[data-handle="e"],
+.overlay-handle[data-handle="w"] {
+  top: 50%;
+  margin-top: -5px;
+  cursor: ew-resize;
+}
+
+.overlay-handle[data-handle="n"] { top: -5px; }
+.overlay-handle[data-handle="s"] { bottom: -5px; }
+.overlay-handle[data-handle="e"] { right: -5px; }
+.overlay-handle[data-handle="w"] { left: -5px; }
+.overlay-handle[data-handle="nw"] { top: -5px; left: -5px; cursor: nwse-resize; }
+.overlay-handle[data-handle="se"] { bottom: -5px; right: -5px; cursor: nwse-resize; }
+.overlay-handle[data-handle="ne"] { top: -5px; right: -5px; cursor: nesw-resize; }
+.overlay-handle[data-handle="sw"] { bottom: -5px; left: -5px; cursor: nesw-resize; }
