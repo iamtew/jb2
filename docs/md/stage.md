@@ -26,10 +26,17 @@ Theme, seek style, playing/paused opacity, pulse, glass, and framing grid. Each 
 | LCD Glass | Translucent blue glass, Better VCR |
 | Lower Third | Opaque charcoal chyron, Geist |
 | Amber Terminal | Black slab, amber Better VCR |
+| Crypt | Black / blood, Flapdoodle, red bloom |
+| Fraktur | Parchment, Germania One, gold ember |
+| Konstrukt | Black slab, red bar, Konstruktor flash |
+| Street | Asphalt, Streetmark, neon outline |
+| Drop | Candy glass, Lemondrop, pastel bloom |
+| Capsule | Mint pill, Pill Gothic 600mg, inner glow |
+| Poster | Orange / cyan slab, Londrina Solid |
 
 Typefaces come with the theme ([Typography](typography.md)). Stage does not pick fonts.
 
-Seek styles: Sesh Sofa (yellow/red), Ice, Magenta, White.
+Seek styles: Sesh Sofa (yellow/red), Ice, Magenta, White, Sunset, Forest, Gold, Lava, Ocean, Candy, Ultraviolet, Acid, Copper, Cherry, Vapor, Graphite, Honey.
 
 Framing grids are Stage-only (not drawn in OBS): thirds+center, thirds, center, golden, broadcast safe (action ~90% / title ~80%), 4×4, off. The panel snaps to the selected grid.
 

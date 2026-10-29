@@ -19,12 +19,19 @@ Faces live under `webroot/vendor/fonts/`. Overlay and Overlay Stage import `over
 
 ## Overlay themes
 
-These assignments live in `webroot/overlay/style.css`. New themes may name any catalog family there. Overlay Stage has no font selector and no persisted font index. Do not add one.
+These assignments live in `webroot/overlay/style.css`. New themes may name any catalog family there. Overlay Stage has no font selector and no persisted font index. Do not add one. Theme faces must include `0-9` (seek times). Do not use Monster Chiller on a theme.
 
 | Theme | Face |
 |-------|------|
 | LCD Glass | Better VCR |
 | Lower Third | Geist |
 | Amber Terminal | Better VCR |
+| Crypt | Flapdoodle |
+| Fraktur | Germania One |
+| Konstrukt | Konstruktor |
+| Street | Streetmark |
+| Drop | Lemondrop |
+| Capsule | Pill Gothic 600mg |
+| Poster | Londrina Solid |
 
 Landing / Stage / docs headings stay Better VCR. Body chrome stays Geist.

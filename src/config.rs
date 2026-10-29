@@ -77,8 +77,37 @@ fn default_overlay_grid() -> String {
     "thirds-center".to_string()
 }
 
-const OVERLAY_THEMES: [&str; 3] = ["lcd-glass", "lower-third", "amber-terminal"];
-const OVERLAY_SEEK_STYLES: [&str; 4] = ["sesh-sofa", "ice", "magenta", "white"];
+const OVERLAY_THEMES: [&str; 10] = [
+    "lcd-glass",
+    "lower-third",
+    "amber-terminal",
+    "crypt",
+    "fraktur",
+    "konstrukt",
+    "street",
+    "drop",
+    "capsule",
+    "poster",
+];
+const OVERLAY_SEEK_STYLES: [&str; 17] = [
+    "sesh-sofa",
+    "ice",
+    "magenta",
+    "white",
+    "sunset",
+    "forest",
+    "gold",
+    "lava",
+    "ocean",
+    "candy",
+    "ultraviolet",
+    "acid",
+    "copper",
+    "cherry",
+    "vapor",
+    "graphite",
+    "honey",
+];
 const OVERLAY_GRIDS: [&str; 7] = [
     "thirds-center",
     "thirds",
@@ -796,6 +825,14 @@ mod tests {
         assert_eq!(hinted.canvas_h, OVERLAY_CANVAS_720.1);
         assert_eq!(hinted.x, 10);
         assert_eq!(hinted.y, 20);
+
+        let kept = normalize_overlay_layout(OverlayLayout {
+            theme: "crypt".into(),
+            seek_style: "vapor".into(),
+            ..Default::default()
+        });
+        assert_eq!(kept.theme, "crypt");
+        assert_eq!(kept.seek_style, "vapor");
 
         let mut cfg = Config::default();
         apply_patch(
