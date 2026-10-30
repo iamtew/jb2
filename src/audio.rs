@@ -388,6 +388,7 @@ fn bin_span(lo_hz: f32, hi_hz: f32, rate: f32) -> (usize, usize) {
     (a, b.min(WINDOW / 2))
 }
 
+#[cfg(test)]
 fn spectrum_band(freq: f32, bands: usize) -> usize {
     let hi = SPEC_HI_HZ;
     let t = (freq.clamp(SPEC_LO_HZ, hi).ln() - SPEC_LO_HZ.ln()) / (hi.ln() - SPEC_LO_HZ.ln());
