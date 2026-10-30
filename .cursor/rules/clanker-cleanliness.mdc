@@ -1,0 +1,14 @@
+---
+description: Clanker cleanliness. Stop servers and test processes Clanker started when the work is done.
+alwaysApply: true
+---
+
+# Clanker cleanliness
+
+Clanker cleanliness is of utmost importance. Leftover processes are a defect.
+
+Do not leave test/dev servers, debug binaries, watchers, or other background jobs running after the check that needed them.
+
+If Clanker started it, Clanker stops it when the work is done, or when the Meat Bag stops the task. Prefer a short-lived process over a parked one.
+
+Kill the process Clanker spawned. Do not hunt unrelated long-running services the Meat Bag already had.
