@@ -15,11 +15,11 @@ JB2 owns the layout (`overlayLayout` in `jb2.sqlite`). Dragging or resizing the 
 
 The composer scales that canvas to the window. Pointer math stays in canvas pixels. Set the OBS browser source to the same size so the overlay lands where Stage shows it.
 
-The top bar picks 720p/1080p and preview. Look settings sit in the left sidebar.
+The top bar picks 720p/1080p, preview, and the framing grid. The left sidebar keeps **Layers** on top of both tabs. **Overlay** holds theme, seek, opacity, pulse, glass, and reset size. **Viz** holds the visualizer switch and output device.
 
 ## Look
 
-Theme, seek style, playing/paused opacity, pulse, glass, framing grid, and the spectrum layer. Each look control except the spectrum checkbox has a refresh control back to default, plus reset size. The Visualizer checkbox writes `audioVisualizer.enabled` and starts Windows loopback capture. **Output** underneath it picks the playback device (`default` or a listed output name). The line under that select is the capture status. **Layers** is front to back: drag a row to put the visualizer or the panel on top. The visualizer is its own box (`vizX`, `vizY`, `vizW`, `vizH`) with the same corner and edge handles as the panel. OBS follows that box and the stack. Dragging the panel does not move them. OBS [`/overlay/`](overlay.md) shows the same layer. Resize **scales** the whole panel from a 500px design width so type, padding, and the seek bar stay in proportion. Themes change look only (colors, type, fill, and a PixiJS FX halo); the widget structure stays artist / title / album / seek bar. Glass off hides that FX.
+Theme, seek style, playing/paused opacity, pulse, glass, and the spectrum layer. The framing grid sits in the top bar. Each look control except the spectrum checkbox has a refresh control back to default, plus reset size. The Visualizer checkbox writes `audioVisualizer.enabled` and starts Windows loopback capture. **Output** underneath it picks the playback device (`default` or a listed output name). The line under that select is the capture status. **Layers** is front to back: drag a row to put the visualizer or the panel on top. The visualizer is its own box (`vizX`, `vizY`, `vizW`, `vizH`) with the same corner and edge handles as the panel. OBS follows that box and the stack. Dragging the panel does not move them. OBS [`/overlay/`](overlay.md) shows the same layer. Resize **scales** the whole panel from a 500px design width so type, padding, and the seek bar stay in proportion. Themes change look only (colors, type, fill, and a PixiJS FX halo); the widget structure stays artist / title / album / seek bar. Glass off hides that FX.
 
 | Theme | Look |
 |---|---|

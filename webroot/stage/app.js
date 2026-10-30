@@ -12,6 +12,12 @@
     paused: "Preview: paused",
     nosignal: "Preview: no signal",
   };
+  const PREVIEW_ICONS = {
+    cycle: "#eye",
+    playing: "#player-play",
+    paused: "#player-pause",
+    nosignal: "#eye-off",
+  };
 
   const canvas = document.getElementById("stageCanvas");
   const fit = document.getElementById("stageFit");
@@ -211,7 +217,12 @@
 
   function setPreviewMode(mode) {
     previewMode = mode;
-    previewBtn.textContent = PREVIEW_LABELS[mode] || mode;
+    const label = PREVIEW_LABELS[mode] || mode;
+    previewBtn.setAttribute("data-preview", mode);
+    previewBtn.setAttribute("aria-label", label);
+    previewBtn.title = label;
+    const icon = previewBtn.querySelector("use");
+    if (icon) icon.setAttribute("href", PREVIEW_ICONS[mode] || "#eye");
     if (mode === "playing") setPaused(false);
     else if (mode === "paused") setPaused(true);
     else if (mode === "nosignal") applyPreview();
@@ -713,6 +724,20 @@
     });
   }
 
+  document.querySelectorAll("[data-stage-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-stage-tab");
+      document.querySelectorAll("[data-stage-tab]").forEach((el) => {
+        const on = el === btn;
+        el.classList.toggle("is-active", on);
+        el.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      document.querySelectorAll("[data-stage-panel]").forEach((panel) => {
+        panel.hidden = panel.getAttribute("data-stage-panel") !== id;
+      });
+    });
+  });
+
   btn720.addEventListener("click", () => setCanvasSize(1280, 720));
   btn1080.addEventListener("click", () => setCanvasSize(1920, 1080));
   themeSelect.addEventListener("change", () => {
@@ -788,11 +813,13 @@
   }
   copyOverlayUrl.addEventListener("click", () => {
     const text = `${window.location.origin}/overlay/`;
-    const original = copyOverlayUrl.textContent;
+    const icon = copyOverlayUrl.querySelector("use");
     function flash(ok) {
-      copyOverlayUrl.textContent = ok ? "Copied!" : "Copy failed";
+      if (icon) icon.setAttribute("href", ok ? "#check" : "#copy");
+      copyOverlayUrl.setAttribute("aria-label", ok ? "Copied" : "Copy failed");
       window.setTimeout(() => {
-        copyOverlayUrl.textContent = original;
+        if (icon) icon.setAttribute("href", "#copy");
+        copyOverlayUrl.setAttribute("aria-label", "Copy Overlay URL");
       }, 1200);
     }
     if (copyNow(text)) {

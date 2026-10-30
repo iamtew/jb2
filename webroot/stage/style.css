@@ -66,6 +66,38 @@ body {
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.stage-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.stage-tab {
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: #99aab5;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.stage-tab.is-active {
+  border-color: #0ff;
+  color: #0ff;
+}
+
+.stage-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stage-tab-panel[hidden] {
+  display: none;
+}
+
 .stage-field,
 .stage-check {
   display: flex;
@@ -109,6 +141,18 @@ body {
   align-items: center;
   gap: 6px;
   color: #eee;
+}
+
+.stage-bar .stage-bar-grid {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.stage-bar .stage-grid-checks {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 10px;
 }
 
 .stage-field select,
@@ -191,6 +235,51 @@ body {
 .stage-size.is-active {
   border-color: #0ff;
   color: #0ff;
+}
+
+/* Round on purpose: this one cycles modes, the square icons do not. */
+.stage-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px dashed #0ff;
+  background: transparent;
+  color: #0ff;
+  cursor: pointer;
+}
+
+.stage-preview .icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.stage-preview[data-preview="playing"] {
+  border-style: solid;
+  background: rgba(0, 255, 255, 0.16);
+}
+
+.stage-preview[data-preview="paused"] {
+  border-style: solid;
+  border-color: #e0b040;
+  color: #e0b040;
+}
+
+.stage-preview[data-preview="nosignal"] {
+  border-style: solid;
+  border-color: #666;
+  color: #888;
 }
 
 .stage-fit {
