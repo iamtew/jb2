@@ -21,6 +21,7 @@
   let spectrum = [];
   let bass = 0;
   let punch = 0;
+  let audioSource = null;
 
   function skin() {
     const theme = document.getElementById("songInfo")?.getAttribute("data-theme") || "lcd-glass";
@@ -41,6 +42,8 @@
     const box = document.getElementById("vizInput");
     if (box && box.checked !== enabled) box.checked = enabled;
     applyVisibility();
+    if (enabled) connectAudio();
+    else disconnectAudio();
   }
 
   function setStatus(text) {
@@ -116,9 +119,15 @@
   }
 
   function connectAudio() {
-    const source = new EventSource("/sse/audio");
-    source.addEventListener("audio", onAudio);
-    return source;
+    if (audioSource) return;
+    audioSource = new EventSource("/sse/audio");
+    audioSource.addEventListener("audio", onAudio);
+  }
+
+  function disconnectAudio() {
+    if (!audioSource) return;
+    audioSource.close();
+    audioSource = null;
   }
 
   let deviceList = null;
@@ -163,15 +172,6 @@
         return fillDevices(viz.device || "default");
       })
       .catch(() => {});
-    const events = new EventSource("/api/events");
-    events.addEventListener("audioVisualizer", (ev) => {
-      try {
-        const data = JSON.parse(ev.data || "{}");
-        if (typeof data.enabled === "boolean") setEnabled(data.enabled);
-      } catch {
-        /* ignore a bad frame */
-      }
-    });
   }
 
   function init(el) {
@@ -190,8 +190,10 @@
         saveViz({ device: deviceSel.value || "default" });
       });
     }
+    window.addEventListener("jb2-viz-enabled", (event) => {
+      setEnabled(Boolean(event.detail));
+    });
     followEnabled();
-    connectAudio();
     if (typeof PIXI === "undefined") return;
     app = new PIXI.Application();
     app

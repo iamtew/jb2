@@ -200,6 +200,16 @@
         log({ error: "overlay layout parse", details: String(err) });
       }
     });
+    events.addEventListener("audioVisualizer", (event) => {
+      try {
+        const data = JSON.parse(event.data || "{}");
+        if (typeof data.enabled === "boolean") {
+          window.dispatchEvent(new CustomEvent("jb2-viz-enabled", { detail: data.enabled }));
+        }
+      } catch (err) {
+        log({ error: "audio visualizer parse", details: String(err) });
+      }
+    });
   }
 
   function setSongInfoOpacity(opacity, duration) {
