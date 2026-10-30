@@ -29,7 +29,7 @@ Compiled into `jb2`. Versions are the ones locked in `Cargo.lock`.
 
 ## Icons
 
-[Tabler Icons](https://github.com/tabler/tabler-icons) outline set, MIT, Paweł Kuna, v3.34.1. Paths are copied into `webroot/admin/index.html` and `docs/icons.svg`. There is no separate icon font in the tree.
+[Tabler Icons](https://github.com/tabler/tabler-icons) outline set, MIT, Paweł Kuna, v3.34.1. Paths are copied into `webroot/admin/index.html`, `docs/icons.svg`, and `src/tray_icons/`. There is no separate icon font in the tree.
 
 ## Fonts
 

@@ -8,6 +8,7 @@ default:
 
 icon:
     magick webroot/img/jukeboks.png -background none -define icon:auto-resize=256,48,32,16 webroot/img/jukeboks.ico
+    foreach ($n in @('home','settings','artboard','device-tv','copy','info-circle','refresh','x')) { magick -background none "src/tray_icons/$n.svg" -resize 32x32 "src/tray_icons/$n.png" }
 
 build:
     cargo build --release
