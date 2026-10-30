@@ -42,9 +42,7 @@ The blacklist is a list of artist or title substrings, case-insensitive. The def
 
 Import a JB1 `jukeboks.json` or a JB2 `jb2.json`. Present fields overwrite current settings. Empty and `***` secrets are skipped, so a JB1 dump cannot wipe Twitch. JB1 files do not touch Twitch. The page also shows the current settings JSON.
 
-## API
-
-The API page runs a built-in command with optional query params (for example `seconds=10`) and shows the URL and the JSON body. Copy the URL for Streamer.bot or curl. The route list is in [HTTP](http.md).
+The bottom of the page runs a built-in command with optional query params (for example `seconds=10`) and shows the URL and the JSON body. Copy the URL for Streamer.bot or curl. The route list is in [HTTP](http.md).
 
 ## About
 

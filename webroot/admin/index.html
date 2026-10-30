@@ -322,25 +322,6 @@
         </div>
       </section>
 
-      <section id="page-system" class="page">
-        <div class="panel">
-          <div class="controls">
-            <label for="commandSelect">Command</label>
-            <select id="commandSelect"></select>
-            <input id="argInput" type="text" placeholder="Optional params, e.g. seconds=10" />
-            <button id="runCommand" type="button"><svg class="icon" data-icon="player-play" aria-hidden="true"></svg>Run</button>
-          </div>
-          <div class="url-box">
-            <label for="commandUrl">Manual URL</label>
-            <div class="url-row">
-              <input id="commandUrl" type="text" readonly value="Select a command" />
-              <button id="copyUrl" type="button" aria-label="Copy"><svg class="icon" data-icon="copy" aria-hidden="true"></svg></button>
-            </div>
-          </div>
-          <pre id="commandOutput">Waiting for a command…</pre>
-        </div>
-      </section>
-
       <section id="page-settings" class="page">
         <div class="panel">
           <div class="settings-block">
@@ -401,6 +382,23 @@
             <h4>Settings JSON</h4>
             <pre id="settingsOutput">Loading settings…</pre>
           </div>
+          <div class="settings-block">
+            <h4>API</h4>
+            <div class="controls">
+              <label for="commandSelect">Command</label>
+              <select id="commandSelect"></select>
+              <input id="argInput" type="text" placeholder="Optional params, e.g. seconds=10" />
+              <button id="runCommand" type="button"><svg class="icon" data-icon="player-play" aria-hidden="true"></svg>Run</button>
+            </div>
+            <div class="url-box">
+              <label for="commandUrl">Manual URL</label>
+              <div class="url-row">
+                <input id="commandUrl" type="text" readonly value="Select a command" />
+                <button id="copyUrl" type="button" aria-label="Copy"><svg class="icon" data-icon="copy" aria-hidden="true"></svg></button>
+              </div>
+            </div>
+            <pre id="commandOutput">Waiting for a command…</pre>
+          </div>
         </div>
       </section>
 
@@ -449,7 +447,6 @@
         <button class="tab" data-page="commands" type="button"><svg class="icon" data-icon="terminal-2" aria-hidden="true"></svg><span>Commands</span></button>
         <button class="tab" data-page="twitch" type="button"><svg class="icon" data-icon="brand-twitch" aria-hidden="true"></svg><span>Twitch</span></button>
         <button class="tab" data-page="settings" type="button"><svg class="icon" data-icon="settings" aria-hidden="true"></svg><span>Settings</span></button>
-        <button class="tab" data-page="system" type="button"><svg class="icon" data-icon="api" aria-hidden="true"></svg><span>API</span></button>
         <button class="tab" data-page="about" type="button"><svg class="icon" data-icon="info-circle" aria-hidden="true"></svg><span>About</span></button>
       </nav>
     </main>
