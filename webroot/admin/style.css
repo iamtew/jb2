@@ -1295,6 +1295,10 @@ body.is-queue-dragging .queue-drag-handle {
   gap: 8px;
 }
 
+.about-link[hidden] {
+  display: none;
+}
+
 .about-link {
   display: inline-flex;
   align-items: center;

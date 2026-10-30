@@ -7,6 +7,7 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | Path | Role |
 |---|---|
 | `GET /health` | liveness (`data.version` is `{git tag}-{git hash short}`, plus `-dirty` if the build tree was dirty) |
+| `GET /api/update` | GitHub `/releases/latest` redirect vs installed tag (`data.installed`, `data.latest`, `data.updateAvailable`, `data.url`). Cached ~10 min. Network miss is `exitCode: 1` with `updateAvailable: false` |
 | `GET /cmd/jb/songinfo` | now playing |
 | `GET /cmd/jb/queueinfo` | upcoming queue (fails if paused) |
 | `GET /cmd/jb/songrequest?input=` | search and queue (`now=1` plays immediately) |

@@ -46,4 +46,4 @@ The bottom of the page runs a built-in command with optional query params (for e
 
 ## About
 
-Product page: name, logo, the build version from `GET /health`, a short description, and links to GitHub, releases, docs, and credits. MIT, copyright, and pear-desktop are listed there too. The Windows tray **About** item still shows the version string.
+Product page: name, logo, the build version from `GET /health`, a short description, and links to GitHub, releases, docs, and credits. MIT, copyright, and pear-desktop are listed there too. The Windows tray **About** item still shows the version string. When `GET /api/update` finds a newer GitHub tag, an **Update available** link sits next to Releases and opens the latest release.

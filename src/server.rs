@@ -15,12 +15,14 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tiny_http::{Header, Method, Request, Response, StatusCode};
 
 /// Largest request body read; config imports and chat posts are a few KB.
 const MAX_BODY_BYTES: u64 = 1 << 20;
 const BAD_VIDEO_MSG: &str = "bad video: not playable on YouTube Music";
+const LATEST_RELEASE_URL: &str = "https://github.com/iamtew/jb2/releases/latest";
+const UPDATE_CACHE_TTL: Duration = Duration::from_secs(10 * 60);
 
 pub struct App {
     pub store: Store,
@@ -34,6 +36,8 @@ pub struct App {
     overlay_live: Mutex<OverlayLayout>,
     /// ponytail: one lock for every queue write. Split if a long purge blocks admin drags.
     queue_lock: Mutex<()>,
+    /// GitHub /releases/latest tag. Shared so home and About do not double-fetch.
+    update_cache: Mutex<Option<(Instant, Value)>>,
 }
 
 impl App {
@@ -55,6 +59,7 @@ impl App {
             audio,
             overlay_live: Mutex::new(overlay_live),
             queue_lock: Mutex::new(()),
+            update_cache: Mutex::new(None),
         })
     }
 
@@ -247,6 +252,7 @@ Transfer-Encoding: chunked\r\n\
                     json!({"features": ["seed"], "version": crate::version()}),
                 ),
             ),
+            ("GET", "/api/update") => self.update_check(),
             ("GET", "/api/config") => self.config_get(),
             ("POST" | "PUT", "/api/config") => self.config_save(body),
             ("POST", "/api/config/import") => self.config_import(body),
@@ -652,6 +658,42 @@ Transfer-Encoding: chunked\r\n\
         Ok(playing_now(ytmd::build_song_request_response(
             video_id, &fresh, lookup, None,
         )))
+    }
+
+    fn update_check(&self) -> Dispatch {
+        if let Ok(cache) = self.update_cache.lock() {
+            if let Some((at, data)) = cache.as_ref() {
+                if at.elapsed() < UPDATE_CACHE_TTL {
+                    return Dispatch::Json(200, Envelope::ok_data(data.clone()));
+                }
+            }
+        }
+        let installed = crate::version();
+        let data = match fetch_latest_tag() {
+            Ok(latest) => json!({
+                "installed": installed,
+                "latest": latest,
+                "updateAvailable": version_newer(installed, &latest),
+                "url": LATEST_RELEASE_URL,
+            }),
+            Err(msg) => {
+                return Dispatch::Json(
+                    200,
+                    Envelope::fail_data(
+                        msg,
+                        json!({
+                            "installed": installed,
+                            "updateAvailable": false,
+                            "url": LATEST_RELEASE_URL,
+                        }),
+                    ),
+                );
+            }
+        };
+        if let Ok(mut cache) = self.update_cache.lock() {
+            *cache = Some((Instant::now(), data.clone()));
+        }
+        Dispatch::Json(200, Envelope::ok_data(data))
     }
 
     fn config_get(&self) -> Dispatch {
@@ -1800,6 +1842,60 @@ fn queue_mutating(method: &str, path: &str) -> bool {
     !method.eq_ignore_ascii_case("GET") && path.contains("queue")
 }
 
+fn version_tag(version: &str) -> &str {
+    let tag = version.split('-').next().unwrap_or(version);
+    tag.strip_prefix('v').unwrap_or(tag)
+}
+
+fn tag_from_location(loc: &str) -> Option<String> {
+    let path = loc.split(['?', '#']).next().unwrap_or(loc).trim_end_matches('/');
+    let tag = path.rsplit('/').next().unwrap_or("").trim();
+    if tag.is_empty() || tag == "tag" || tag == "latest" {
+        return None;
+    }
+    Some(version_tag(tag).to_string())
+}
+
+fn parse_dotted(v: &str) -> Option<Vec<u64>> {
+    let parts: Result<Vec<u64>, _> = v.split('.').map(|p| p.parse()).collect();
+    parts.ok().filter(|p| !p.is_empty())
+}
+
+fn version_newer(installed: &str, latest: &str) -> bool {
+    match (
+        parse_dotted(version_tag(installed)),
+        parse_dotted(version_tag(latest)),
+    ) {
+        (Some(mut a), Some(mut b)) => {
+            let n = a.len().max(b.len());
+            a.resize(n, 0);
+            b.resize(n, 0);
+            b > a
+        }
+        _ => false,
+    }
+}
+
+fn fetch_latest_tag() -> Result<String, String> {
+    let agent = ureq::AgentBuilder::new()
+        .redirects(0)
+        .timeout(Duration::from_secs(8))
+        .build();
+    let result = agent
+        .get(LATEST_RELEASE_URL)
+        .set("User-Agent", "jb2")
+        .call();
+    let resp = match result {
+        Ok(r) => r,
+        Err(ureq::Error::Status(_, r)) => r,
+        Err(e) => return Err(e.to_string()),
+    };
+    let loc = resp
+        .header("location")
+        .ok_or_else(|| "no Location from GitHub latest".to_string())?;
+    tag_from_location(loc).ok_or_else(|| format!("bad Location: {loc}"))
+}
+
 fn is_quiet_poll_get(method: &str, path: &str) -> bool {
     if path == "/api/overlay" && matches!(method, "GET" | "PUT") {
         return true;
@@ -1944,7 +2040,10 @@ fn is_inside(root: &Path, path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{dir_slash_location, is_quiet_poll_get, origin_allowed};
+    use super::{
+        dir_slash_location, is_quiet_poll_get, origin_allowed, tag_from_location, version_newer,
+        version_tag,
+    };
 
     #[test]
     fn admin_poll_gets_are_quiet() {
@@ -1984,5 +2083,34 @@ mod tests {
         assert_eq!(dir_slash_location("/overlay/", ""), None);
         assert_eq!(dir_slash_location("/overlay/", "dev=true"), None);
         assert_eq!(dir_slash_location("/admin", ""), Some("/admin/".into()));
+    }
+
+    #[test]
+    fn version_tag_strips_hash_and_v() {
+        assert_eq!(version_tag("0.1.2-abc1234-dirty"), "0.1.2");
+        assert_eq!(version_tag("v0.1.2-abc"), "0.1.2");
+        assert_eq!(version_tag("0.1.2"), "0.1.2");
+    }
+
+    #[test]
+    fn tag_from_github_latest_location() {
+        assert_eq!(
+            tag_from_location("https://github.com/iamtew/jb2/releases/tag/0.1.3"),
+            Some("0.1.3".into())
+        );
+        assert_eq!(
+            tag_from_location("/iamtew/jb2/releases/tag/v0.1.3?foo=1"),
+            Some("0.1.3".into())
+        );
+        assert_eq!(tag_from_location("https://github.com/iamtew/jb2/releases/latest"), None);
+    }
+
+    #[test]
+    fn latest_is_newer_than_installed() {
+        assert!(version_newer("0.1.2-abc-dirty", "0.1.3"));
+        assert!(version_newer("0.1.2", "0.2.0"));
+        assert!(!version_newer("0.1.3-abc", "0.1.3"));
+        assert!(!version_newer("0.2.0-abc", "0.1.9"));
+        assert!(!version_newer("nope", "0.1.0"));
     }
 }

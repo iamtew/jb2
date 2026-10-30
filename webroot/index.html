@@ -17,16 +17,16 @@
         </div>
       </section>
       <p class="intro">
-        JB2 is a local control layer for YouTube Music Desktop: Twitch song requests, an OBS
-        now-playing overlay, Overlay Stage, and a small admin dock. For
+        Local control layer for YouTube Music Desktop: song requests, overlay, Overlay Stage, and an
+        admin dock. For
         <a href="https://github.com/pear-devs/pear-desktop">pear-desktop</a>, not the original
         <a href="https://github.com/th-ch/youtube-music">YouTube Music Desktop</a>.
       </p>
       <nav class="actions" aria-label="JB2 on the web">
-        <a class="button" href="https://github.com/iamtew/jb2/releases/latest" target="_blank" rel="noopener">Download</a>
         <a class="button" href="https://iamtew.github.io/jb2/docs.html" target="_blank" rel="noopener">Documentation</a>
         <a class="button secondary" href="https://iamtew.github.io/jb2/docs.html#credits" target="_blank" rel="noopener">Credits</a>
         <a class="button secondary" href="https://github.com/iamtew/jb2" target="_blank" rel="noopener">GitHub</a>
+        <a id="downloadLink" class="button secondary" href="https://github.com/iamtew/jb2/releases/latest" target="_blank" rel="noopener">Download</a>
       </nav>
 
       <section class="cards">
@@ -34,7 +34,7 @@
           <h2>Control Panel</h2>
           <p>Use the admin dock to issue commands and test the available pear-desktop actions.</p>
           <div class="actions">
-            <a href="/admin/" class="button">Open Control Panel</a>
+            <a href="/admin/" class="button">Open</a>
             <button class="button secondary" data-copy="/admin/">Copy URL</button>
           </div>
         </article>
@@ -43,7 +43,7 @@
           <h2>Now Playing Overlay</h2>
           <p>Display the current track, playback state, and progress in OBS as a browser source.</p>
           <div class="actions">
-            <a href="/overlay/" class="button">Open Overlay</a>
+            <a href="/overlay/" class="button">Open</a>
             <button class="button secondary" data-copy="/overlay/">Copy URL</button>
           </div>
         </article>
@@ -52,7 +52,7 @@
           <h2>Overlay Stage</h2>
           <p>Place the overlay on a 720p or 1080p canvas. OBS follows as you drag.</p>
           <div class="actions">
-            <a href="/stage/" class="button">Open Overlay Stage</a>
+            <a href="/stage/" class="button">Open</a>
             <button class="button secondary" data-copy="/stage/">Copy URL</button>
           </div>
         </article>
@@ -60,5 +60,6 @@
     </main>
 
     <script src="/app.js"></script>
+    <script src="/update.js"></script>
   </body>
 </html>
