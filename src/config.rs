@@ -322,6 +322,9 @@ pub struct OverlayLayout {
     pub theme: String,
     #[serde(rename = "seekStyle", default = "default_seek_style")]
     pub seek_style: String,
+    /// `lr`, `rl`, `tb`, or `bt`.
+    #[serde(rename = "seekDir", default = "default_viz_color_dir")]
+    pub seek_dir: String,
     #[serde(rename = "playingOpacity", default = "default_playing_opacity")]
     pub playing_opacity: f32,
     #[serde(rename = "pausedOpacity", default = "default_paused_opacity")]
@@ -361,6 +364,7 @@ impl Default for OverlayLayout {
             canvas_h: OVERLAY_CANVAS_1080.1,
             theme: default_overlay_theme(),
             seek_style: default_seek_style(),
+            seek_dir: default_viz_color_dir(),
             playing_opacity: default_playing_opacity(),
             paused_opacity: default_paused_opacity(),
             panel_w: default_panel_w(),
@@ -387,6 +391,7 @@ impl OverlayLayout {
             "canvasH": self.canvas_h,
             "theme": self.theme,
             "seekStyle": self.seek_style,
+            "seekDir": self.seek_dir,
             "playingOpacity": self.playing_opacity,
             "pausedOpacity": self.paused_opacity,
             "panelW": self.panel_w,
@@ -454,6 +459,7 @@ pub fn normalize_overlay_layout(mut layout: OverlayLayout) -> OverlayLayout {
         layout.seek_style = "sesh-sofa".to_string();
     }
     layout.seek_style = pick_allowed(&layout.seek_style, &OVERLAY_SEEK_STYLES, "sesh-sofa");
+    layout.seek_dir = normalize_viz_color_dir(&layout.seek_dir);
     layout.grid = normalize_overlay_grid(&layout.grid);
     if !layout.playing_opacity.is_finite() {
         layout.playing_opacity = 1.0;
@@ -530,6 +536,9 @@ pub fn overlay_layout_from_value(base: OverlayLayout, parsed: &Value) -> Overlay
     }
     if let Some(s) = parsed.get("seekStyle").and_then(|v| v.as_str()) {
         layout.seek_style = s.to_string();
+    }
+    if let Some(s) = parsed.get("seekDir").and_then(|v| v.as_str()) {
+        layout.seek_dir = s.to_string();
     }
     if let Some(n) = parsed.get("playingOpacity").and_then(json_f32) {
         layout.playing_opacity = n;
@@ -1135,6 +1144,7 @@ mod tests {
         assert_eq!(bogus.y, OVERLAY_CANVAS_1080.1 - OVERLAY_PANEL_H_MIN);
         assert_eq!(bogus.theme, "lcd-glass");
         assert_eq!(bogus.seek_style, "sesh-sofa");
+        assert_eq!(bogus.seek_dir, "lr");
         assert_eq!(bogus.grid, "center,thirds");
         assert!(bogus.snap);
         assert_eq!(bogus.playing_opacity, 1.0);
@@ -1187,6 +1197,7 @@ mod tests {
         assert_eq!(cfg.overlay_layout.canvas_w, 1280);
         assert_eq!(cfg.overlay_layout.theme, "amber-terminal");
         assert_eq!(cfg.overlay_layout.seek_style, "ice");
+        assert_eq!(cfg.overlay_layout.seek_dir, "lr");
         assert!((cfg.overlay_layout.playing_opacity - 0.8).abs() < 0.001);
         assert!((cfg.overlay_layout.paused_opacity - 0.1).abs() < 0.001);
         assert_eq!(cfg.overlay_layout.panel_w, 400);
@@ -1203,6 +1214,24 @@ mod tests {
         );
         let cfg = normalize(cfg);
         assert!(!cfg.overlay_layout.snap);
+
+        let mut cfg = cfg;
+        apply_patch(
+            &mut cfg,
+            &json!({
+                "overlayLayout": { "seekDir": "nope" }
+            }),
+        );
+        let mut cfg = normalize(cfg);
+        assert_eq!(cfg.overlay_layout.seek_dir, "lr");
+        apply_patch(
+            &mut cfg,
+            &json!({
+                "overlayLayout": { "seekDir": "tb" }
+            }),
+        );
+        let cfg = normalize(cfg);
+        assert_eq!(cfg.overlay_layout.seek_dir, "tb");
 
         let alias = normalize_overlay_layout(OverlayLayout {
             grid: "thirds-center".into(),

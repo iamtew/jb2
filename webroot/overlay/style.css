@@ -109,6 +109,7 @@ body.dev .dev-checkerboard {
     opacity: 1;
     transform-origin: 0 0;
     transition: opacity 180ms ease;
+    --seek-dir: to right;
 }
 
 #songInfo.is-glowing[data-theme="lcd-glass"] {
@@ -705,20 +706,32 @@ body.dev .dev-checkerboard {
     outline: none;
 }
 
+#songInfo[data-seek-dir="rl"] {
+    --seek-dir: to left;
+}
+
+#songInfo[data-seek-dir="tb"] {
+    --seek-dir: to top;
+}
+
+#songInfo[data-seek-dir="bt"] {
+    --seek-dir: to bottom;
+}
+
 #songInfo[data-seek="sesh-sofa"] #fill,
 #songInfo[data-seek="sesh-sofs"] #fill,
 #songInfo:not([data-seek]) #fill {
-    background: linear-gradient(to right, #E5F20D, #F20D0D);
+    background: linear-gradient(var(--seek-dir, to right), #E5F20D, #F20D0D);
     box-shadow: 0 0 8px #F20D0D, 0 0 12px #E5F20D;
 }
 
 #songInfo[data-seek="ice"] #fill {
-    background: linear-gradient(to right, #8ef6ff, #e8ffff, #3ad0ff);
+    background: linear-gradient(var(--seek-dir, to right), #8ef6ff, #e8ffff, #3ad0ff);
     box-shadow: 0 0 8px #3ad0ff;
 }
 
 #songInfo[data-seek="magenta"] #fill {
-    background: linear-gradient(to right, #ff4dce, #9b5cff, #ff4dce);
+    background: linear-gradient(var(--seek-dir, to right), #ff4dce, #9b5cff, #ff4dce);
     box-shadow: 0 0 8px #ff4dce;
 }
 
@@ -728,66 +741,66 @@ body.dev .dev-checkerboard {
 }
 
 #songInfo[data-seek="sunset"] #fill {
-    background: linear-gradient(to right, #ff7a18, #ff2d95);
+    background: linear-gradient(var(--seek-dir, to right), #ff7a18, #ff2d95);
     box-shadow: 0 0 8px #ff7a18;
 }
 
 #songInfo[data-seek="forest"] #fill {
-    background: linear-gradient(to right, #0b4d2a, #7dff6a);
+    background: linear-gradient(var(--seek-dir, to right), #0b4d2a, #7dff6a);
     box-shadow: 0 0 8px #2db84a;
 }
 
 #songInfo[data-seek="gold"] #fill {
-    background: linear-gradient(to right, #b8860b, #ffe566);
+    background: linear-gradient(var(--seek-dir, to right), #b8860b, #ffe566);
     box-shadow: 0 0 8px #ffd24a;
 }
 
 #songInfo[data-seek="lava"] #fill {
-    background: linear-gradient(to right, #1a0500, #ff3b00);
+    background: linear-gradient(var(--seek-dir, to right), #1a0500, #ff3b00);
     box-shadow: 0 0 10px #ff3b00;
 }
 
 #songInfo[data-seek="ocean"] #fill {
-    background: linear-gradient(to right, #05204a, #1ec8c8);
+    background: linear-gradient(var(--seek-dir, to right), #05204a, #1ec8c8);
     box-shadow: 0 0 8px #1ec8c8;
 }
 
 #songInfo[data-seek="candy"] #fill {
-    background: linear-gradient(to right, #ff2d95, #7dffc8);
+    background: linear-gradient(var(--seek-dir, to right), #ff2d95, #7dffc8);
     box-shadow: 0 0 8px #ff2d95;
 }
 
 #songInfo[data-seek="ultraviolet"] #fill {
-    background: linear-gradient(to right, #c77dff, #2a0a6a);
+    background: linear-gradient(var(--seek-dir, to right), #c77dff, #2a0a6a);
     box-shadow: 0 0 8px #c77dff;
 }
 
 #songInfo[data-seek="acid"] #fill {
-    background: linear-gradient(to right, #b6ff00, #fff200);
+    background: linear-gradient(var(--seek-dir, to right), #b6ff00, #fff200);
     box-shadow: 0 0 8px #b6ff00;
 }
 
 #songInfo[data-seek="copper"] #fill {
-    background: linear-gradient(to right, #5a2a12, #e07a3a);
+    background: linear-gradient(var(--seek-dir, to right), #5a2a12, #e07a3a);
     box-shadow: 0 0 8px #c45c28;
 }
 
 #songInfo[data-seek="cherry"] #fill {
-    background: linear-gradient(to right, #9b0018, #ff6b8a);
+    background: linear-gradient(var(--seek-dir, to right), #9b0018, #ff6b8a);
     box-shadow: 0 0 8px #ff3b5c;
 }
 
 #songInfo[data-seek="vapor"] #fill {
-    background: linear-gradient(to right, #ff71ce, #01cdfe, #b967ff);
+    background: linear-gradient(var(--seek-dir, to right), #ff71ce, #01cdfe, #b967ff);
     box-shadow: 0 0 8px #01cdfe;
 }
 
 #songInfo[data-seek="graphite"] #fill {
-    background: linear-gradient(to right, #4a4f55, #c5cdd4);
+    background: linear-gradient(var(--seek-dir, to right), #4a4f55, #c5cdd4);
     box-shadow: none;
 }
 
 #songInfo[data-seek="honey"] #fill {
-    background: linear-gradient(to right, #ffe08a, #8a4b08);
+    background: linear-gradient(var(--seek-dir, to right), #ffe08a, #8a4b08);
     box-shadow: 0 0 8px #e0a030;
 }

@@ -56,6 +56,11 @@
     applyVizFrame(layout);
     songInfo.setAttribute("data-theme", layout.theme || "lcd-glass");
     songInfo.setAttribute("data-seek", layout.seekStyle || "sesh-sofa");
+    const seekDir = layout.seekDir;
+    songInfo.setAttribute(
+      "data-seek-dir",
+      seekDir === "rl" || seekDir === "tb" || seekDir === "bt" ? seekDir : "lr"
+    );
     const playOp = Number(layout.playingOpacity);
     const pauseOp = Number(layout.pausedOpacity);
     look.playingOpacity = Number.isFinite(playOp) ? playOp : 1;

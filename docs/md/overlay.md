@@ -2,9 +2,9 @@
 
 `http://localhost:42420/overlay/`
 
-Use it as an OBS browser source. It shows play/pause state, artist, title, album, and a progress bar. Long lines scroll. Paused shows centered `Jukeboks Paused` / `Add song with !sr <song / URL>` instead of the last track. A down pear-desktop WebSocket shows **NO SIGNAL**.
+Use it as an OBS browser source. It shows play/pause state, artist, title, album, and a progress bar. Long lines scroll. After pause, the last track holds for about 2s, then Paused shows centered `Jukeboks Paused` / `Add song with !sr <song / URL>`. A down pear-desktop WebSocket shows **NO SIGNAL**.
 
-Look (theme, seek style, opacities, size, pulse, glass) comes from JB2 `overlayLayout`, same as position. Overlay Stage writes it; this page applies `GET /api/overlay` then `event: overlay` on `GET /api/events`. Set the OBS browser source to the same canvas size (1920×1080 or 1280×720). See [Overlay Stage](stage.md).
+Look (theme, seek style, seek direction, opacities, size, pulse, glass) comes from JB2 `overlayLayout`, same as position. Overlay Stage writes it; this page applies `GET /api/overlay` then `event: overlay` on `GET /api/events`. Set the OBS browser source to the same canvas size (1920×1080 or 1280×720). See [Overlay Stage](stage.md).
 
 Each theme paints a small PixiJS FX layer behind the widget (scan, motes, neon, and so on). Type and the seek bar stay HTML. Text-only (`glass` off or `?bg=0`) hides the FX. If WebGL fails, the canvas is removed and CSS look still works.
 

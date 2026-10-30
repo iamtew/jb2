@@ -28,10 +28,11 @@
   };
 
   const timings = {
-    fadeOutDelay: 180,
     fadeOutDuration: 600,
     fadeInDuration: 180,
   };
+  // Hold last track through YTMD's between-song pause blip; retune if the desk gap feels wrong.
+  const PAUSE_COPY_GRACE_MS = 2000;
   // YTMD position ticks are often ~1s; keep headroom so we don't false-pause between ticks.
   const PROGRESS_STALL_MS = 1800;
 
@@ -178,7 +179,7 @@
       state.pauseFadeTimer = window.setTimeout(() => {
         if (generation !== state.fadeGeneration) return;
         applyVisual({ duration: timings.fadeOutDuration });
-      }, timings.fadeOutDelay);
+      }, PAUSE_COPY_GRACE_MS);
       return;
     }
 

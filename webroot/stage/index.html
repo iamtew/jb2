@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Overlay Stage</title>
     <link rel="icon" href="/img/jukeboks.png" />
-    <link rel="stylesheet" href="/overlay/style.css?v=20261029ai" />
+    <link rel="stylesheet" href="/overlay/style.css?v=20261030j" />
     <link rel="stylesheet" href="/stage/style.css?v=20261030i" />
   </head>
   <body>
@@ -102,6 +102,19 @@
                 <option value="honey">Honey</option>
               </select>
               <button type="button" class="stage-reset" data-reset="seekStyle" aria-label="Reset seek">
+                <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+              </button>
+            </span>
+          </label>
+          <label class="stage-field">Seek direction
+            <span class="stage-control">
+              <select id="seekDirSelect">
+                <option value="lr">Left → right</option>
+                <option value="rl">Right → left</option>
+                <option value="tb">Bottom → top</option>
+                <option value="bt">Top → bottom</option>
+              </select>
+              <button type="button" class="stage-reset" data-reset="seekDir" aria-label="Reset seek direction">
                 <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
               </button>
             </span>
@@ -265,7 +278,7 @@
             <svg id="stageGridLines"></svg>
           </div>
           <div class="overlay-box" id="overlayBox">
-            <div id="songInfo" data-theme="lcd-glass" data-seek="sesh-sofa">
+            <div id="songInfo" data-theme="lcd-glass" data-seek="sesh-sofa" data-seek-dir="lr">
               <p id="overlayState"><span class="overlay-state-lead">Jukeboks Paused</span><span class="overlay-state-hint">Add song with !sr &lt;song / URL&gt;</span></p>
               <div id="infoRow">
                 <div id="playState">⏸</div>
@@ -307,7 +320,7 @@
     <script src="/vendor/pixi.min.js"></script>
     <script src="/overlay/viz.js?v=20261030d"></script>
     <script src="/overlay/fx.js?v=20261029ad"></script>
-    <script src="/overlay/now.js?v=20261030g"></script>
-    <script src="/stage/app.js?v=20261030i"></script>
+    <script src="/overlay/now.js?v=20261030h"></script>
+    <script src="/stage/app.js?v=20261030j"></script>
   </body>
 </html>

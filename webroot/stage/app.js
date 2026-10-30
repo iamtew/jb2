@@ -15,6 +15,7 @@
   const btn1080 = document.getElementById("size1080");
   const themeSelect = document.getElementById("themeSelect");
   const seekSelect = document.getElementById("seekSelect");
+  const seekDirSelect = document.getElementById("seekDirSelect");
   const playingOpacity = document.getElementById("playingOpacity");
   const pausedOpacity = document.getElementById("pausedOpacity");
   const pulseInput = document.getElementById("pulseInput");
@@ -27,6 +28,7 @@
   const DEFAULTS = {
     theme: "lcd-glass",
     seekStyle: "sesh-sofa",
+    seekDir: "lr",
     playingOpacity: 1,
     pausedOpacity: 0.25,
     panelW: 500,
@@ -61,9 +63,14 @@
     if (window.JB2NowPlaying) window.JB2NowPlaying.refresh();
   }
 
+  function seekDirOf(value) {
+    return value === "rl" || value === "tb" || value === "bt" ? value : "lr";
+  }
+
   function applyLook() {
     songInfo.setAttribute("data-theme", layout.theme);
     songInfo.setAttribute("data-seek", layout.seekStyle);
+    songInfo.setAttribute("data-seek-dir", seekDirOf(layout.seekDir));
     songInfo.classList.toggle("is-text-only", !layout.glass);
     refreshNow();
   }
@@ -298,6 +305,7 @@
   function syncToolbar() {
     themeSelect.value = layout.theme;
     seekSelect.value = layout.seekStyle;
+    if (seekDirSelect) seekDirSelect.value = seekDirOf(layout.seekDir);
     playingOpacity.value = String(layout.playingOpacity);
     pausedOpacity.value = String(layout.pausedOpacity);
     pulseInput.value = String(layout.pulse);
@@ -344,6 +352,7 @@
       canvasH: layout.canvasH,
       theme: layout.theme,
       seekStyle: layout.seekStyle,
+      seekDir: seekDirOf(layout.seekDir),
       playingOpacity: layout.playingOpacity,
       pausedOpacity: layout.pausedOpacity,
       panelW: layout.panelW,
@@ -629,6 +638,13 @@
     applyLook();
     saveNow();
   });
+  if (seekDirSelect) {
+    seekDirSelect.addEventListener("change", () => {
+      layout.seekDir = seekDirOf(seekDirSelect.value);
+      applyLook();
+      saveNow();
+    });
+  }
   playingOpacity.addEventListener("input", () => {
     layout.playingOpacity = Number(playingOpacity.value);
     refreshNow();
@@ -741,6 +757,7 @@
     layout.canvasH = Number(data.canvasH) || 1080;
     if (data.theme) layout.theme = data.theme;
     if (data.seekStyle) layout.seekStyle = data.seekStyle;
+    if (data.seekDir) layout.seekDir = seekDirOf(data.seekDir);
     if (data.playingOpacity != null) layout.playingOpacity = Number(data.playingOpacity);
     if (data.pausedOpacity != null) layout.pausedOpacity = Number(data.pausedOpacity);
     if (data.panelW) layout.panelW = Number(data.panelW);
