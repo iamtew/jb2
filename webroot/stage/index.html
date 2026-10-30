@@ -6,7 +6,7 @@
     <title>Overlay Stage</title>
     <link rel="icon" href="/img/jukeboks.png" />
     <link rel="stylesheet" href="/overlay/style.css?v=20261029ai" />
-    <link rel="stylesheet" href="/stage/style.css?v=20261030h" />
+    <link rel="stylesheet" href="/stage/style.css?v=20261030i" />
   </head>
   <body>
     <!-- Tabler Icons (outline), MIT. https://github.com/tabler/tabler-icons -->
@@ -40,6 +40,9 @@
           </button>
         </span>
       </div>
+      <label class="stage-check stage-bar-snap">
+        <input id="snapInput" type="checkbox" checked /> Snap
+      </label>
       <div class="stage-sizes" role="group" aria-label="Canvas size">
         <button type="button" id="size720" class="stage-size">720p</button>
         <button type="button" id="size1080" class="stage-size">1080p</button>
@@ -146,6 +149,7 @@
               <input id="vizInput" type="checkbox" /> Visualizer
             </span>
           </label>
+          <fieldset id="vizLook" class="stage-viz-look" disabled>
           <label class="stage-field">Output
             <span class="stage-control">
               <select id="vizDevice" aria-label="Visualizer output"></select>
@@ -201,6 +205,19 @@
               </button>
             </span>
           </label>
+          <label class="stage-field">Direction
+            <span class="stage-control">
+              <select id="vizColorDir">
+                <option value="lr">Left → right</option>
+                <option value="rl">Right → left</option>
+                <option value="tb">Bottom → top</option>
+                <option value="bt">Top → bottom</option>
+              </select>
+              <button type="button" class="stage-reset" data-viz-reset="colorDir" aria-label="Reset direction">
+                <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+              </button>
+            </span>
+          </label>
           <label class="stage-field">Smoothing
             <span class="stage-control">
               <input id="vizSmoothing" type="range" min="0" max="1" step="0.05" value="0.35" />
@@ -225,6 +242,7 @@
               </button>
             </span>
           </label>
+          </fieldset>
         </div>
       </aside>
       <div class="stage-fit" id="stageFit">
@@ -286,9 +304,9 @@
       </div>
     </div>
     <script src="/vendor/pixi.min.js"></script>
-    <script src="/overlay/viz.js?v=20261030c"></script>
+    <script src="/overlay/viz.js?v=20261030d"></script>
     <script src="/overlay/fx.js?v=20261029ad"></script>
     <script src="/overlay/now.js?v=20261030g"></script>
-    <script src="/stage/app.js?v=20261030g"></script>
+    <script src="/stage/app.js?v=20261030i"></script>
   </body>
 </html>

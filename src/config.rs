@@ -113,6 +113,10 @@ fn default_viz_style() -> String {
     "bands".to_string()
 }
 
+fn default_viz_color_dir() -> String {
+    "lr".to_string()
+}
+
 fn default_viz_peak_fall() -> f32 {
     0.35
 }
@@ -154,6 +158,9 @@ pub struct AudioVisualizer {
     /// Seek gradient id. Empty follows the live seek style.
     #[serde(default)]
     pub color: String,
+    /// `lr`, `rl`, `tb`, or `bt`.
+    #[serde(rename = "colorDir", default = "default_viz_color_dir")]
+    pub color_dir: String,
     #[serde(default)]
     pub mirror: bool,
     /// 0 hides peak caps. Higher drops faster.
@@ -174,6 +181,7 @@ impl Default for AudioVisualizer {
             treble_hz: default_treble_hz(),
             style: default_viz_style(),
             color: String::new(),
+            color_dir: default_viz_color_dir(),
             mirror: false,
             peak_fall: default_viz_peak_fall(),
         }
@@ -192,6 +200,7 @@ pub fn normalize_audio_visualizer(mut viz: AudioVisualizer) -> AudioVisualizer {
     viz.spectrum_bands = viz.spectrum_bands.clamp(1, 32);
     viz.style = normalize_viz_style(&viz.style);
     viz.color = normalize_viz_color(&viz.color);
+    viz.color_dir = normalize_viz_color_dir(&viz.color_dir);
     if !viz.peak_fall.is_finite() {
         viz.peak_fall = default_viz_peak_fall();
     } else {
@@ -227,6 +236,13 @@ fn normalize_viz_color(color: &str) -> String {
         | "ocean" | "candy" | "ultraviolet" | "acid" | "copper" | "cherry" | "vapor"
         | "graphite" | "honey" => color.trim().to_string(),
         _ => String::new(),
+    }
+}
+
+fn normalize_viz_color_dir(dir: &str) -> String {
+    match dir.trim() {
+        "lr" | "rl" | "tb" | "bt" => dir.trim().to_string(),
+        _ => default_viz_color_dir(),
     }
 }
 
@@ -320,6 +336,9 @@ pub struct OverlayLayout {
     pub glass: bool,
     #[serde(default = "default_overlay_grid")]
     pub grid: String,
+    /// Stage-only. OBS ignores this.
+    #[serde(default = "default_true")]
+    pub snap: bool,
     #[serde(rename = "vizX", default)]
     pub viz_x: i32,
     #[serde(rename = "vizY", default = "default_viz_y")]
@@ -349,6 +368,7 @@ impl Default for OverlayLayout {
             pulse: default_overlay_pulse(),
             glass: true,
             grid: default_overlay_grid(),
+            snap: true,
             viz_x: 0,
             viz_y: default_viz_y(),
             viz_w: default_viz_w(),
@@ -374,6 +394,7 @@ impl OverlayLayout {
             "pulse": self.pulse,
             "glass": self.glass,
             "grid": self.grid,
+            "snap": self.snap,
             "vizX": self.viz_x,
             "vizY": self.viz_y,
             "vizW": self.viz_w,
@@ -530,6 +551,9 @@ pub fn overlay_layout_from_value(base: OverlayLayout, parsed: &Value) -> Overlay
     }
     if let Some(s) = parsed.get("grid").and_then(|v| v.as_str()) {
         layout.grid = s.to_string();
+    }
+    if let Some(b) = parsed.get("snap").and_then(|v| v.as_bool()) {
+        layout.snap = b;
     }
     if let Some(n) = parsed.get("vizX").and_then(|v| v.as_i64()) {
         layout.viz_x = i32::try_from(n).unwrap_or(0);
@@ -832,6 +856,9 @@ fn apply_audio_patch(dst: &mut AudioVisualizer, parsed: &Value) {
     if let Some(s) = obj.get("color").and_then(|v| v.as_str()) {
         dst.color = s.to_string();
     }
+    if let Some(s) = obj.get("colorDir").and_then(|v| v.as_str()) {
+        dst.color_dir = s.to_string();
+    }
     if let Some(b) = obj.get("mirror").and_then(|v| v.as_bool()) {
         dst.mirror = b;
     }
@@ -1109,6 +1136,7 @@ mod tests {
         assert_eq!(bogus.theme, "lcd-glass");
         assert_eq!(bogus.seek_style, "sesh-sofa");
         assert_eq!(bogus.grid, "center,thirds");
+        assert!(bogus.snap);
         assert_eq!(bogus.playing_opacity, 1.0);
         assert_eq!(bogus.paused_opacity, 0.0);
         assert_eq!(bogus.panel_w, OVERLAY_PANEL_W_MIN);
@@ -1154,7 +1182,7 @@ mod tests {
                 }
             }),
         );
-        let cfg = normalize(cfg);
+        let mut cfg = normalize(cfg);
         assert_eq!(cfg.overlay_layout.x, 50);
         assert_eq!(cfg.overlay_layout.canvas_w, 1280);
         assert_eq!(cfg.overlay_layout.theme, "amber-terminal");
@@ -1165,6 +1193,16 @@ mod tests {
         assert_eq!(cfg.overlay_layout.pulse, 0);
         assert!(!cfg.overlay_layout.glass);
         assert_eq!(cfg.overlay_layout.grid, "safe");
+        assert!(cfg.overlay_layout.snap);
+
+        apply_patch(
+            &mut cfg,
+            &json!({
+                "overlayLayout": { "snap": false }
+            }),
+        );
+        let cfg = normalize(cfg);
+        assert!(!cfg.overlay_layout.snap);
 
         let alias = normalize_overlay_layout(OverlayLayout {
             grid: "thirds-center".into(),
@@ -1224,6 +1262,7 @@ mod tests {
         assert_eq!(cfg.audio_visualizer.spectrum_bands, 7);
         assert_eq!(cfg.audio_visualizer.style, "bands");
         assert_eq!(cfg.audio_visualizer.color, "");
+        assert_eq!(cfg.audio_visualizer.color_dir, "lr");
         assert!(!cfg.audio_visualizer.mirror);
         assert_eq!(cfg.audio_visualizer.peak_fall, 0.35);
         assert_eq!(cfg.audio_visualizer.update_hz, 30);
@@ -1240,6 +1279,7 @@ mod tests {
                     "spectrumBands": 0,
                     "style": "nope",
                     "color": "nope",
+                    "colorDir": "nope",
                     "mirror": true,
                     "peakFall": 4.0
                 }
@@ -1249,6 +1289,7 @@ mod tests {
         assert_eq!(cfg.audio_visualizer.spectrum_bands, 1);
         assert_eq!(cfg.audio_visualizer.style, "bands");
         assert_eq!(cfg.audio_visualizer.color, "");
+        assert_eq!(cfg.audio_visualizer.color_dir, "lr");
         assert!(cfg.audio_visualizer.mirror);
         assert_eq!(cfg.audio_visualizer.peak_fall, 1.0);
 
@@ -1260,6 +1301,7 @@ mod tests {
                     "spectrumBands": 99,
                     "style": "wave",
                     "color": "ice",
+                    "colorDir": "rl",
                     "peakFall": -1.0
                 }
             }),
@@ -1268,6 +1310,7 @@ mod tests {
         assert_eq!(cfg.audio_visualizer.spectrum_bands, 32);
         assert_eq!(cfg.audio_visualizer.style, "wave");
         assert_eq!(cfg.audio_visualizer.color, "ice");
+        assert_eq!(cfg.audio_visualizer.color_dir, "rl");
         assert_eq!(cfg.audio_visualizer.peak_fall, 0.0);
     }
 }

@@ -20,6 +20,7 @@
   const pulseInput = document.getElementById("pulseInput");
   const glassInput = document.getElementById("glassInput");
   const gridChecks = document.querySelectorAll('input[name="grid"]');
+  const snapInput = document.getElementById("snapInput");
   const gridSvg = document.getElementById("stageGridLines");
   const copyOverlayUrl = document.getElementById("copyOverlayUrl");
 
@@ -33,6 +34,7 @@
     pulse: 3,
     glass: true,
     grid: "center,thirds",
+    snap: true,
     vizX: 0,
     vizY: 800,
     vizW: 1920,
@@ -53,6 +55,7 @@
   let drag = null;
   let putTimer = null;
   let canvasScale = 1;
+  let editTarget = "overlay";
 
   function refreshNow() {
     if (window.JB2NowPlaying) window.JB2NowPlaying.refresh();
@@ -177,12 +180,34 @@
     return Math.max(0, Math.min(canvasSpan - size, Math.round(next)));
   }
 
+  function siblingLines(span, origin, size) {
+    return [origin, origin + size / 2, origin + size].filter((n) => n >= 0 && n <= span);
+  }
+
+  function snapBox(x, y, w, h, other) {
+    const clampX = Math.max(0, Math.min(layout.canvasW - w, Math.round(x)));
+    const clampY = Math.max(0, Math.min(layout.canvasH - h, Math.round(y)));
+    if (!layout.snap) return { x: clampX, y: clampY };
+    const xLines = gridLines(layout.canvasW).concat(siblingLines(layout.canvasW, other.x, other.w));
+    const yLines = gridLines(layout.canvasH).concat(siblingLines(layout.canvasH, other.y, other.h));
+    return {
+      x: snapAxis(x, w, layout.canvasW, xLines),
+      y: snapAxis(y, h, layout.canvasH, yLines),
+    };
+  }
+
+  function vizRect() {
+    return { x: layout.vizX, y: layout.vizY, w: layout.vizW, h: layout.vizH };
+  }
+
+  function overlayRect() {
+    const { w, h } = panelSize();
+    return { x: layout.x, y: layout.y, w, h };
+  }
+
   function snapPanel(x, y) {
     const { w, h } = panelSize();
-    return {
-      x: snapAxis(x, w, layout.canvasW, gridLines(layout.canvasW)),
-      y: snapAxis(y, h, layout.canvasH, gridLines(layout.canvasH)),
-    };
+    return snapBox(x, y, w, h, vizRect());
   }
 
   function applyPanelBox() {
@@ -221,10 +246,26 @@
   }
 
   function snapViz(x, y) {
-    return {
-      x: snapAxis(x, layout.vizW, layout.canvasW, gridLines(layout.canvasW)),
-      y: snapAxis(y, layout.vizH, layout.canvasH, gridLines(layout.canvasH)),
-    };
+    return snapBox(x, y, layout.vizW, layout.vizH, overlayRect());
+  }
+
+  function applyEditTarget() {
+    overlayBox.classList.toggle("is-editing", editTarget === "overlay");
+    if (vizBox) vizBox.classList.toggle("is-editing", editTarget === "viz");
+  }
+
+  function setEditTarget(id) {
+    editTarget = id === "viz" ? "viz" : "overlay";
+    document.querySelectorAll("[data-stage-tab]").forEach((el) => {
+      const on = el.getAttribute("data-stage-tab") === editTarget;
+      el.classList.toggle("is-active", on);
+      el.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    document.querySelectorAll("[data-stage-panel]").forEach((panel) => {
+      panel.hidden = panel.getAttribute("data-stage-panel") !== editTarget;
+    });
+    paintLayers();
+    applyEditTarget();
   }
 
   function parseLayers(value) {
@@ -249,6 +290,7 @@
       li.draggable = true;
       li.dataset.layer = id;
       li.textContent = id === "viz" ? "Visualizer" : "Overlay";
+      li.classList.toggle("is-active", id === editTarget);
       layerList.appendChild(li);
     });
   }
@@ -264,8 +306,10 @@
     gridChecks.forEach((el) => {
       el.checked = selected.has(el.value);
     });
+    if (snapInput) snapInput.checked = layout.snap !== false;
     paintGrid();
     paintLayers();
+    applyEditTarget();
   }
 
   function fitCanvas() {
@@ -307,6 +351,7 @@
       pulse: layout.pulse,
       glass: layout.glass,
       grid: layout.grid,
+      snap: layout.snap !== false,
       vizX: layout.vizX,
       vizY: layout.vizY,
       vizW: layout.vizW,
@@ -364,6 +409,9 @@
     const snapped = snapPanel(layout.x, layout.y);
     layout.x = snapped.x;
     layout.y = snapped.y;
+    const vizSnapped = snapViz(layout.vizX, layout.vizY);
+    layout.vizX = vizSnapped.x;
+    layout.vizY = vizSnapped.y;
     applyPanelBox();
     applyVizBox();
     fitCanvas();
@@ -376,6 +424,7 @@
   }
 
   overlayBox.addEventListener("pointerdown", (ev) => {
+    if (editTarget !== "overlay") return;
     if (ev.button !== 0) return;
     ev.preventDefault();
     overlayBox.setPointerCapture(ev.pointerId);
@@ -436,8 +485,9 @@
     h = w / ratio;
     let x = handle.includes("w") ? drag.x + drag.w - w : drag.x;
     let y = handle.includes("n") ? drag.y + drag.h - h : drag.y;
-    x = Math.max(0, Math.min(layout.canvasW - w, x));
-    y = Math.max(0, Math.min(layout.canvasH - h, y));
+    const snapped = snapBox(x, y, w, h, vizRect());
+    x = snapped.x;
+    y = snapped.y;
     layout.x = Math.round(x);
     layout.y = Math.round(y);
     layout.panelW = Math.round(w);
@@ -460,6 +510,7 @@
 
   if (vizBox) {
     vizBox.addEventListener("pointerdown", (ev) => {
+      if (editTarget !== "viz") return;
       if (ev.button !== 0) return;
       ev.preventDefault();
       vizBox.setPointerCapture(ev.pointerId);
@@ -508,8 +559,9 @@
       h = Math.max(MIN_VIZ, Math.min(layout.canvasH, h));
       if (handle.includes("w")) x = drag.x + drag.w - w;
       if (handle.includes("n")) y = drag.y + drag.h - h;
-      x = Math.max(0, Math.min(layout.canvasW - w, x));
-      y = Math.max(0, Math.min(layout.canvasH - h, y));
+      const snapped = snapBox(x, y, w, h, overlayRect());
+      x = snapped.x;
+      y = snapped.y;
       layout.vizX = Math.round(x);
       layout.vizY = Math.round(y);
       layout.vizW = Math.round(w);
@@ -538,6 +590,11 @@
       const li = ev.target.closest("li");
       if (li) li.classList.remove("is-over");
     });
+    layerList.addEventListener("click", (ev) => {
+      const li = ev.target.closest("li");
+      if (!li || !li.dataset.layer) return;
+      setEditTarget(li.dataset.layer);
+    });
     layerList.addEventListener("drop", (ev) => {
       ev.preventDefault();
       const li = ev.target.closest("li");
@@ -556,15 +613,7 @@
 
   document.querySelectorAll("[data-stage-tab]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-stage-tab");
-      document.querySelectorAll("[data-stage-tab]").forEach((el) => {
-        const on = el === btn;
-        el.classList.toggle("is-active", on);
-        el.setAttribute("aria-selected", on ? "true" : "false");
-      });
-      document.querySelectorAll("[data-stage-panel]").forEach((panel) => {
-        panel.hidden = panel.getAttribute("data-stage-panel") !== id;
-      });
+      setEditTarget(btn.getAttribute("data-stage-tab"));
     });
   });
 
@@ -603,6 +652,12 @@
     applyLook();
     saveNow();
   });
+  if (snapInput) {
+    snapInput.addEventListener("change", () => {
+      layout.snap = snapInput.checked;
+      saveNow();
+    });
+  }
   gridChecks.forEach((el) => {
     el.addEventListener("change", () => {
       const ids = [];
@@ -693,6 +748,7 @@
     if (data.pulse != null) layout.pulse = Number(data.pulse);
     if (typeof data.glass === "boolean") layout.glass = data.glass;
     if (data.grid) layout.grid = formatGrid(parseGrid(data.grid));
+    if (typeof data.snap === "boolean") layout.snap = data.snap;
     if (data.vizX != null) layout.vizX = Number(data.vizX) || 0;
     if (data.vizY != null) layout.vizY = Number(data.vizY) || 0;
     if (data.vizW != null) layout.vizW = Number(data.vizW) || MIN_VIZ;
@@ -707,6 +763,7 @@
   applyLook();
   applyVizBox();
   paintLayers();
+  applyEditTarget();
 
   if (window.JB2NowPlaying) {
     window.JB2NowPlaying.start({

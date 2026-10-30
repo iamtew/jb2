@@ -201,6 +201,7 @@ Transfer-Encoding: chunked\r\n\
                 "enabled": viz.enabled,
                 "style": viz.style,
                 "color": viz.color,
+                "colorDir": viz.color_dir,
                 "spectrumBands": viz.spectrum_bands,
                 "smoothing": viz.smoothing,
                 "mirror": viz.mirror,

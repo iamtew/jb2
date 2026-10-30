@@ -20,9 +20,11 @@
     honey: [0xffe08a, 0x8a4b08],
   };
   const STYLES = { bands: 1, wave: 1, dots: 1, radial: 1 };
+  const DIRS = { lr: 1, rl: 1, tb: 1, bt: 1 };
   const LOOK_DEFAULTS = {
     style: "bands",
     color: "",
+    colorDir: "lr",
     bands: 16,
     smoothing: 0.35,
     mirror: false,
@@ -85,10 +87,16 @@
     if (!hide) window.requestAnimationFrame(resize);
   }
 
+  function setLookLock() {
+    const set = document.getElementById("vizLook");
+    if (set) set.disabled = !enabled;
+  }
+
   function setEnabled(on) {
     enabled = Boolean(on);
     const box = document.getElementById("vizInput");
     if (box && box.checked !== enabled) box.checked = enabled;
+    setLookLock();
     applyVisibility();
     if (enabled) connectAudio();
     else disconnectAudio();
@@ -113,6 +121,7 @@
     saveViz({
       style: look.style,
       color: look.color,
+      colorDir: look.colorDir,
       spectrumBands: look.bands,
       smoothing: look.smoothing,
       mirror: look.mirror,
@@ -130,6 +139,8 @@
     if (styleSel) styleSel.value = look.style;
     const colorSel = document.getElementById("vizColor");
     if (colorSel) colorSel.value = look.color;
+    const dirSel = document.getElementById("vizColorDir");
+    if (dirSel) dirSel.value = DIRS[look.colorDir] ? look.colorDir : LOOK_DEFAULTS.colorDir;
     const bands = document.getElementById("vizBands");
     if (bands) bands.value = String(look.bands);
     const bandsOut = document.getElementById("vizBandsOut");
@@ -147,6 +158,8 @@
     if (styleSel && STYLES[styleSel.value]) look.style = styleSel.value;
     const colorSel = document.getElementById("vizColor");
     if (colorSel) look.color = SEEK[colorSel.value] ? colorSel.value : "";
+    const dirSel = document.getElementById("vizColorDir");
+    if (dirSel) look.colorDir = DIRS[dirSel.value] ? dirSel.value : LOOK_DEFAULTS.colorDir;
     const bands = document.getElementById("vizBands");
     if (bands) look.bands = clampBands(bands.value);
     const smoothing = document.getElementById("vizSmoothing");
@@ -163,6 +176,9 @@
     if (!patch) return;
     if (STYLES[patch.style]) look.style = patch.style;
     if (typeof patch.color === "string") look.color = SEEK[patch.color] ? patch.color : "";
+    if (typeof patch.colorDir === "string") {
+      look.colorDir = DIRS[patch.colorDir] ? patch.colorDir : LOOK_DEFAULTS.colorDir;
+    }
     if (patch.spectrumBands != null) look.bands = clampBands(patch.spectrumBands);
     if (patch.smoothing != null) look.smoothing = clampUnit(patch.smoothing, LOOK_DEFAULTS.smoothing);
     if (typeof patch.mirror === "boolean") look.mirror = patch.mirror;
@@ -191,8 +207,18 @@
     }
   }
 
-  function bandColor(stops, i, n) {
-    return colorAt(stops, n <= 1 ? 0.5 : i / (n - 1));
+  function colorT(i, n, level) {
+    const dir = DIRS[look.colorDir] ? look.colorDir : "lr";
+    if (dir === "tb" || dir === "bt") {
+      const t = Math.min(1, Math.max(0, Number(level) || 0));
+      return dir === "bt" ? 1 - t : t;
+    }
+    const t = n <= 1 ? 0.5 : i / (n - 1);
+    return dir === "rl" ? 1 - t : t;
+  }
+
+  function bandColor(stops, i, n, level) {
+    return colorAt(stops, colorT(i, n, level));
   }
 
   function paintBands(w, h, levels, stops) {
@@ -203,7 +229,7 @@
     const mid = h / 2;
     const showPeak = look.peakFall > 0;
     for (let i = 0; i < n; i++) {
-      const color = bandColor(stops, i, n);
+      const color = bandColor(stops, i, n, levels[i]);
       const bh = Math.max(1, levels[i] * maxH);
       const x = gap + i * (bw + gap);
       if (look.mirror) {
@@ -232,7 +258,7 @@
     const n = levels.length;
     const maxH = h * 0.92 * (1 + punch * 0.18);
     if (n === 1) {
-      const color = bandColor(stops, 0, 1);
+      const color = bandColor(stops, 0, 1, levels[0]);
       const top = waveY(h, levels[0], maxH, true);
       const bot = waveY(h, levels[0], maxH, false);
       gfx.rect(0, Math.min(top, bot), w, Math.max(1, Math.abs(bot - top))).fill({ color, alpha: 0.9 });
@@ -246,7 +272,7 @@
     for (let i = 0; i < n - 1; i++) {
       const x0 = (i / (n - 1)) * w;
       const x1 = ((i + 1) / (n - 1)) * w;
-      const color = bandColor(stops, i, n);
+      const color = bandColor(stops, i, n, levels[i]);
       gfx
         .poly([
           x0, waveY(h, levels[i], maxH, true),
@@ -258,7 +284,7 @@
     }
     if (look.peakFall <= 0) return;
     for (let i = 0; i < n - 1; i++) {
-      const color = bandColor(stops, i, n);
+      const color = bandColor(stops, i, n, levels[i]);
       const x0 = (i / (n - 1)) * w;
       const x1 = ((i + 1) / (n - 1)) * w;
       gfx.moveTo(x0, waveY(h, peaks[i], maxH, true));
@@ -278,7 +304,7 @@
     const cy = look.mirror ? h * 0.33 : h * 0.5;
     const showPeak = look.peakFall > 0;
     for (let i = 0; i < n; i++) {
-      const color = bandColor(stops, i, n);
+      const color = bandColor(stops, i, n, levels[i]);
       const cx = slot * i + slot / 2;
       const r = Math.max(1.5, levels[i] * maxR);
       gfx.circle(cx, cy, r).fill({ color, alpha: 0.9 });
@@ -301,7 +327,7 @@
     const showPeak = look.peakFall > 0;
     for (let i = 0; i < n; i++) {
       const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
-      const color = bandColor(stops, i, n);
+      const color = bandColor(stops, i, n, levels[i]);
       const len = Math.max(1, levels[i] * reach);
       const cos = Math.cos(ang);
       const sin = Math.sin(ang);
@@ -431,7 +457,7 @@
   }
 
   function bindControls() {
-    ["vizStyle", "vizColor", "vizBands", "vizSmoothing", "vizMirror", "vizPeak"].forEach((id) => {
+    ["vizStyle", "vizColor", "vizColorDir", "vizBands", "vizSmoothing", "vizMirror", "vizPeak"].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       const event = el.type === "range" || el.type === "checkbox" ? "input" : "change";

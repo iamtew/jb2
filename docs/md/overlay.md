@@ -8,7 +8,7 @@ Look (theme, seek style, opacities, size, pulse, glass) comes from JB2 `overlayL
 
 Each theme paints a small PixiJS FX layer behind the widget (scan, motes, neon, and so on). Type and the seek bar stay HTML. Text-only (`glass` off or `?bg=0`) hides the FX. If WebGL fails, the canvas is removed and CSS look still works.
 
-A second Pixi layer, `.viz-layer`, sits on the canvas under the panel. It draws the spectrum from `GET /sse/audio` in the style Stage saved (`bands`, `wave`, `dots`, or `radial`), colored by the seek gradient (`audioVisualizer.color`, or the live seek style when that is empty). Peak caps follow `peakFall`. Overlay Stage owns the switch and the look (`audioVisualizer` on `/api/config`). This page follows `event: audioVisualizer` on `GET /api/events`. Capture errors and the disabled state hide the layer. The panel does not move the drawing.
+A second Pixi layer, `.viz-layer`, sits on the canvas under the panel. It draws the spectrum from `GET /sse/audio` in the style Stage saved (`bands`, `wave`, `dots`, or `radial`), colored by the seek gradient (`audioVisualizer.color`, or the live seek style when that is empty). `colorDir` is `lr`, `rl`, `tb`, or `bt`. Peak caps follow `peakFall`. Overlay Stage owns the switch and the look (`audioVisualizer` on `/api/config`). This page follows `event: audioVisualizer` on `GET /api/events`. Capture errors and the disabled state hide the layer. The panel does not move the drawing.
 
 Playback does not come from JB2. The page opens a WebSocket to [pear-desktop](https://github.com/pear-devs/pear-desktop):
 
