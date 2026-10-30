@@ -19,7 +19,7 @@
     graphite: [0x4a4f55, 0xc5cdd4],
     honey: [0xffe08a, 0x8a4b08],
   };
-  const STYLES = { bands: 1, wave: 1, dots: 1, radial: 1 };
+  const STYLES = { bands: 1, wave: 1, dots: 1, trail: 1, warp: 1 };
   const DIRS = { lr: 1, rl: 1, tb: 1, bt: 1 };
   const LOOK_DEFAULTS = {
     style: "bands",
@@ -44,6 +44,8 @@
   let audioSource = null;
   let look = Object.assign({}, LOOK_DEFAULTS);
   let saveTimer = 0;
+  let trailHist = [];
+  let warpZ = 0;
 
   function clampBands(n) {
     const v = Math.round(Number(n));
@@ -316,39 +318,108 @@
     }
   }
 
-  function paintRadial(w, h, levels, stops) {
-    const n = levels.length;
-    const cx = w / 2;
-    const cy = h / 2;
-    const outer = Math.min(w, h) * 0.46;
-    const inner = outer * 0.28;
-    const reach = outer - inner;
-    const thick = Math.max(2, Math.min(18, ((Math.PI * 2 * inner) / n) * 0.55));
-    const showPeak = look.peakFall > 0;
-    for (let i = 0; i < n; i++) {
-      const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
-      const color = bandColor(stops, i, n, levels[i]);
-      const len = Math.max(1, levels[i] * reach);
-      const cos = Math.cos(ang);
-      const sin = Math.sin(ang);
-      const px = Math.cos(ang + Math.PI / 2) * thick * 0.5;
-      const py = Math.sin(ang + Math.PI / 2) * thick * 0.5;
-      const x0 = cx + cos * inner;
-      const y0 = cy + sin * inner;
-      const x1 = cx + cos * (inner + len);
-      const y1 = cy + sin * (inner + len);
-      gfx.poly([x0 - px, y0 - py, x0 + px, y0 + py, x1 + px, y1 + py, x1 - px, y1 - py]).fill({
-        color,
-        alpha: 0.9,
-      });
-      if (!showPeak) continue;
-      const pr = inner + Math.max(0, peaks[i]) * reach;
-      const tx = cx + cos * pr;
-      const ty = cy + sin * pr;
-      gfx.moveTo(tx - px, ty - py);
-      gfx.lineTo(tx + px, ty + py);
-      gfx.stroke({ width: 2, color, alpha: 1 });
+  function strokeSnap(w, h, snap, stops, alpha, maxH) {
+    const n = snap.length;
+    if (!n) return;
+    const width = 2 + punch * 2;
+    if (n === 1) {
+      const color = bandColor(stops, 0, 1, snap[0]);
+      gfx.moveTo(0, waveY(h, snap[0], maxH, true));
+      gfx.lineTo(w, waveY(h, snap[0], maxH, true));
+      gfx.stroke({ width, color, alpha });
+      if (!look.mirror) return;
+      gfx.moveTo(0, waveY(h, snap[0], maxH, false));
+      gfx.lineTo(w, waveY(h, snap[0], maxH, false));
+      gfx.stroke({ width, color, alpha });
+      return;
     }
+    for (let i = 0; i < n - 1; i++) {
+      const x0 = (i / (n - 1)) * w;
+      const x1 = ((i + 1) / (n - 1)) * w;
+      const color = bandColor(stops, i, n, snap[i]);
+      gfx.moveTo(x0, waveY(h, snap[i], maxH, true));
+      gfx.lineTo(x1, waveY(h, snap[i + 1], maxH, true));
+      gfx.stroke({ width, color, alpha });
+      if (!look.mirror) continue;
+      gfx.moveTo(x0, waveY(h, snap[i], maxH, false));
+      gfx.lineTo(x1, waveY(h, snap[i + 1], maxH, false));
+      gfx.stroke({ width, color, alpha });
+    }
+  }
+
+  function paintTrail(w, h, levels, stops) {
+    const cap = look.peakFall <= 0 ? 1 : 1 + Math.round(look.peakFall * 20);
+    if (trailHist.length && trailHist[0].length !== levels.length) trailHist = [];
+    trailHist.push(levels.slice());
+    while (trailHist.length > cap) trailHist.shift();
+    const maxH = h * 0.92 * (1 + punch * 0.18);
+    for (let t = 0; t < trailHist.length; t++) {
+      const alpha = 0.12 + 0.88 * ((t + 1) / trailHist.length);
+      strokeSnap(w, h, trailHist[t], stops, alpha, maxH);
+    }
+  }
+
+  function sampleLevel(levels, t) {
+    const n = levels.length;
+    if (n <= 1) return Number(levels[0]) || 0;
+    const x = Math.min(1, Math.max(0, t)) * (n - 1);
+    const i = Math.min(n - 2, Math.floor(x));
+    const f = x - i;
+    return (Number(levels[i]) || 0) * (1 - f) + (Number(levels[i + 1]) || 0) * f;
+  }
+
+  function paintWarp(w, h, levels, stops, dt) {
+    const n = levels.length;
+    if (!n) return;
+    warpZ = (warpZ + (0.01 + bass * 0.05 + punch * 0.08) * dt) % 1;
+    const horizon = look.mirror ? h * 0.5 : Math.min(h * 0.18, Math.max(8, h - 48));
+    const vpX = w / 2;
+    const floorH = h - horizon;
+    if (floorH < 4) return;
+    const rows = 14;
+    const steps = Math.max(2, n);
+
+    function yAt(depth, t, sign) {
+      const persp = depth * depth;
+      const lift = sampleLevel(levels, t) * floorH * 0.22 * persp;
+      return horizon + sign * (floorH * persp - lift);
+    }
+
+    function xAt(depth, t) {
+      return vpX + (t * w - vpX) * depth;
+    }
+
+    function drawFloor(sign) {
+      for (let r = 0; r < rows; r++) {
+        const depth = (r / rows + warpZ) % 1;
+        if (depth < 0.04) continue;
+        const alpha = 0.15 + 0.75 * depth;
+        const width = 1 + depth * 1.5;
+        for (let i = 0; i < steps - 1; i++) {
+          const t0 = i / (steps - 1);
+          const t1 = (i + 1) / (steps - 1);
+          const color = bandColor(stops, Math.min(n - 1, i), n, sampleLevel(levels, t0));
+          gfx.moveTo(xAt(depth, t0), yAt(depth, t0, sign));
+          gfx.lineTo(xAt(depth, t1), yAt(depth, t1, sign));
+          gfx.stroke({ width, color, alpha });
+        }
+      }
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const color = bandColor(stops, Math.min(n - 1, i), n, sampleLevel(levels, t));
+        const segs = 8;
+        for (let s = 0; s < segs; s++) {
+          const d0 = s / segs;
+          const d1 = (s + 1) / segs;
+          gfx.moveTo(xAt(d0, t), yAt(d0, t, sign));
+          gfx.lineTo(xAt(d1, t), yAt(d1, t, sign));
+          gfx.stroke({ width: 1, color, alpha: 0.18 + 0.62 * d1 });
+        }
+      }
+    }
+
+    drawFloor(1);
+    if (look.mirror) drawFloor(-1);
   }
 
   function paint(ticker) {
@@ -366,9 +437,11 @@
     const stops = stopsForFrame();
     const tint = Math.min(0.18, bass * 0.16);
     if (tint > 0.01) gfx.rect(0, 0, w, h).fill({ color: stops[0], alpha: tint });
+    if (look.style !== "trail") trailHist = [];
     if (look.style === "wave") paintWave(w, h, levels, stops);
     else if (look.style === "dots") paintDots(w, h, levels, stops);
-    else if (look.style === "radial") paintRadial(w, h, levels, stops);
+    else if (look.style === "trail") paintTrail(w, h, levels, stops);
+    else if (look.style === "warp") paintWarp(w, h, levels, stops, dt);
     else paintBands(w, h, levels, stops);
     punch *= 0.86;
   }

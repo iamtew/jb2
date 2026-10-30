@@ -152,7 +152,7 @@ pub struct AudioVisualizer {
     pub mid_hz: [i32; 2],
     #[serde(rename = "trebleHz", default = "default_treble_hz")]
     pub treble_hz: [i32; 2],
-    /// `bands`, `wave`, `dots`, or `radial`.
+    /// `bands`, `wave`, `dots`, `trail`, or `warp`.
     #[serde(default = "default_viz_style")]
     pub style: String,
     /// Seek gradient id. Empty follows the live seek style.
@@ -224,7 +224,7 @@ pub fn normalize_audio_visualizer(mut viz: AudioVisualizer) -> AudioVisualizer {
 
 fn normalize_viz_style(style: &str) -> String {
     match style.trim() {
-        "bands" | "wave" | "dots" | "radial" => style.trim().to_string(),
+        "bands" | "wave" | "dots" | "trail" | "warp" => style.trim().to_string(),
         _ => default_viz_style(),
     }
 }
@@ -1312,5 +1312,29 @@ mod tests {
         assert_eq!(cfg.audio_visualizer.color, "ice");
         assert_eq!(cfg.audio_visualizer.color_dir, "rl");
         assert_eq!(cfg.audio_visualizer.peak_fall, 0.0);
+
+        let mut cfg = cfg;
+        apply_patch(
+            &mut cfg,
+            &json!({ "audioVisualizer": { "style": "radial" } }),
+        );
+        let cfg = normalize(cfg);
+        assert_eq!(cfg.audio_visualizer.style, "bands");
+
+        let mut cfg = cfg;
+        apply_patch(
+            &mut cfg,
+            &json!({ "audioVisualizer": { "style": "trail" } }),
+        );
+        let cfg = normalize(cfg);
+        assert_eq!(cfg.audio_visualizer.style, "trail");
+
+        let mut cfg = cfg;
+        apply_patch(
+            &mut cfg,
+            &json!({ "audioVisualizer": { "style": "warp" } }),
+        );
+        let cfg = normalize(cfg);
+        assert_eq!(cfg.audio_visualizer.style, "warp");
     }
 }
