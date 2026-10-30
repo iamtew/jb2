@@ -159,7 +159,7 @@ impl Analyzer {
 
     pub fn retune(&mut self, rate: u32, viz: &AudioVisualizer) {
         let rate = rate.max(8000);
-        let bands = if viz.spectrum_bands == 32 { 32 } else { 16 };
+        let bands = viz.spectrum_bands.clamp(1, 32) as usize;
         let edges_changed = self.bass_hz != viz.bass_hz
             || self.mid_hz != viz.mid_hz
             || self.treble_hz != viz.treble_hz;
@@ -987,9 +987,7 @@ mod tests {
         };
         let mut slow = Analyzer::new(rate as u32, &heavy);
         let held = slow.push(&zeros, 1).unwrap();
-        let jumped = slow
-            .push(&tone(snapped, rate, WINDOW, 0.9), 1)
-            .unwrap();
+        let jumped = slow.push(&tone(snapped, rate, WINDOW, 0.9), 1).unwrap();
         assert!(
             jumped.spectrum[expect] > held.spectrum[expect] + 0.4,
             "attack {} -> {}",

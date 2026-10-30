@@ -119,6 +119,13 @@ body {
   color: #c8d0d6;
 }
 
+.stage-viz-out {
+  flex: 0 0 3ch;
+  text-align: right;
+  color: #eee;
+  font-variant-numeric: tabular-nums;
+}
+
 .stage-control select,
 .stage-control input[type="range"],
 .stage-grid-checks {

@@ -1,15 +1,32 @@
 (function () {
-  const SKINS = {
-    "lcd-glass": { a: 0x3ec8ff, b: 0xff4cf0 },
-    "lower-third": { a: 0xee1111, b: 0xf4f4f4 },
-    "amber-terminal": { a: 0xffb000, b: 0xff6a00 },
-    crypt: { a: 0xc02020, b: 0xff6a20 },
-    fraktur: { a: 0xe0c060, b: 0x8a6a20 },
-    konstrukt: { a: 0xcc0000, b: 0xf4ead8 },
-    street: { a: 0x39ff14, b: 0xff2bd6 },
-    drop: { a: 0xff78b4, b: 0xffdc50 },
-    capsule: { a: 0x3cb89a, b: 0xa8fff0 },
-    poster: { a: 0x00c8ff, b: 0xe85d04 },
+  // Keep in step with the seek fills in overlay/style.css.
+  const SEEK = {
+    "sesh-sofa": [0xe5f20d, 0xf20d0d],
+    ice: [0x8ef6ff, 0xe8ffff, 0x3ad0ff],
+    magenta: [0xff4dce, 0x9b5cff, 0xff4dce],
+    white: [0xeeeeee],
+    sunset: [0xff7a18, 0xff2d95],
+    forest: [0x0b4d2a, 0x7dff6a],
+    gold: [0xb8860b, 0xffe566],
+    lava: [0x1a0500, 0xff3b00],
+    ocean: [0x05204a, 0x1ec8c8],
+    candy: [0xff2d95, 0x7dffc8],
+    ultraviolet: [0xc77dff, 0x2a0a6a],
+    acid: [0xb6ff00, 0xfff200],
+    copper: [0x5a2a12, 0xe07a3a],
+    cherry: [0x9b0018, 0xff6b8a],
+    vapor: [0xff71ce, 0x01cdfe, 0xb967ff],
+    graphite: [0x4a4f55, 0xc5cdd4],
+    honey: [0xffe08a, 0x8a4b08],
+  };
+  const STYLES = { bands: 1, wave: 1, dots: 1, radial: 1 };
+  const LOOK_DEFAULTS = {
+    style: "bands",
+    color: "",
+    bands: 16,
+    smoothing: 0.35,
+    mirror: false,
+    peakFall: 0.35,
   };
 
   let app = null;
@@ -19,13 +36,44 @@
   let hideForStatus = true;
   let reduced = false;
   let spectrum = [];
+  let peaks = [];
   let bass = 0;
   let punch = 0;
   let audioSource = null;
+  let look = Object.assign({}, LOOK_DEFAULTS);
+  let saveTimer = 0;
 
-  function skin() {
-    const theme = document.getElementById("songInfo")?.getAttribute("data-theme") || "lcd-glass";
-    return SKINS[theme] || SKINS["lcd-glass"];
+  function clampBands(n) {
+    const v = Math.round(Number(n));
+    if (!Number.isFinite(v)) return LOOK_DEFAULTS.bands;
+    return Math.min(32, Math.max(1, v));
+  }
+
+  function clampUnit(n, fallback) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return fallback;
+    return Math.min(1, Math.max(0, v));
+  }
+
+  function mix(a, b, t) {
+    const ch = (c, shift) => (c >> shift) & 255;
+    const r = Math.round(ch(a, 16) + (ch(b, 16) - ch(a, 16)) * t);
+    const g = Math.round(ch(a, 8) + (ch(b, 8) - ch(a, 8)) * t);
+    const bl = Math.round(ch(a, 0) + (ch(b, 0) - ch(a, 0)) * t);
+    return (r << 16) | (g << 8) | bl;
+  }
+
+  function colorAt(stops, t) {
+    if (!stops || !stops.length) return 0xffffff;
+    if (stops.length === 1) return stops[0];
+    const x = Math.min(1, Math.max(0, t)) * (stops.length - 1);
+    const i = Math.min(stops.length - 2, Math.floor(x));
+    return mix(stops[i], stops[i + 1], x - i);
+  }
+
+  function stopsForFrame() {
+    const id = look.color || document.getElementById("songInfo")?.getAttribute("data-seek") || "sesh-sofa";
+    return SEEK[id] || SEEK["sesh-sofa"];
   }
 
   function applyVisibility() {
@@ -59,6 +107,69 @@
     }).catch(() => {});
   }
 
+  function saveLook() {
+    window.clearTimeout(saveTimer);
+    saveTimer = 0;
+    saveViz({
+      style: look.style,
+      color: look.color,
+      spectrumBands: look.bands,
+      smoothing: look.smoothing,
+      mirror: look.mirror,
+      peakFall: look.peakFall,
+    });
+  }
+
+  function scheduleSave() {
+    window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(saveLook, 120);
+  }
+
+  function syncControls() {
+    const styleSel = document.getElementById("vizStyle");
+    if (styleSel) styleSel.value = look.style;
+    const colorSel = document.getElementById("vizColor");
+    if (colorSel) colorSel.value = look.color;
+    const bands = document.getElementById("vizBands");
+    if (bands) bands.value = String(look.bands);
+    const bandsOut = document.getElementById("vizBandsOut");
+    if (bandsOut) bandsOut.textContent = String(look.bands);
+    const smoothing = document.getElementById("vizSmoothing");
+    if (smoothing) smoothing.value = String(look.smoothing);
+    const mirror = document.getElementById("vizMirror");
+    if (mirror) mirror.checked = look.mirror;
+    const peak = document.getElementById("vizPeak");
+    if (peak) peak.value = String(look.peakFall);
+  }
+
+  function readControls() {
+    const styleSel = document.getElementById("vizStyle");
+    if (styleSel && STYLES[styleSel.value]) look.style = styleSel.value;
+    const colorSel = document.getElementById("vizColor");
+    if (colorSel) look.color = SEEK[colorSel.value] ? colorSel.value : "";
+    const bands = document.getElementById("vizBands");
+    if (bands) look.bands = clampBands(bands.value);
+    const smoothing = document.getElementById("vizSmoothing");
+    if (smoothing) look.smoothing = clampUnit(smoothing.value, LOOK_DEFAULTS.smoothing);
+    const mirror = document.getElementById("vizMirror");
+    if (mirror) look.mirror = mirror.checked;
+    const peak = document.getElementById("vizPeak");
+    if (peak) look.peakFall = clampUnit(peak.value, LOOK_DEFAULTS.peakFall);
+    const bandsOut = document.getElementById("vizBandsOut");
+    if (bandsOut) bandsOut.textContent = String(look.bands);
+  }
+
+  function applyLook(patch) {
+    if (!patch) return;
+    if (STYLES[patch.style]) look.style = patch.style;
+    if (typeof patch.color === "string") look.color = SEEK[patch.color] ? patch.color : "";
+    if (patch.spectrumBands != null) look.bands = clampBands(patch.spectrumBands);
+    if (patch.smoothing != null) look.smoothing = clampUnit(patch.smoothing, LOOK_DEFAULTS.smoothing);
+    if (typeof patch.mirror === "boolean") look.mirror = patch.mirror;
+    if (patch.peakFall != null) look.peakFall = clampUnit(patch.peakFall, LOOK_DEFAULTS.peakFall);
+    syncControls();
+  }
+
   function resize() {
     if (!app || !host || host.hidden) return;
     const w = host.clientWidth;
@@ -68,27 +179,171 @@
     app.renderer.resize(w, h);
   }
 
-  function paint() {
+  function stepPeaks(levels, dt) {
+    if (peaks.length !== levels.length) {
+      peaks = levels.slice();
+      return;
+    }
+    if (look.peakFall <= 0) return;
+    const drop = look.peakFall * 0.22 * dt;
+    for (let i = 0; i < levels.length; i++) {
+      peaks[i] = Math.max(levels[i], (peaks[i] || 0) - drop);
+    }
+  }
+
+  function bandColor(stops, i, n) {
+    return colorAt(stops, n <= 1 ? 0.5 : i / (n - 1));
+  }
+
+  function paintBands(w, h, levels, stops) {
+    const n = levels.length;
+    const gap = n <= 1 ? 0 : Math.max(2, Math.round(w / 400));
+    const bw = Math.max(1, (w - gap * (n + 1)) / n);
+    const maxH = h * 0.92 * (1 + punch * 0.18);
+    const mid = h / 2;
+    const showPeak = look.peakFall > 0;
+    for (let i = 0; i < n; i++) {
+      const color = bandColor(stops, i, n);
+      const bh = Math.max(1, levels[i] * maxH);
+      const x = gap + i * (bw + gap);
+      if (look.mirror) {
+        gfx.rect(x, mid - bh / 2, bw, bh).fill({ color, alpha: 0.9 });
+      } else {
+        gfx.rect(x, h - bh, bw, bh).fill({ color, alpha: 0.9 });
+      }
+      if (!showPeak) continue;
+      const ph = Math.max(2, peaks[i] * maxH);
+      if (look.mirror) {
+        gfx.rect(x, mid - ph / 2, bw, 2).fill({ color, alpha: 1 });
+        gfx.rect(x, mid + ph / 2 - 2, bw, 2).fill({ color, alpha: 1 });
+      } else {
+        gfx.rect(x, h - ph, bw, 2).fill({ color, alpha: 1 });
+      }
+    }
+  }
+
+  function waveY(h, level, maxH, top) {
+    const mid = h / 2;
+    if (!look.mirror) return top ? h - level * maxH : h;
+    return top ? mid - (level * maxH) / 2 : mid + (level * maxH) / 2;
+  }
+
+  function paintWave(w, h, levels, stops) {
+    const n = levels.length;
+    const maxH = h * 0.92 * (1 + punch * 0.18);
+    if (n === 1) {
+      const color = bandColor(stops, 0, 1);
+      const top = waveY(h, levels[0], maxH, true);
+      const bot = waveY(h, levels[0], maxH, false);
+      gfx.rect(0, Math.min(top, bot), w, Math.max(1, Math.abs(bot - top))).fill({ color, alpha: 0.9 });
+      if (look.peakFall > 0) {
+        const py = waveY(h, peaks[0], maxH, true);
+        gfx.rect(0, py, w, 2).fill({ color, alpha: 1 });
+        if (look.mirror) gfx.rect(0, waveY(h, peaks[0], maxH, false) - 2, w, 2).fill({ color, alpha: 1 });
+      }
+      return;
+    }
+    for (let i = 0; i < n - 1; i++) {
+      const x0 = (i / (n - 1)) * w;
+      const x1 = ((i + 1) / (n - 1)) * w;
+      const color = bandColor(stops, i, n);
+      gfx
+        .poly([
+          x0, waveY(h, levels[i], maxH, true),
+          x1, waveY(h, levels[i + 1], maxH, true),
+          x1, waveY(h, levels[i + 1], maxH, false),
+          x0, waveY(h, levels[i], maxH, false),
+        ])
+        .fill({ color, alpha: 0.9 });
+    }
+    if (look.peakFall <= 0) return;
+    for (let i = 0; i < n - 1; i++) {
+      const color = bandColor(stops, i, n);
+      const x0 = (i / (n - 1)) * w;
+      const x1 = ((i + 1) / (n - 1)) * w;
+      gfx.moveTo(x0, waveY(h, peaks[i], maxH, true));
+      gfx.lineTo(x1, waveY(h, peaks[i + 1], maxH, true));
+      gfx.stroke({ width: 2, color, alpha: 1 });
+      if (!look.mirror) continue;
+      gfx.moveTo(x0, waveY(h, peaks[i], maxH, false));
+      gfx.lineTo(x1, waveY(h, peaks[i + 1], maxH, false));
+      gfx.stroke({ width: 2, color, alpha: 1 });
+    }
+  }
+
+  function paintDots(w, h, levels, stops) {
+    const n = levels.length;
+    const slot = w / n;
+    const maxR = Math.min(slot * 0.46, h * 0.42);
+    const cy = look.mirror ? h * 0.33 : h * 0.5;
+    const showPeak = look.peakFall > 0;
+    for (let i = 0; i < n; i++) {
+      const color = bandColor(stops, i, n);
+      const cx = slot * i + slot / 2;
+      const r = Math.max(1.5, levels[i] * maxR);
+      gfx.circle(cx, cy, r).fill({ color, alpha: 0.9 });
+      if (look.mirror) gfx.circle(cx, h - cy, r).fill({ color, alpha: 0.9 });
+      if (!showPeak) continue;
+      const pr = Math.max(2, peaks[i] * maxR);
+      gfx.circle(cx, cy, pr).stroke({ width: 1.5, color, alpha: 1 });
+      if (look.mirror) gfx.circle(cx, h - cy, pr).stroke({ width: 1.5, color, alpha: 1 });
+    }
+  }
+
+  function paintRadial(w, h, levels, stops) {
+    const n = levels.length;
+    const cx = w / 2;
+    const cy = h / 2;
+    const outer = Math.min(w, h) * 0.46;
+    const inner = outer * 0.28;
+    const reach = outer - inner;
+    const thick = Math.max(2, Math.min(18, ((Math.PI * 2 * inner) / n) * 0.55));
+    const showPeak = look.peakFall > 0;
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
+      const color = bandColor(stops, i, n);
+      const len = Math.max(1, levels[i] * reach);
+      const cos = Math.cos(ang);
+      const sin = Math.sin(ang);
+      const px = Math.cos(ang + Math.PI / 2) * thick * 0.5;
+      const py = Math.sin(ang + Math.PI / 2) * thick * 0.5;
+      const x0 = cx + cos * inner;
+      const y0 = cy + sin * inner;
+      const x1 = cx + cos * (inner + len);
+      const y1 = cy + sin * (inner + len);
+      gfx.poly([x0 - px, y0 - py, x0 + px, y0 + py, x1 + px, y1 + py, x1 - px, y1 - py]).fill({
+        color,
+        alpha: 0.9,
+      });
+      if (!showPeak) continue;
+      const pr = inner + Math.max(0, peaks[i]) * reach;
+      const tx = cx + cos * pr;
+      const ty = cy + sin * pr;
+      gfx.moveTo(tx - px, ty - py);
+      gfx.lineTo(tx + px, ty + py);
+      gfx.stroke({ width: 2, color, alpha: 1 });
+    }
+  }
+
+  function paint(ticker) {
     if (!gfx || !app) return;
-    const colors = skin();
     const w = app.renderer.width;
     const h = app.renderer.height;
     gfx.clear();
     if (!enabled || hideForStatus || reduced || w < 2 || h < 2) return;
     const n = spectrum.length;
     if (!n) return;
+    const levels = [];
+    for (let i = 0; i < n; i++) levels.push(Number(spectrum[i]) || 0);
+    const dt = ticker && ticker.deltaTime ? ticker.deltaTime : 1;
+    stepPeaks(levels, dt);
+    const stops = stopsForFrame();
     const tint = Math.min(0.18, bass * 0.16);
-    if (tint > 0.01) gfx.rect(0, 0, w, h).fill({ color: colors.a, alpha: tint });
-    const gap = Math.max(2, Math.round(w / 400));
-    const bw = (w - gap * (n + 1)) / n;
-    const maxH = h * 0.92 * (1 + punch * 0.18);
-    for (let i = 0; i < n; i++) {
-      const bh = Math.max(1, (Number(spectrum[i]) || 0) * maxH);
-      gfx.rect(gap + i * (bw + gap), h - bh, Math.max(1, bw), bh).fill({
-        color: i % 2 ? colors.b : colors.a,
-        alpha: 0.9,
-      });
-    }
+    if (tint > 0.01) gfx.rect(0, 0, w, h).fill({ color: stops[0], alpha: tint });
+    if (look.style === "wave") paintWave(w, h, levels, stops);
+    else if (look.style === "dots") paintDots(w, h, levels, stops);
+    else if (look.style === "radial") paintRadial(w, h, levels, stops);
+    else paintBands(w, h, levels, stops);
     punch *= 0.86;
   }
 
@@ -169,9 +424,30 @@
       .then((env) => {
         const viz = (env && env.data && env.data.audioVisualizer) || {};
         setEnabled(Boolean(viz.enabled));
+        applyLook(viz);
         return fillDevices(viz.device || "default");
       })
       .catch(() => {});
+  }
+
+  function bindControls() {
+    ["vizStyle", "vizColor", "vizBands", "vizSmoothing", "vizMirror", "vizPeak"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const event = el.type === "range" || el.type === "checkbox" ? "input" : "change";
+      el.addEventListener(event, () => {
+        readControls();
+        scheduleSave();
+      });
+    });
+    document.querySelectorAll("[data-viz-reset]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute("data-viz-reset");
+        if (Object.prototype.hasOwnProperty.call(LOOK_DEFAULTS, key)) look[key] = LOOK_DEFAULTS[key];
+        syncControls();
+        saveLook();
+      });
+    });
   }
 
   function init(el) {
@@ -190,8 +466,11 @@
         saveViz({ device: deviceSel.value || "default" });
       });
     }
-    window.addEventListener("jb2-viz-enabled", (event) => {
-      setEnabled(Boolean(event.detail));
+    bindControls();
+    window.addEventListener("jb2-viz", (event) => {
+      const data = event.detail || {};
+      if (typeof data.enabled === "boolean") setEnabled(data.enabled);
+      applyLook(data);
     });
     followEnabled();
     if (typeof PIXI === "undefined") return;

@@ -105,9 +105,7 @@
     events.addEventListener("audioVisualizer", (event) => {
       try {
         const data = JSON.parse(event.data || "{}");
-        if (typeof data.enabled === "boolean") {
-          window.dispatchEvent(new CustomEvent("jb2-viz-enabled", { detail: data.enabled }));
-        }
+        window.dispatchEvent(new CustomEvent("jb2-viz", { detail: data }));
       } catch (err) {
         log({ error: "audio visualizer parse", details: String(err) });
       }

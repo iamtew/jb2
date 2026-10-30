@@ -109,6 +109,14 @@ fn default_viz_smoothing() -> f32 {
     0.35
 }
 
+fn default_viz_style() -> String {
+    "bands".to_string()
+}
+
+fn default_viz_peak_fall() -> f32 {
+    0.35
+}
+
 fn default_bass_hz() -> [i32; 2] {
     [20, 250]
 }
@@ -140,6 +148,17 @@ pub struct AudioVisualizer {
     pub mid_hz: [i32; 2],
     #[serde(rename = "trebleHz", default = "default_treble_hz")]
     pub treble_hz: [i32; 2],
+    /// `bands`, `wave`, `dots`, or `radial`.
+    #[serde(default = "default_viz_style")]
+    pub style: String,
+    /// Seek gradient id. Empty follows the live seek style.
+    #[serde(default)]
+    pub color: String,
+    #[serde(default)]
+    pub mirror: bool,
+    /// 0 hides peak caps. Higher drops faster.
+    #[serde(rename = "peakFall", default = "default_viz_peak_fall")]
+    pub peak_fall: f32,
 }
 
 impl Default for AudioVisualizer {
@@ -153,6 +172,10 @@ impl Default for AudioVisualizer {
             bass_hz: default_bass_hz(),
             mid_hz: default_mid_hz(),
             treble_hz: default_treble_hz(),
+            style: default_viz_style(),
+            color: String::new(),
+            mirror: false,
+            peak_fall: default_viz_peak_fall(),
         }
     }
 }
@@ -166,7 +189,14 @@ pub fn normalize_audio_visualizer(mut viz: AudioVisualizer) -> AudioVisualizer {
             name.to_string()
         }
     };
-    viz.spectrum_bands = if viz.spectrum_bands == 32 { 32 } else { 16 };
+    viz.spectrum_bands = viz.spectrum_bands.clamp(1, 32);
+    viz.style = normalize_viz_style(&viz.style);
+    viz.color = normalize_viz_color(&viz.color);
+    if !viz.peak_fall.is_finite() {
+        viz.peak_fall = default_viz_peak_fall();
+    } else {
+        viz.peak_fall = viz.peak_fall.clamp(0.0, 1.0);
+    }
     viz.update_hz = match viz.update_hz {
         45 => 45,
         60 => 60,
@@ -181,6 +211,23 @@ pub fn normalize_audio_visualizer(mut viz: AudioVisualizer) -> AudioVisualizer {
     viz.mid_hz = normalize_hz_pair(viz.mid_hz, default_mid_hz());
     viz.treble_hz = normalize_hz_pair(viz.treble_hz, default_treble_hz());
     viz
+}
+
+fn normalize_viz_style(style: &str) -> String {
+    match style.trim() {
+        "bands" | "wave" | "dots" | "radial" => style.trim().to_string(),
+        _ => default_viz_style(),
+    }
+}
+
+fn normalize_viz_color(color: &str) -> String {
+    match color.trim() {
+        "" => String::new(),
+        "sesh-sofa" | "ice" | "magenta" | "white" | "sunset" | "forest" | "gold" | "lava"
+        | "ocean" | "candy" | "ultraviolet" | "acid" | "copper" | "cherry" | "vapor"
+        | "graphite" | "honey" => color.trim().to_string(),
+        _ => String::new(),
+    }
 }
 
 fn normalize_hz_pair(pair: [i32; 2], fallback: [i32; 2]) -> [i32; 2] {
@@ -413,8 +460,12 @@ pub fn normalize_overlay_layout(mut layout: OverlayLayout) -> OverlayLayout {
     layout.y = layout.y.clamp(0, max_y);
     layout.viz_w = layout.viz_w.clamp(OVERLAY_VIZ_MIN, layout.canvas_w);
     layout.viz_h = layout.viz_h.clamp(OVERLAY_VIZ_MIN, layout.canvas_h);
-    layout.viz_x = layout.viz_x.clamp(0, (layout.canvas_w - layout.viz_w).max(0));
-    layout.viz_y = layout.viz_y.clamp(0, (layout.canvas_h - layout.viz_h).max(0));
+    layout.viz_x = layout
+        .viz_x
+        .clamp(0, (layout.canvas_w - layout.viz_w).max(0));
+    layout.viz_y = layout
+        .viz_y
+        .clamp(0, (layout.canvas_h - layout.viz_h).max(0));
     layout.layers = normalize_layers(&layout.layers);
     layout
 }
@@ -774,6 +825,18 @@ fn apply_audio_patch(dst: &mut AudioVisualizer, parsed: &Value) {
     }
     if let Some(pair) = obj.get("trebleHz").and_then(json_hz_pair) {
         dst.treble_hz = pair;
+    }
+    if let Some(s) = obj.get("style").and_then(|v| v.as_str()) {
+        dst.style = s.to_string();
+    }
+    if let Some(s) = obj.get("color").and_then(|v| v.as_str()) {
+        dst.color = s.to_string();
+    }
+    if let Some(b) = obj.get("mirror").and_then(|v| v.as_bool()) {
+        dst.mirror = b;
+    }
+    if let Some(n) = obj.get("peakFall").and_then(json_f32) {
+        dst.peak_fall = n;
     }
 }
 
@@ -1158,11 +1221,53 @@ mod tests {
         let cfg = normalize(cfg);
         assert!(cfg.audio_visualizer.enabled);
         assert_eq!(cfg.audio_visualizer.device, "default");
-        assert_eq!(cfg.audio_visualizer.spectrum_bands, 16);
+        assert_eq!(cfg.audio_visualizer.spectrum_bands, 7);
+        assert_eq!(cfg.audio_visualizer.style, "bands");
+        assert_eq!(cfg.audio_visualizer.color, "");
+        assert!(!cfg.audio_visualizer.mirror);
+        assert_eq!(cfg.audio_visualizer.peak_fall, 0.35);
         assert_eq!(cfg.audio_visualizer.update_hz, 30);
         assert_eq!(cfg.audio_visualizer.smoothing, 1.0);
         assert_eq!(cfg.audio_visualizer.bass_hz, [20, 250]);
         assert_eq!(cfg.audio_visualizer.mid_hz, [300, 1500]);
         assert_eq!(cfg.audio_visualizer.treble_hz, [2000, 16000]);
+
+        let mut cfg = cfg;
+        apply_patch(
+            &mut cfg,
+            &json!({
+                "audioVisualizer": {
+                    "spectrumBands": 0,
+                    "style": "nope",
+                    "color": "nope",
+                    "mirror": true,
+                    "peakFall": 4.0
+                }
+            }),
+        );
+        let cfg = normalize(cfg);
+        assert_eq!(cfg.audio_visualizer.spectrum_bands, 1);
+        assert_eq!(cfg.audio_visualizer.style, "bands");
+        assert_eq!(cfg.audio_visualizer.color, "");
+        assert!(cfg.audio_visualizer.mirror);
+        assert_eq!(cfg.audio_visualizer.peak_fall, 1.0);
+
+        let mut cfg = cfg;
+        apply_patch(
+            &mut cfg,
+            &json!({
+                "audioVisualizer": {
+                    "spectrumBands": 99,
+                    "style": "wave",
+                    "color": "ice",
+                    "peakFall": -1.0
+                }
+            }),
+        );
+        let cfg = normalize(cfg);
+        assert_eq!(cfg.audio_visualizer.spectrum_bands, 32);
+        assert_eq!(cfg.audio_visualizer.style, "wave");
+        assert_eq!(cfg.audio_visualizer.color, "ice");
+        assert_eq!(cfg.audio_visualizer.peak_fall, 0.0);
     }
 }

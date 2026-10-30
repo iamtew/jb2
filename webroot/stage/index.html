@@ -6,7 +6,7 @@
     <title>Overlay Stage</title>
     <link rel="icon" href="/img/jukeboks.png" />
     <link rel="stylesheet" href="/overlay/style.css?v=20261029ai" />
-    <link rel="stylesheet" href="/stage/style.css?v=20261030g" />
+    <link rel="stylesheet" href="/stage/style.css?v=20261030h" />
   </head>
   <body>
     <!-- Tabler Icons (outline), MIT. https://github.com/tabler/tabler-icons -->
@@ -152,6 +152,79 @@
             </span>
             <span id="vizStatus" class="stage-viz-status"></span>
           </label>
+          <label class="stage-field">Style
+            <span class="stage-control">
+              <select id="vizStyle">
+                <option value="bands">Bands</option>
+                <option value="wave">Wave</option>
+                <option value="dots">Dots</option>
+                <option value="radial">Radial</option>
+              </select>
+              <button type="button" class="stage-reset" data-viz-reset="style" aria-label="Reset style">
+                <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+              </button>
+            </span>
+          </label>
+          <label class="stage-field">Bands
+            <span class="stage-control">
+              <input id="vizBands" type="range" min="1" max="32" step="1" value="16" />
+              <output id="vizBandsOut" class="stage-viz-out" for="vizBands">16</output>
+              <button type="button" class="stage-reset" data-viz-reset="bands" aria-label="Reset bands">
+                <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+              </button>
+            </span>
+          </label>
+          <label class="stage-field">Color
+            <span class="stage-control">
+              <select id="vizColor">
+                <option value="">Follow seek</option>
+                <option value="sesh-sofa">Sesh Sofa</option>
+                <option value="ice">Ice</option>
+                <option value="magenta">Magenta</option>
+                <option value="white">White</option>
+                <option value="sunset">Sunset</option>
+                <option value="forest">Forest</option>
+                <option value="gold">Gold</option>
+                <option value="lava">Lava</option>
+                <option value="ocean">Ocean</option>
+                <option value="candy">Candy</option>
+                <option value="ultraviolet">Ultraviolet</option>
+                <option value="acid">Acid</option>
+                <option value="copper">Copper</option>
+                <option value="cherry">Cherry</option>
+                <option value="vapor">Vapor</option>
+                <option value="graphite">Graphite</option>
+                <option value="honey">Honey</option>
+              </select>
+              <button type="button" class="stage-reset" data-viz-reset="color" aria-label="Reset color">
+                <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+              </button>
+            </span>
+          </label>
+          <label class="stage-field">Smoothing
+            <span class="stage-control">
+              <input id="vizSmoothing" type="range" min="0" max="1" step="0.05" value="0.35" />
+              <button type="button" class="stage-reset" data-viz-reset="smoothing" aria-label="Reset smoothing">
+                <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+              </button>
+            </span>
+          </label>
+          <label class="stage-check">
+            <span class="stage-control">
+              <input id="vizMirror" type="checkbox" /> Mirror
+              <button type="button" class="stage-reset" data-viz-reset="mirror" aria-label="Reset mirror">
+                <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+              </button>
+            </span>
+          </label>
+          <label class="stage-field">Peak fall
+            <span class="stage-control">
+              <input id="vizPeak" type="range" min="0" max="1" step="0.05" value="0.35" />
+              <button type="button" class="stage-reset" data-viz-reset="peakFall" aria-label="Reset peak fall">
+                <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+              </button>
+            </span>
+          </label>
         </div>
       </aside>
       <div class="stage-fit" id="stageFit">
@@ -213,7 +286,7 @@
       </div>
     </div>
     <script src="/vendor/pixi.min.js"></script>
-    <script src="/overlay/viz.js?v=20261030b"></script>
+    <script src="/overlay/viz.js?v=20261030c"></script>
     <script src="/overlay/fx.js?v=20261029ad"></script>
     <script src="/overlay/now.js?v=20261030g"></script>
     <script src="/stage/app.js?v=20261030g"></script>

@@ -194,9 +194,18 @@ Transfer-Encoding: chunked\r\n\
             return;
         }
         self.audio.apply(cfg.audio_visualizer.clone());
+        let viz = &cfg.audio_visualizer;
         self.emit(
             "audioVisualizer",
-            json!({"enabled": cfg.audio_visualizer.enabled}),
+            json!({
+                "enabled": viz.enabled,
+                "style": viz.style,
+                "color": viz.color,
+                "spectrumBands": viz.spectrum_bands,
+                "smoothing": viz.smoothing,
+                "mirror": viz.mirror,
+                "peakFall": viz.peak_fall,
+            }),
         );
     }
 
