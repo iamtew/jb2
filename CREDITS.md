@@ -73,6 +73,8 @@ Vendored for the pages in `docs/`. Not part of the JB2 process. License texts si
 | `docs/vendor/pixi.min.js` | PixiJS 8.22.0 | MIT, Mathew Groves and Chad Engler. `docs/vendor/pixi.LICENSE` |
 | `docs/vendor/marked.min.js` | marked 18.1.2 | MIT, MarkedJS and Christopher Jeffrey. `docs/vendor/marked.LICENSE` |
 
+The docs index hero and the docs topbar traveling grid share this Pixi bundle.
+
 [PixiJS](https://github.com/pixijs/pixijs). [marked](https://github.com/markedjs/marked).
 
 ## Art
