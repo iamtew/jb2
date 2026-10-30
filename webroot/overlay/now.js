@@ -52,6 +52,7 @@
   let onMessage = function () {};
   let started = false;
   let ws;
+  let commandsEnabled = true;
 
   function ytmdWsUrl(token) {
     const url = `${protocol}://${host}:${port}/api/v1/ws`;
@@ -94,10 +95,12 @@
       return;
     }
     if (ui.overlayState) {
-      ui.overlayState.innerHTML =
-        kind === "nosignal"
-          ? "NO SIGNAL"
-          : '<span class="overlay-state-lead">Jukeboks Paused</span><span class="overlay-state-hint">Add song with !sr &lt;song / URL&gt;</span>';
+      const paused =
+        '<span class="overlay-state-lead">Jukeboks Paused</span>' +
+        (commandsEnabled
+          ? '<span class="overlay-state-hint">Add song with !sr &lt;song / URL&gt;</span>'
+          : "");
+      ui.overlayState.innerHTML = kind === "nosignal" ? "NO SIGNAL" : paused;
     }
     ui.songInfo.classList.add("is-status");
   }
@@ -377,6 +380,31 @@
     };
   }
 
+  function setCommandsEnabled(enabled) {
+    const next = Boolean(enabled);
+    if (commandsEnabled === next) return;
+    commandsEnabled = next;
+    if (started) refresh();
+  }
+
+  function followCommands() {
+    fetch("/cmd/jb/commands")
+      .then((res) => res.json())
+      .then((env) => {
+        if (env && env.exitCode === 0 && typeof env.data?.enabled === "boolean") {
+          setCommandsEnabled(env.data.enabled);
+        }
+      })
+      .catch(() => {});
+    const events = new EventSource("/api/events");
+    events.addEventListener("commands", (event) => {
+      try {
+        const data = JSON.parse(event.data || "{}");
+        if (typeof data.enabled === "boolean") setCommandsEnabled(data.enabled);
+      } catch (_) {}
+    });
+  }
+
   function start(opts) {
     opts = opts || {};
     if (opts.look) look = opts.look;
@@ -388,6 +416,7 @@
     }
     started = true;
     window.addEventListener("resize", repaintText);
+    followCommands();
     refresh();
     connect();
   }
