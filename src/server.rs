@@ -1850,7 +1850,11 @@ fn version_tag(version: &str) -> &str {
 }
 
 fn tag_from_location(loc: &str) -> Option<String> {
-    let path = loc.split(['?', '#']).next().unwrap_or(loc).trim_end_matches('/');
+    let path = loc
+        .split(['?', '#'])
+        .next()
+        .unwrap_or(loc)
+        .trim_end_matches('/');
     let tag = path.rsplit('/').next().unwrap_or("").trim();
     if tag.is_empty() || tag == "tag" || tag == "latest" {
         return None;
@@ -2104,7 +2108,10 @@ mod tests {
             tag_from_location("/iamtew/jb2/releases/tag/v0.1.3?foo=1"),
             Some("0.1.3".into())
         );
-        assert_eq!(tag_from_location("https://github.com/iamtew/jb2/releases/latest"), None);
+        assert_eq!(
+            tag_from_location("https://github.com/iamtew/jb2/releases/latest"),
+            None
+        );
     }
 
     #[test]

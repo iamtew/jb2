@@ -391,10 +391,7 @@ fn is_viz_id(id: &str) -> bool {
     let Some(rest) = id.strip_prefix("viz-") else {
         return false;
     };
-    !rest.is_empty()
-        && rest
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    !rest.is_empty() && rest.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
 fn unique_viz_id(want: &str, used: &mut HashSet<String>) -> String {
@@ -423,7 +420,11 @@ fn clamp_viz_rect(layer: &mut OverlayVizLayer, canvas_w: i32, canvas_h: i32) {
     layer.y = layer.y.clamp(0, (canvas_h - layer.h).max(0));
 }
 
-fn normalize_viz_layer(mut layer: OverlayVizLayer, canvas_w: i32, canvas_h: i32) -> OverlayVizLayer {
+fn normalize_viz_layer(
+    mut layer: OverlayVizLayer,
+    canvas_w: i32,
+    canvas_h: i32,
+) -> OverlayVizLayer {
     layer.style = normalize_viz_style(&layer.style);
     layer.color = normalize_viz_color(&layer.color);
     layer.color_dir = normalize_viz_color_dir(&layer.color_dir);
@@ -1678,10 +1679,7 @@ mod tests {
         assert_eq!(cfg.audio_visualizer.style, "trail");
 
         let mut cfg = cfg;
-        apply_patch(
-            &mut cfg,
-            &json!({ "audioVisualizer": { "style": "warp" } }),
-        );
+        apply_patch(&mut cfg, &json!({ "audioVisualizer": { "style": "warp" } }));
         let cfg = normalize(cfg);
         assert_eq!(cfg.audio_visualizer.style, "warp");
     }
