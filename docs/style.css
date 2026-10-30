@@ -152,9 +152,9 @@ img { image-rendering: pixelated; image-rendering: crisp-edges; }
 }
 
 .landing-copy h1 {
-  margin: 0 0 12px;
+  margin: 0.25em 0 12px;
   font-size: clamp(3rem, 8vw, 5.5rem);
-  line-height: 0.9;
+  line-height: 1.15;
   font-weight: 700;
   font-family: "Better VCR", sans-serif;
   text-shadow: 0 0 18px rgba(62, 200, 255, 0.75), 0 0 2px #fff;

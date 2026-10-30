@@ -26,13 +26,26 @@ body {
   padding: 48px 24px 64px;
 }
 
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
 .logo {
   display: block;
+  flex: 0 0 auto;
   width: min(280px, 70vw);
   height: auto;
-  margin: 0 0 24px;
+  margin: 0;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+.hero-title h1 { margin-bottom: 0; }
+
+@media (max-width: 640px) {
+  .hero { flex-direction: column; align-items: flex-start; }
 }
 
 .eyebrow {
@@ -52,6 +65,7 @@ h1 {
 
 .intro {
   max-width: 720px;
+  margin: 24px 0 0;
   font-size: 1rem;
   line-height: 1.6;
   color: var(--muted);
