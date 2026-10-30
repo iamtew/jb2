@@ -62,7 +62,7 @@ Vendored for Overlay and Overlay Stage (`webroot/`). License text sits next to t
 |---|---|---|
 | `webroot/vendor/pixi.min.js` | PixiJS 8.22.0 | MIT, Mathew Groves and Chad Engler. `webroot/vendor/pixi.LICENSE` |
 
-Same bundle as the docs hero. Overlay uses it for a transparent FX layer behind the now-playing widget.
+Same bundle as the docs hero. Overlay uses it for a transparent FX layer behind the now-playing widget. The local app home uses it for the idle CRT backdrop.
 
 ## Docs site
 

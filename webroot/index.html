@@ -8,9 +8,10 @@
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
+    <div id="stage" aria-hidden="true"></div>
     <main class="landing-shell">
       <section class="hero">
-        <img class="logo" src="/img/jukeboks.png" alt="" />
+        <img id="logo" class="logo" src="/img/jukeboks.png" alt="" />
         <div class="hero-title">
           <p class="eyebrow">Twitch • YouTube Music • OBS</p>
           <h1>JB2</h1>
@@ -30,36 +31,44 @@
       </nav>
 
       <section class="cards">
-        <article class="card">
-          <h2>Control Panel</h2>
-          <p>Use the admin dock to issue commands and test the available pear-desktop actions.</p>
+        <div class="card-col">
+          <article class="card">
+            <h2>Control Panel</h2>
+            <p>Use the admin dock to issue commands and test the available pear-desktop actions.</p>
+          </article>
           <div class="actions">
             <a href="/admin/" class="button">Open</a>
             <button class="button secondary" data-copy="/admin/">Copy URL</button>
           </div>
-        </article>
+        </div>
 
-        <article class="card">
-          <h2>Now Playing Overlay</h2>
-          <p>Display the current track, playback state, and progress in OBS as a browser source.</p>
+        <div class="card-col">
+          <article class="card">
+            <h2>Now Playing Overlay</h2>
+            <p>Display the current track, playback state, and progress in OBS as a browser source.</p>
+          </article>
           <div class="actions">
             <a href="/overlay/" class="button">Open</a>
             <button class="button secondary" data-copy="/overlay/">Copy URL</button>
           </div>
-        </article>
+        </div>
 
-        <article class="card">
-          <h2>Overlay Stage</h2>
-          <p>Place the overlay on a 720p or 1080p canvas. OBS follows as you drag.</p>
+        <div class="card-col">
+          <article class="card">
+            <h2>Overlay Stage</h2>
+            <p>Place the overlay on a 720p or 1080p canvas. OBS follows as you drag.</p>
+          </article>
           <div class="actions">
             <a href="/stage/" class="button">Open</a>
             <button class="button secondary" data-copy="/stage/">Copy URL</button>
           </div>
-        </article>
+        </div>
       </section>
     </main>
 
     <script src="/app.js"></script>
     <script src="/update.js"></script>
+    <script src="/vendor/pixi.min.js"></script>
+    <script src="/hero.js"></script>
   </body>
 </html>
