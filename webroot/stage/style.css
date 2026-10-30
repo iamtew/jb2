@@ -56,7 +56,7 @@ body {
 }
 
 .stage-side {
-  flex: 0 0 220px;
+  flex: 0 0 248px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -66,28 +66,6 @@ body {
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.stage-tabs {
-  display: flex;
-  gap: 4px;
-}
-
-.stage-tab {
-  flex: 1;
-  font-family: inherit;
-  font-size: 0.8rem;
-  color: #99aab5;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 6px 8px;
-  cursor: pointer;
-}
-
-.stage-tab.is-active {
-  border-color: #0ff;
-  color: #0ff;
-}
-
 .stage-tab-panel {
   display: flex;
   flex-direction: column;
@@ -95,7 +73,7 @@ body {
 }
 
 .stage-tab-panel[hidden] {
-  display: none;
+  display: none !important;
 }
 
 .stage-field,
@@ -307,17 +285,66 @@ body {
 
 .viz-box {
   cursor: grab;
-  pointer-events: none;
+  pointer-events: auto;
   touch-action: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 0, 255, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 0, 255, 0.35);
 }
 
 .viz-box.is-editing {
   pointer-events: auto;
+  box-shadow: inset 0 0 0 1px #f0f;
 }
 
 .viz-box.is-dragging {
   cursor: grabbing;
+}
+
+.viz-box.is-ghost,
+.overlay-box.is-ghost {
+  opacity: 0.38;
+}
+
+.stage-layers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stage-icon-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  color: #8b949e;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.stage-icon-btn:hover {
+  color: #eee;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.stage-icon-btn:disabled {
+  opacity: 0.28;
+  cursor: default;
+  background: transparent;
+}
+
+.stage-icon-btn .icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  pointer-events: none;
 }
 
 .stage-layers {
@@ -326,27 +353,69 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
 }
 
 .stage-layers li {
-  padding: 6px 8px;
-  background: #222;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #eee;
-  cursor: grab;
+  display: grid;
+  grid-template-columns: 18px 1fr auto auto;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 4px 0 2px;
+  background: #1c1c1c;
+  border: 1px solid transparent;
+  color: #ddd;
+  border-radius: 2px;
 }
 
 .stage-layers li.is-over {
-  border-color: #0ff;
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .stage-layers li.is-active[data-layer="overlay"] {
+  background: #182224;
   border-color: #0ff;
 }
 
-.stage-layers li.is-active[data-layer="viz"] {
+.stage-layers li.is-active.is-viz {
+  background: #221824;
   border-color: #f0f;
+}
+
+.stage-layers li.is-hidden .stage-layer-name {
+  color: #6e7681;
+}
+
+.stage-layer-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #5c636a;
+  cursor: grab;
+}
+
+.stage-layer-grip:hover {
+  color: #c8d0d6;
+}
+
+.stage-layer-grip .icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  pointer-events: none;
+}
+
+.stage-layer-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: #eee;
 }
 
 .overlay-box {

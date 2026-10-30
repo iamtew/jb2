@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Overlay Stage</title>
     <link rel="icon" href="/img/jukeboks.png" />
-    <link rel="stylesheet" href="/overlay/style.css?v=20261030j" />
-    <link rel="stylesheet" href="/stage/style.css?v=20261030i" />
+    <link rel="stylesheet" href="/overlay/style.css?v=20261030k" />
+    <link rel="stylesheet" href="/stage/style.css?v=20261030l" />
   </head>
   <body>
     <!-- Tabler Icons (outline), MIT. https://github.com/tabler/tabler-icons -->
@@ -21,6 +21,34 @@
       </symbol>
       <symbol id="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M5 12l5 5l10 -10" />
+      </symbol>
+      <symbol id="grip-vertical" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+        <path d="M9 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+        <path d="M9 19m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+        <path d="M15 5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+        <path d="M15 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+        <path d="M15 19m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+      </symbol>
+      <symbol id="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+        <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6" />
+      </symbol>
+      <symbol id="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.585 10.587a2 2 0 0 0 2.829 2.828" />
+        <path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87" />
+        <path d="M3 3l18 18" />
+      </symbol>
+      <symbol id="trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 7l16 0" />
+        <path d="M10 11l0 6" />
+        <path d="M14 11l0 6" />
+        <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+        <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+      </symbol>
+      <symbol id="plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 5l0 14" />
+        <path d="M5 12l14 0" />
       </symbol>
     </svg>
     <header class="stage-bar">
@@ -53,14 +81,16 @@
     </header>
     <div class="stage-body">
       <aside class="stage-side">
-        <div class="stage-field">Layers
+        <div class="stage-field">
+          <span class="stage-layers-head">Layers
+            <button type="button" id="addViz" class="stage-icon-btn" aria-label="Add visualizer" title="Add visualizer">
+              <svg class="icon" aria-hidden="true"><use href="#plus"></use></svg>
+            </button>
+          </span>
           <ol id="layerList" class="stage-layers"></ol>
         </div>
-        <div class="stage-tabs" role="tablist" aria-label="Stage settings">
-          <button type="button" class="stage-tab is-active" role="tab" aria-selected="true" data-stage-tab="overlay">Overlay</button>
-          <button type="button" class="stage-tab" role="tab" aria-selected="false" data-stage-tab="viz">Viz</button>
-        </div>
-        <div class="stage-tab-panel" role="tabpanel" data-stage-panel="overlay">
+        <div class="stage-tab-panel" data-stage-panel="overlay">
+          <fieldset id="overlayLook" class="stage-viz-look">
           <label class="stage-field">Theme
             <span class="stage-control">
               <select id="themeSelect">
@@ -155,20 +185,24 @@
             <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
             Size
           </button>
+          </fieldset>
         </div>
-        <div class="stage-tab-panel" role="tabpanel" data-stage-panel="viz" hidden>
-          <label class="stage-check">
-            <span class="stage-control">
-              <input id="vizInput" type="checkbox" /> Visualizer
-            </span>
-          </label>
-          <fieldset id="vizLook" class="stage-viz-look" disabled>
+        <div class="stage-tab-panel" data-stage-panel="viz" hidden>
           <label class="stage-field">Output
             <span class="stage-control">
               <select id="vizDevice" aria-label="Visualizer output"></select>
             </span>
             <span id="vizStatus" class="stage-viz-status"></span>
           </label>
+          <label class="stage-field">Smoothing
+            <span class="stage-control">
+              <input id="vizSmoothing" type="range" min="0" max="1" step="0.05" value="0.35" />
+              <button type="button" class="stage-reset" data-viz-reset="smoothing" aria-label="Reset smoothing">
+                <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
+              </button>
+            </span>
+          </label>
+          <fieldset id="vizLook" class="stage-viz-look">
           <label class="stage-field">Style
             <span class="stage-control">
               <select id="vizStyle">
@@ -232,14 +266,6 @@
               </button>
             </span>
           </label>
-          <label class="stage-field">Smoothing
-            <span class="stage-control">
-              <input id="vizSmoothing" type="range" min="0" max="1" step="0.05" value="0.35" />
-              <button type="button" class="stage-reset" data-viz-reset="smoothing" aria-label="Reset smoothing">
-                <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
-              </button>
-            </span>
-          </label>
           <label class="stage-check">
             <span class="stage-control">
               <input id="vizMirror" type="checkbox" /> Mirror
@@ -261,19 +287,7 @@
       </aside>
       <div class="stage-fit" id="stageFit">
         <div class="stage-canvas" id="stageCanvas">
-          <div class="viz-box" id="vizBox">
-            <div class="viz-layer" aria-hidden="true"></div>
-            <div class="overlay-handles" aria-hidden="true">
-              <span class="overlay-handle" data-handle="n"></span>
-              <span class="overlay-handle" data-handle="s"></span>
-              <span class="overlay-handle" data-handle="e"></span>
-              <span class="overlay-handle" data-handle="w"></span>
-              <span class="overlay-handle" data-handle="ne"></span>
-              <span class="overlay-handle" data-handle="nw"></span>
-              <span class="overlay-handle" data-handle="se"></span>
-              <span class="overlay-handle" data-handle="sw"></span>
-            </div>
-          </div>
+          <div id="vizStack"></div>
           <div class="stage-grid" aria-hidden="true">
             <svg id="stageGridLines"></svg>
           </div>
@@ -318,9 +332,9 @@
       </div>
     </div>
     <script src="/vendor/pixi.min.js"></script>
-    <script src="/overlay/viz.js?v=20261030d"></script>
+    <script src="/overlay/viz.js?v=20261030k"></script>
     <script src="/overlay/fx.js?v=20261029ad"></script>
     <script src="/overlay/now.js?v=20261030i"></script>
-    <script src="/stage/app.js?v=20261030j"></script>
+    <script src="/stage/app.js?v=20261030k"></script>
   </body>
 </html>

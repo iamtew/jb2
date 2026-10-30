@@ -4,11 +4,12 @@
   const MIN_W = 280;
   const MIN_VIZ = 80;
   const BASE_W = 500;
+  const VIZ_MAX = 8;
 
   const canvas = document.getElementById("stageCanvas");
   const fit = document.getElementById("stageFit");
   const overlayBox = document.getElementById("overlayBox");
-  const vizBox = document.getElementById("vizBox");
+  const vizStack = document.getElementById("vizStack");
   const layerList = document.getElementById("layerList");
   const songInfo = document.getElementById("songInfo");
   const btn720 = document.getElementById("size720");
@@ -24,6 +25,8 @@
   const snapInput = document.getElementById("snapInput");
   const gridSvg = document.getElementById("stageGridLines");
   const copyOverlayUrl = document.getElementById("copyOverlayUrl");
+  const addViz = document.getElementById("addViz");
+  const overlayLook = document.getElementById("overlayLook");
 
   const DEFAULTS = {
     theme: "lcd-glass",
@@ -37,27 +40,44 @@
     glass: true,
     grid: "center,thirds",
     snap: true,
-    vizX: 0,
-    vizY: 800,
-    vizW: 1920,
-    vizH: 280,
   };
-  const layoutLayers = ["overlay", "viz"];
   const GRID_IDS = ["center", "golden", "quad", "safe", "thirds"];
   const GRID_CYAN = "rgba(0, 255, 255, 0.45)";
   const GRID_ORANGE = "rgba(255, 64, 0, 0.55)";
+
+  function defaultVizLayer(id, src) {
+    const base = src || {};
+    return {
+      id,
+      x: Number.isFinite(Number(base.x)) ? Number(base.x) : 0,
+      y: Number.isFinite(Number(base.y)) ? Number(base.y) : 800,
+      w: Number.isFinite(Number(base.w)) ? Number(base.w) : 1920,
+      h: Number.isFinite(Number(base.h)) ? Number(base.h) : 280,
+      hidden: base.hidden !== false,
+      style: base.style || "bands",
+      color: typeof base.color === "string" ? base.color : "",
+      colorDir: base.colorDir || "lr",
+      bands: Number.isFinite(Number(base.bands)) ? Number(base.bands) : 16,
+      mirror: Boolean(base.mirror),
+      peakFall: Number.isFinite(Number(base.peakFall)) ? Number(base.peakFall) : 0.35,
+    };
+  }
+
   const layout = {
     x: 0,
     y: 0,
     canvasW: 1920,
     canvasH: 1080,
-    layers: layoutLayers.slice(),
+    layers: ["overlay", "viz"],
+    overlayHidden: false,
+    vizLayers: [defaultVizLayer("viz")],
     ...DEFAULTS,
   };
   let drag = null;
   let putTimer = null;
   let canvasScale = 1;
   let editTarget = "overlay";
+  let vizSeq = 1;
 
   function refreshNow() {
     if (window.JB2NowPlaying) window.JB2NowPlaying.refresh();
@@ -65,6 +85,14 @@
 
   function seekDirOf(value) {
     return value === "rl" || value === "tb" || value === "bt" ? value : "lr";
+  }
+
+  function isVizId(id) {
+    return id === "viz" || (typeof id === "string" && id.startsWith("viz-"));
+  }
+
+  function vizLayer(id) {
+    return layout.vizLayers.find((layer) => layer.id === id) || null;
   }
 
   function applyLook() {
@@ -191,20 +219,20 @@
     return [origin, origin + size / 2, origin + size].filter((n) => n >= 0 && n <= span);
   }
 
-  function snapBox(x, y, w, h, other) {
+  function snapBox(x, y, w, h, others) {
     const clampX = Math.max(0, Math.min(layout.canvasW - w, Math.round(x)));
     const clampY = Math.max(0, Math.min(layout.canvasH - h, Math.round(y)));
     if (!layout.snap) return { x: clampX, y: clampY };
-    const xLines = gridLines(layout.canvasW).concat(siblingLines(layout.canvasW, other.x, other.w));
-    const yLines = gridLines(layout.canvasH).concat(siblingLines(layout.canvasH, other.y, other.h));
+    let xLines = gridLines(layout.canvasW);
+    let yLines = gridLines(layout.canvasH);
+    (others || []).forEach((box) => {
+      xLines = xLines.concat(siblingLines(layout.canvasW, box.x, box.w));
+      yLines = yLines.concat(siblingLines(layout.canvasH, box.y, box.h));
+    });
     return {
       x: snapAxis(x, w, layout.canvasW, xLines),
       y: snapAxis(y, h, layout.canvasH, yLines),
     };
-  }
-
-  function vizRect() {
-    return { x: layout.vizX, y: layout.vizY, w: layout.vizW, h: layout.vizH };
   }
 
   function overlayRect() {
@@ -212,9 +240,18 @@
     return { x: layout.x, y: layout.y, w, h };
   }
 
+  function snapTargets(skipId) {
+    const boxes = [overlayRect()];
+    layout.vizLayers.forEach((layer) => {
+      if (layer.id === skipId) return;
+      boxes.push({ x: layer.x, y: layer.y, w: layer.w, h: layer.h });
+    });
+    return boxes;
+  }
+
   function snapPanel(x, y) {
     const { w, h } = panelSize();
-    return snapBox(x, y, w, h, vizRect());
+    return snapBox(x, y, w, h, snapTargets());
   }
 
   function applyPanelBox() {
@@ -227,79 +264,168 @@
     songInfo.style.transform = s === 1 ? "none" : `scale(${s})`;
     overlayBox.style.width = `${layout.panelW}px`;
     overlayBox.style.height = `${Math.round((songInfo.offsetHeight || 160) * s)}px`;
+    overlayBox.classList.toggle("is-ghost", layout.overlayHidden);
     applyStack();
   }
 
   function applyStack() {
-    const front = layout.layers[0] === "viz" ? "viz" : "overlay";
-    overlayBox.style.zIndex = front === "overlay" ? "3" : "2";
-    if (vizBox) vizBox.style.zIndex = front === "viz" ? "3" : "2";
+    const depth = layout.layers.length;
+    layout.layers.forEach((id, i) => {
+      const z = String(depth - i + 2);
+      if (id === "overlay") {
+        overlayBox.style.zIndex = z;
+        return;
+      }
+      const box = vizStack && vizStack.querySelector(`[data-viz-id="${id}"]`);
+      if (box) box.style.zIndex = z;
+    });
   }
 
-  function applyVizBox() {
-    if (!vizBox) return;
-    vizBox.style.left = `${layout.vizX}px`;
-    vizBox.style.top = `${layout.vizY}px`;
-    vizBox.style.width = `${layout.vizW}px`;
-    vizBox.style.height = `${layout.vizH}px`;
+  function vizBoxHtml() {
+    const box = document.createElement("div");
+    box.className = "viz-box";
+    box.innerHTML =
+      '<div class="viz-layer" aria-hidden="true"></div>' +
+      '<div class="overlay-handles" aria-hidden="true">' +
+      '<span class="overlay-handle" data-handle="n"></span>' +
+      '<span class="overlay-handle" data-handle="s"></span>' +
+      '<span class="overlay-handle" data-handle="e"></span>' +
+      '<span class="overlay-handle" data-handle="w"></span>' +
+      '<span class="overlay-handle" data-handle="ne"></span>' +
+      '<span class="overlay-handle" data-handle="nw"></span>' +
+      '<span class="overlay-handle" data-handle="se"></span>' +
+      '<span class="overlay-handle" data-handle="sw"></span>' +
+      "</div>";
+    return box;
+  }
+
+  function applyVizBoxes() {
+    if (!vizStack) return;
+    const keep = new Set(layout.vizLayers.map((layer) => layer.id));
+    layout.vizLayers.forEach((layer) => {
+      let box = vizStack.querySelector(`[data-viz-id="${layer.id}"]`);
+      if (!box) {
+        box = vizBoxHtml();
+        box.dataset.vizId = layer.id;
+        vizStack.appendChild(box);
+      }
+      box.style.left = `${layer.x}px`;
+      box.style.top = `${layer.y}px`;
+      box.style.width = `${layer.w}px`;
+      box.style.height = `${layer.h}px`;
+      box.classList.toggle("is-ghost", layer.hidden);
+      box.classList.toggle("is-editing", editTarget === layer.id);
+    });
+    vizStack.querySelectorAll("[data-viz-id]").forEach((box) => {
+      if (!keep.has(box.dataset.vizId)) box.remove();
+    });
     applyStack();
+    if (window.JB2Viz) {
+      window.JB2Viz.sync({ vizLayers: layout.vizLayers });
+      window.JB2Viz.select(isVizId(editTarget) ? editTarget : "");
+    }
+  }
+
+  function clampVizLayer(layer) {
+    layer.w = Math.max(MIN_VIZ, Math.min(layout.canvasW, Math.round(layer.w)));
+    layer.h = Math.max(MIN_VIZ, Math.min(layout.canvasH, Math.round(layer.h)));
+    layer.x = Math.max(0, Math.min(layout.canvasW - layer.w, Math.round(layer.x)));
+    layer.y = Math.max(0, Math.min(layout.canvasH - layer.h, Math.round(layer.y)));
   }
 
   function clampViz() {
-    layout.vizW = Math.max(MIN_VIZ, Math.min(layout.canvasW, Math.round(layout.vizW)));
-    layout.vizH = Math.max(MIN_VIZ, Math.min(layout.canvasH, Math.round(layout.vizH)));
-    layout.vizX = Math.max(0, Math.min(layout.canvasW - layout.vizW, Math.round(layout.vizX)));
-    layout.vizY = Math.max(0, Math.min(layout.canvasH - layout.vizH, Math.round(layout.vizY)));
+    layout.vizLayers.forEach(clampVizLayer);
   }
 
-  function snapViz(x, y) {
-    return snapBox(x, y, layout.vizW, layout.vizH, overlayRect());
+  function lockInspectors() {
+    if (overlayLook) overlayLook.disabled = layout.overlayHidden;
+    const vizLook = document.getElementById("vizLook");
+    const layer = vizLayer(editTarget);
+    if (vizLook) vizLook.disabled = !layer || layer.hidden;
   }
 
   function applyEditTarget() {
     overlayBox.classList.toggle("is-editing", editTarget === "overlay");
-    if (vizBox) vizBox.classList.toggle("is-editing", editTarget === "viz");
+    if (vizStack) {
+      vizStack.querySelectorAll("[data-viz-id]").forEach((box) => {
+        box.classList.toggle("is-editing", box.dataset.vizId === editTarget);
+      });
+    }
+    lockInspectors();
   }
 
   function setEditTarget(id) {
-    editTarget = id === "viz" ? "viz" : "overlay";
-    document.querySelectorAll("[data-stage-tab]").forEach((el) => {
-      const on = el.getAttribute("data-stage-tab") === editTarget;
-      el.classList.toggle("is-active", on);
-      el.setAttribute("aria-selected", on ? "true" : "false");
-    });
+    editTarget = id === "overlay" || isVizId(id) ? id : "overlay";
     document.querySelectorAll("[data-stage-panel]").forEach((panel) => {
-      panel.hidden = panel.getAttribute("data-stage-panel") !== editTarget;
+      const kind = panel.getAttribute("data-stage-panel");
+      panel.hidden = kind === "viz" ? !isVizId(editTarget) : editTarget !== "overlay";
     });
     paintLayers();
     applyEditTarget();
+    if (window.JB2Viz) window.JB2Viz.select(isVizId(editTarget) ? editTarget : "");
   }
 
-  function parseLayers(value) {
+  function parseLayers(value, vizIds) {
+    const allowed = new Set(["overlay"].concat(vizIds));
     const ids = [];
     String(value || "")
       .split(",")
       .forEach((part) => {
         const id = part.trim();
-        if ((id === "overlay" || id === "viz") && !ids.includes(id)) ids.push(id);
+        if (allowed.has(id) && !ids.includes(id)) ids.push(id);
       });
-    ["overlay", "viz"].forEach((id) => {
+    if (!ids.includes("overlay")) ids.push("overlay");
+    vizIds.forEach((id) => {
       if (!ids.includes(id)) ids.push(id);
     });
     return ids;
   }
 
+  function layerName(id) {
+    if (id === "overlay") return "Overlay";
+    const i = layout.vizLayers.findIndex((layer) => layer.id === id);
+    return layout.vizLayers.length === 1 ? "Visualizer" : `Visualizer ${i + 1}`;
+  }
+
   function paintLayers() {
     if (!layerList) return;
     layerList.replaceChildren();
+    const vizCount = layout.vizLayers.length;
     layout.layers.forEach((id) => {
       const li = document.createElement("li");
-      li.draggable = true;
       li.dataset.layer = id;
-      li.textContent = id === "viz" ? "Visualizer" : "Overlay";
       li.classList.toggle("is-active", id === editTarget);
+      li.classList.toggle("is-hidden", id === "overlay" ? layout.overlayHidden : Boolean(vizLayer(id)?.hidden));
+      li.classList.toggle("is-viz", isVizId(id));
+      const grip = document.createElement("span");
+      grip.className = "stage-layer-grip";
+      grip.draggable = true;
+      grip.title = "Drag to reorder";
+      grip.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#grip-vertical"></use></svg>';
+      const name = document.createElement("span");
+      name.className = "stage-layer-name";
+      name.textContent = layerName(id);
+      const eye = document.createElement("button");
+      eye.type = "button";
+      eye.className = "stage-icon-btn";
+      const hidden = id === "overlay" ? layout.overlayHidden : Boolean(vizLayer(id)?.hidden);
+      eye.dataset.eye = id;
+      eye.setAttribute("aria-label", hidden ? "Show layer" : "Hide layer");
+      eye.innerHTML = `<svg class="icon" aria-hidden="true"><use href="${hidden ? "#eye-off" : "#eye"}"></use></svg>`;
+      li.append(grip, name, eye);
+      if (isVizId(id)) {
+        const trash = document.createElement("button");
+        trash.type = "button";
+        trash.className = "stage-icon-btn";
+        trash.dataset.trash = id;
+        trash.disabled = vizCount <= 1;
+        trash.setAttribute("aria-label", "Delete visualizer");
+        trash.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#trash"></use></svg>';
+        li.appendChild(trash);
+      }
       layerList.appendChild(li);
     });
+    if (addViz) addViz.disabled = vizCount >= VIZ_MAX;
   }
 
   function syncToolbar() {
@@ -361,11 +487,9 @@
       glass: layout.glass,
       grid: layout.grid,
       snap: layout.snap !== false,
-      vizX: layout.vizX,
-      vizY: layout.vizY,
-      vizW: layout.vizW,
-      vizH: layout.vizH,
+      overlayHidden: layout.overlayHidden,
       layers: layout.layers.join(","),
+      vizLayers: layout.vizLayers,
       save: Boolean(save),
     };
   }
@@ -405,12 +529,16 @@
 
   function setCanvasSize(w, h) {
     if (w === layout.canvasW && h === layout.canvasH) return;
-    layout.x = Math.round((layout.x * w) / layout.canvasW);
-    layout.y = Math.round((layout.y * h) / layout.canvasH);
-    layout.vizX = Math.round((layout.vizX * w) / layout.canvasW);
-    layout.vizY = Math.round((layout.vizY * h) / layout.canvasH);
-    layout.vizW = Math.round((layout.vizW * w) / layout.canvasW);
-    layout.vizH = Math.round((layout.vizH * h) / layout.canvasH);
+    const sx = w / layout.canvasW;
+    const sy = h / layout.canvasH;
+    layout.x = Math.round(layout.x * sx);
+    layout.y = Math.round(layout.y * sy);
+    layout.vizLayers.forEach((layer) => {
+      layer.x = Math.round(layer.x * sx);
+      layer.y = Math.round(layer.y * sy);
+      layer.w = Math.round(layer.w * sx);
+      layer.h = Math.round(layer.h * sy);
+    });
     layout.canvasW = w;
     layout.canvasH = h;
     clampBox();
@@ -418,11 +546,13 @@
     const snapped = snapPanel(layout.x, layout.y);
     layout.x = snapped.x;
     layout.y = snapped.y;
-    const vizSnapped = snapViz(layout.vizX, layout.vizY);
-    layout.vizX = vizSnapped.x;
-    layout.vizY = vizSnapped.y;
+    layout.vizLayers.forEach((layer) => {
+      const next = snapBox(layer.x, layer.y, layer.w, layer.h, snapTargets(layer.id));
+      layer.x = next.x;
+      layer.y = next.y;
+    });
     applyPanelBox();
-    applyVizBox();
+    applyVizBoxes();
     fitCanvas();
     saveNow();
   }
@@ -469,6 +599,7 @@
       scheduleLivePut();
       return;
     }
+    if (drag.kind !== "resize") return;
     const ratio = drag.w / Math.max(1, drag.h);
     const handle = drag.handle;
     const fromW = handle.includes("e") || handle.includes("w");
@@ -494,7 +625,7 @@
     h = w / ratio;
     let x = handle.includes("w") ? drag.x + drag.w - w : drag.x;
     let y = handle.includes("n") ? drag.y + drag.h - h : drag.y;
-    const snapped = snapBox(x, y, w, h, vizRect());
+    const snapped = snapBox(x, y, w, h, snapTargets());
     x = snapped.x;
     y = snapped.y;
     layout.x = Math.round(x);
@@ -509,7 +640,7 @@
     if (!drag) return;
     drag = null;
     overlayBox.classList.remove("is-dragging");
-    if (vizBox) vizBox.classList.remove("is-dragging");
+    if (vizStack) vizStack.querySelectorAll(".viz-box").forEach((box) => box.classList.remove("is-dragging"));
     saveNow();
     refreshNow();
   }
@@ -517,39 +648,47 @@
   overlayBox.addEventListener("pointerup", endDrag);
   overlayBox.addEventListener("pointercancel", endDrag);
 
-  if (vizBox) {
-    vizBox.addEventListener("pointerdown", (ev) => {
-      if (editTarget !== "viz") return;
+  if (vizStack) {
+    vizStack.addEventListener("pointerdown", (ev) => {
+      const box = ev.target.closest("[data-viz-id]");
+      if (!box) return;
+      const id = box.dataset.vizId;
+      if (editTarget !== id) setEditTarget(id);
       if (ev.button !== 0) return;
+      const layer = vizLayer(id);
+      if (!layer) return;
       ev.preventDefault();
-      vizBox.setPointerCapture(ev.pointerId);
+      box.setPointerCapture(ev.pointerId);
       const p = pointerToCanvas(ev);
       const handle = handleOf(ev.target);
       if (handle) {
         drag = {
           kind: "viz-resize",
+          id,
           handle,
-          x: layout.vizX,
-          y: layout.vizY,
-          w: layout.vizW,
-          h: layout.vizH,
+          x: layer.x,
+          y: layer.y,
+          w: layer.w,
+          h: layer.h,
           px: p.x,
           py: p.y,
         };
       } else {
-        drag = { kind: "viz-move", dx: p.x - layout.vizX, dy: p.y - layout.vizY };
+        drag = { kind: "viz-move", id, dx: p.x - layer.x, dy: p.y - layer.y };
       }
-      vizBox.classList.add("is-dragging");
+      box.classList.add("is-dragging");
     });
-    vizBox.addEventListener("pointermove", (ev) => {
+    vizStack.addEventListener("pointermove", (ev) => {
       if (!drag || (drag.kind !== "viz-move" && drag.kind !== "viz-resize")) return;
+      const layer = vizLayer(drag.id);
+      if (!layer) return;
       const p = pointerToCanvas(ev);
       if (drag.kind === "viz-move") {
-        const snapped = snapViz(p.x - drag.dx, p.y - drag.dy);
-        if (snapped.x === layout.vizX && snapped.y === layout.vizY) return;
-        layout.vizX = snapped.x;
-        layout.vizY = snapped.y;
-        applyVizBox();
+        const snapped = snapBox(p.x - drag.dx, p.y - drag.dy, layer.w, layer.h, snapTargets(layer.id));
+        if (snapped.x === layer.x && snapped.y === layer.y) return;
+        layer.x = snapped.x;
+        layer.y = snapped.y;
+        applyVizBoxes();
         scheduleLivePut();
         return;
       }
@@ -568,24 +707,81 @@
       h = Math.max(MIN_VIZ, Math.min(layout.canvasH, h));
       if (handle.includes("w")) x = drag.x + drag.w - w;
       if (handle.includes("n")) y = drag.y + drag.h - h;
-      const snapped = snapBox(x, y, w, h, overlayRect());
-      x = snapped.x;
-      y = snapped.y;
-      layout.vizX = Math.round(x);
-      layout.vizY = Math.round(y);
-      layout.vizW = Math.round(w);
-      layout.vizH = Math.round(h);
-      applyVizBox();
+      const snapped = snapBox(x, y, w, h, snapTargets(layer.id));
+      layer.x = Math.round(snapped.x);
+      layer.y = Math.round(snapped.y);
+      layer.w = Math.round(w);
+      layer.h = Math.round(h);
+      applyVizBoxes();
       scheduleLivePut();
     });
-    vizBox.addEventListener("pointerup", endDrag);
-    vizBox.addEventListener("pointercancel", endDrag);
+    vizStack.addEventListener("pointerup", endDrag);
+    vizStack.addEventListener("pointercancel", endDrag);
   }
+
+  function nextVizId() {
+    vizSeq += 1;
+    let id = `viz-${vizSeq}`;
+    while (vizLayer(id)) {
+      vizSeq += 1;
+      id = `viz-${vizSeq}`;
+    }
+    return id;
+  }
+
+  function addVizLayer() {
+    if (layout.vizLayers.length >= VIZ_MAX) return;
+    const src = vizLayer(editTarget) || layout.vizLayers[0];
+    const layer = defaultVizLayer(nextVizId(), src);
+    layer.hidden = false;
+    const ox = layer.x + 24;
+    const oy = layer.y + 24;
+    layer.x = ox + layer.w <= layout.canvasW ? ox : Math.max(0, layer.x - 24);
+    layer.y = oy + layer.h <= layout.canvasH ? oy : Math.max(0, layer.y - 24);
+    clampVizLayer(layer);
+    layout.vizLayers.push(layer);
+    layout.layers = [layer.id].concat(layout.layers.filter((id) => id !== layer.id));
+    setEditTarget(layer.id);
+    applyVizBoxes();
+    saveNow();
+  }
+
+  function removeVizLayer(id) {
+    if (layout.vizLayers.length <= 1) return;
+    const idx = layout.vizLayers.findIndex((layer) => layer.id === id);
+    if (idx < 0) return;
+    layout.vizLayers.splice(idx, 1);
+    layout.layers = layout.layers.filter((item) => item !== id);
+    const next = layout.vizLayers[Math.min(idx, layout.vizLayers.length - 1)];
+    setEditTarget(next ? next.id : "overlay");
+    applyVizBoxes();
+    saveNow();
+  }
+
+  function toggleHidden(id) {
+    if (id === "overlay") layout.overlayHidden = !layout.overlayHidden;
+    else {
+      const layer = vizLayer(id);
+      if (!layer) return;
+      layer.hidden = !layer.hidden;
+    }
+    paintLayers();
+    applyPanelBox();
+    applyVizBoxes();
+    lockInspectors();
+    saveNow();
+  }
+
+  if (addViz) addViz.addEventListener("click", addVizLayer);
 
   if (layerList) {
     layerList.addEventListener("dragstart", (ev) => {
+      const grip = ev.target.closest(".stage-layer-grip");
       const li = ev.target.closest("li");
-      if (!li) return;
+      if (!grip || !li) {
+        ev.preventDefault();
+        return;
+      }
       ev.dataTransfer.setData("text/plain", li.dataset.layer || "");
       ev.dataTransfer.effectAllowed = "move";
     });
@@ -600,6 +796,18 @@
       if (li) li.classList.remove("is-over");
     });
     layerList.addEventListener("click", (ev) => {
+      const eye = ev.target.closest("[data-eye]");
+      if (eye) {
+        ev.stopPropagation();
+        toggleHidden(eye.dataset.eye);
+        return;
+      }
+      const trash = ev.target.closest("[data-trash]");
+      if (trash) {
+        ev.stopPropagation();
+        if (!trash.disabled) removeVizLayer(trash.dataset.trash);
+        return;
+      }
       const li = ev.target.closest("li");
       if (!li || !li.dataset.layer) return;
       setEditTarget(li.dataset.layer);
@@ -613,18 +821,12 @@
       if (!from || !to || from === to) return;
       const order = layout.layers.filter((id) => id !== from);
       order.splice(Math.max(0, order.indexOf(to)), 0, from);
-      layout.layers = parseLayers(order.join(","));
+      layout.layers = parseLayers(order.join(","), layout.vizLayers.map((layer) => layer.id));
       paintLayers();
       applyStack();
       saveNow();
     });
   }
-
-  document.querySelectorAll("[data-stage-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      setEditTarget(btn.getAttribute("data-stage-tab"));
-    });
-  });
 
   btn720.addEventListener("click", () => setCanvasSize(1280, 720));
   btn1080.addEventListener("click", () => setCanvasSize(1920, 1080));
@@ -685,8 +887,6 @@
       saveNow();
     });
   });
-  // execCommand in the click itself. Off-screen nodes often return false;
-  // writeText after await loses the user gesture.
   function copyNow(text) {
     const el = document.createElement("textarea");
     el.value = text;
@@ -710,7 +910,7 @@
     const icon = copyOverlayUrl.querySelector("use");
     function flash(ok) {
       if (icon) icon.setAttribute("href", ok ? "#check" : "#copy");
-      copyOverlayUrl.setAttribute("aria-label", ok ? "Copied" : "Copy failed");
+      copyOverlayUrl.setAttribute("aria-label", ok ? "Copied" : "Copy Overlay URL");
       window.setTimeout(() => {
         if (icon) icon.setAttribute("href", "#copy");
         copyOverlayUrl.setAttribute("aria-label", "Copy Overlay URL");
@@ -749,6 +949,41 @@
   });
   window.addEventListener("resize", fitCanvas);
 
+  if (window.JB2Viz) {
+    window.JB2Viz.onLookChange = function (id, look) {
+      const layer = vizLayer(id);
+      if (!layer) return;
+      layer.style = look.style;
+      layer.color = look.color;
+      layer.colorDir = look.colorDir;
+      layer.bands = look.bands;
+      layer.mirror = look.mirror;
+      layer.peakFall = look.peakFall;
+      saveNow();
+    };
+  }
+
+  function readVizLayers(data) {
+    const raw = Array.isArray(data.vizLayers) ? data.vizLayers : [];
+    if (raw.length) {
+      layout.vizLayers = raw.map((layer, i) => defaultVizLayer(layer.id || `viz-${i + 1}`, layer));
+    } else {
+      layout.vizLayers = [
+        defaultVizLayer("viz", {
+          x: data.vizX,
+          y: data.vizY,
+          w: data.vizW,
+          h: data.vizH,
+        }),
+      ];
+    }
+    layout.vizLayers.forEach((layer) => {
+      const n = Number(String(layer.id).replace(/^viz-?/, ""));
+      if (Number.isFinite(n) && n >= vizSeq) vizSeq = n;
+    });
+    layout.layers = parseLayers(data.layers, layout.vizLayers.map((layer) => layer.id));
+  }
+
   function readLayout(data) {
     if (!data) return;
     layout.x = Number(data.x) || 0;
@@ -766,11 +1001,8 @@
     if (typeof data.glass === "boolean") layout.glass = data.glass;
     if (data.grid) layout.grid = formatGrid(parseGrid(data.grid));
     if (typeof data.snap === "boolean") layout.snap = data.snap;
-    if (data.vizX != null) layout.vizX = Number(data.vizX) || 0;
-    if (data.vizY != null) layout.vizY = Number(data.vizY) || 0;
-    if (data.vizW != null) layout.vizW = Number(data.vizW) || MIN_VIZ;
-    if (data.vizH != null) layout.vizH = Number(data.vizH) || MIN_VIZ;
-    if (data.layers) layout.layers = parseLayers(data.layers);
+    if (typeof data.overlayHidden === "boolean") layout.overlayHidden = data.overlayHidden;
+    readVizLayers(data);
   }
 
   if (window.JB2OverlayFx) {
@@ -778,7 +1010,7 @@
   }
 
   applyLook();
-  applyVizBox();
+  applyVizBoxes();
   paintLayers();
   applyEditTarget();
 
@@ -802,7 +1034,7 @@
       syncToolbar();
       applyLook();
       applyPanelBox();
-      applyVizBox();
+      applyVizBoxes();
       refreshNow();
       fitCanvas();
     });

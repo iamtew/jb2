@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -91,6 +91,14 @@ fn default_viz_h() -> i32 {
 
 fn default_layers() -> String {
     "overlay,viz".to_string()
+}
+
+fn default_viz_id() -> String {
+    "viz".to_string()
+}
+
+fn default_viz_layers() -> Vec<OverlayVizLayer> {
+    vec![OverlayVizLayer::default()]
 }
 
 fn default_viz_device() -> String {
@@ -291,6 +299,7 @@ const OVERLAY_GRID_PARTS: [&str; 5] = ["center", "golden", "quad", "safe", "thir
 const OVERLAY_PANEL_W_MIN: i32 = 280;
 const OVERLAY_PANEL_H_MIN: i32 = 80;
 const OVERLAY_VIZ_MIN: i32 = 80;
+const OVERLAY_VIZ_MAX: usize = 8;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SeedPlaylist {
@@ -306,6 +315,167 @@ pub struct CommandCooldown {
     pub gcd: i32,
     #[serde(default)]
     pub ucd: i32,
+}
+
+/// One spectrum box on the overlay canvas. Capture is shared; look is per layer.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OverlayVizLayer {
+    #[serde(default = "default_viz_id")]
+    pub id: String,
+    #[serde(default)]
+    pub x: i32,
+    #[serde(default = "default_viz_y")]
+    pub y: i32,
+    #[serde(default = "default_viz_w")]
+    pub w: i32,
+    #[serde(default = "default_viz_h")]
+    pub h: i32,
+    #[serde(default = "default_true")]
+    pub hidden: bool,
+    #[serde(default = "default_viz_style")]
+    pub style: String,
+    #[serde(default)]
+    pub color: String,
+    #[serde(rename = "colorDir", default = "default_viz_color_dir")]
+    pub color_dir: String,
+    #[serde(default = "default_viz_bands")]
+    pub bands: i32,
+    #[serde(default)]
+    pub mirror: bool,
+    #[serde(rename = "peakFall", default = "default_viz_peak_fall")]
+    pub peak_fall: f32,
+}
+
+impl Default for OverlayVizLayer {
+    fn default() -> Self {
+        Self {
+            id: default_viz_id(),
+            x: 0,
+            y: default_viz_y(),
+            w: default_viz_w(),
+            h: default_viz_h(),
+            hidden: true,
+            style: default_viz_style(),
+            color: String::new(),
+            color_dir: default_viz_color_dir(),
+            bands: default_viz_bands(),
+            mirror: false,
+            peak_fall: default_viz_peak_fall(),
+        }
+    }
+}
+
+impl OverlayVizLayer {
+    fn to_json(&self) -> Value {
+        serde_json::json!({
+            "id": self.id,
+            "x": self.x,
+            "y": self.y,
+            "w": self.w,
+            "h": self.h,
+            "hidden": self.hidden,
+            "style": self.style,
+            "color": self.color,
+            "colorDir": self.color_dir,
+            "bands": self.bands,
+            "mirror": self.mirror,
+            "peakFall": self.peak_fall,
+        })
+    }
+}
+
+fn is_viz_id(id: &str) -> bool {
+    if id == "viz" {
+        return true;
+    }
+    let Some(rest) = id.strip_prefix("viz-") else {
+        return false;
+    };
+    !rest.is_empty()
+        && rest
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
+
+fn unique_viz_id(want: &str, used: &mut HashSet<String>) -> String {
+    let base = if is_viz_id(want) {
+        want.to_string()
+    } else {
+        default_viz_id()
+    };
+    if used.insert(base.clone()) {
+        return base;
+    }
+    let mut n = 2;
+    loop {
+        let id = format!("{base}-{n}");
+        if used.insert(id.clone()) {
+            return id;
+        }
+        n += 1;
+    }
+}
+
+fn clamp_viz_rect(layer: &mut OverlayVizLayer, canvas_w: i32, canvas_h: i32) {
+    layer.w = layer.w.clamp(OVERLAY_VIZ_MIN, canvas_w);
+    layer.h = layer.h.clamp(OVERLAY_VIZ_MIN, canvas_h);
+    layer.x = layer.x.clamp(0, (canvas_w - layer.w).max(0));
+    layer.y = layer.y.clamp(0, (canvas_h - layer.h).max(0));
+}
+
+fn normalize_viz_layer(mut layer: OverlayVizLayer, canvas_w: i32, canvas_h: i32) -> OverlayVizLayer {
+    layer.style = normalize_viz_style(&layer.style);
+    layer.color = normalize_viz_color(&layer.color);
+    layer.color_dir = normalize_viz_color_dir(&layer.color_dir);
+    layer.bands = layer.bands.clamp(1, 32);
+    if !layer.peak_fall.is_finite() {
+        layer.peak_fall = default_viz_peak_fall();
+    } else {
+        layer.peak_fall = layer.peak_fall.clamp(0.0, 1.0);
+    }
+    clamp_viz_rect(&mut layer, canvas_w, canvas_h);
+    layer
+}
+
+fn viz_layer_from_value(base: OverlayVizLayer, parsed: &Value) -> OverlayVizLayer {
+    let mut layer = base;
+    if let Some(s) = parsed.get("id").and_then(|v| v.as_str()) {
+        layer.id = s.to_string();
+    }
+    if let Some(n) = parsed.get("x").and_then(|v| v.as_i64()) {
+        layer.x = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = parsed.get("y").and_then(|v| v.as_i64()) {
+        layer.y = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = parsed.get("w").and_then(|v| v.as_i64()) {
+        layer.w = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(n) = parsed.get("h").and_then(|v| v.as_i64()) {
+        layer.h = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(b) = parsed.get("hidden").and_then(|v| v.as_bool()) {
+        layer.hidden = b;
+    }
+    if let Some(s) = parsed.get("style").and_then(|v| v.as_str()) {
+        layer.style = s.to_string();
+    }
+    if let Some(s) = parsed.get("color").and_then(|v| v.as_str()) {
+        layer.color = s.to_string();
+    }
+    if let Some(s) = parsed.get("colorDir").and_then(|v| v.as_str()) {
+        layer.color_dir = s.to_string();
+    }
+    if let Some(n) = parsed.get("bands").and_then(|v| v.as_i64()) {
+        layer.bands = i32::try_from(n).unwrap_or(0);
+    }
+    if let Some(b) = parsed.get("mirror").and_then(|v| v.as_bool()) {
+        layer.mirror = b;
+    }
+    if let Some(n) = parsed.get("peakFall").and_then(json_f32) {
+        layer.peak_fall = n;
+    }
+    layer
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -350,9 +520,14 @@ pub struct OverlayLayout {
     pub viz_w: i32,
     #[serde(rename = "vizH", default = "default_viz_h")]
     pub viz_h: i32,
-    /// Front to back. First id paints above the other.
+    /// Front to back. Overlay plus viz ids.
     #[serde(default = "default_layers")]
     pub layers: String,
+    #[serde(rename = "overlayHidden", default)]
+    pub overlay_hidden: bool,
+    /// Missing/empty migrates from vizX/Y/W/H.
+    #[serde(rename = "vizLayers", default)]
+    pub viz_layers: Vec<OverlayVizLayer>,
 }
 
 impl Default for OverlayLayout {
@@ -378,6 +553,8 @@ impl Default for OverlayLayout {
             viz_w: default_viz_w(),
             viz_h: default_viz_h(),
             layers: default_layers(),
+            overlay_hidden: false,
+            viz_layers: default_viz_layers(),
         }
     }
 }
@@ -405,8 +582,14 @@ impl OverlayLayout {
             "vizW": self.viz_w,
             "vizH": self.viz_h,
             "layers": self.layers,
+            "overlayHidden": self.overlay_hidden,
+            "vizLayers": self.viz_layers.iter().map(OverlayVizLayer::to_json).collect::<Vec<_>>(),
         })
     }
+}
+
+pub fn any_viz_visible(layout: &OverlayLayout) -> bool {
+    layout.viz_layers.iter().any(|layer| !layer.hidden)
 }
 
 fn pick_allowed(value: &str, allowed: &[&str], fallback: &str) -> String {
@@ -493,20 +676,68 @@ pub fn normalize_overlay_layout(mut layout: OverlayLayout) -> OverlayLayout {
     layout.viz_y = layout
         .viz_y
         .clamp(0, (layout.canvas_h - layout.viz_h).max(0));
-    layout.layers = normalize_layers(&layout.layers);
+    if layout.viz_layers.is_empty() {
+        layout.viz_layers.push(OverlayVizLayer {
+            id: default_viz_id(),
+            x: layout.viz_x,
+            y: layout.viz_y,
+            w: layout.viz_w,
+            h: layout.viz_h,
+            ..OverlayVizLayer::default()
+        });
+    }
+    let mut used = HashSet::new();
+    let mut layers = Vec::new();
+    for layer in layout.viz_layers.drain(..) {
+        if layers.len() >= OVERLAY_VIZ_MAX {
+            break;
+        }
+        let mut layer = normalize_viz_layer(layer, layout.canvas_w, layout.canvas_h);
+        layer.id = unique_viz_id(&layer.id, &mut used);
+        layers.push(layer);
+    }
+    if layers.is_empty() {
+        layers.push(normalize_viz_layer(
+            OverlayVizLayer {
+                id: default_viz_id(),
+                x: layout.viz_x,
+                y: layout.viz_y,
+                w: layout.viz_w,
+                h: layout.viz_h,
+                ..OverlayVizLayer::default()
+            },
+            layout.canvas_w,
+            layout.canvas_h,
+        ));
+    }
+    layout.viz_layers = layers;
+    if let Some(first) = layout.viz_layers.first() {
+        layout.viz_x = first.x;
+        layout.viz_y = first.y;
+        layout.viz_w = first.w;
+        layout.viz_h = first.h;
+    }
+    layout.layers = normalize_layers(&layout.layers, &layout.viz_layers);
     layout
 }
 
-fn normalize_layers(value: &str) -> String {
+fn normalize_layers(value: &str, viz_layers: &[OverlayVizLayer]) -> String {
+    let viz_ids: Vec<&str> = viz_layers.iter().map(|layer| layer.id.as_str()).collect();
     let mut out = Vec::new();
     for id in value.split(',') {
         let id = id.trim();
-        if (id == "overlay" || id == "viz") && !out.contains(&id) {
+        if id.is_empty() || out.contains(&id) {
+            continue;
+        }
+        if id == "overlay" || viz_ids.contains(&id) {
             out.push(id);
         }
     }
-    for id in ["overlay", "viz"] {
-        if !out.contains(&id) {
+    if !out.iter().any(|id| *id == "overlay") {
+        out.push("overlay");
+    }
+    for id in &viz_ids {
+        if !out.contains(id) {
             out.push(id);
         }
     }
@@ -578,6 +809,28 @@ pub fn overlay_layout_from_value(base: OverlayLayout, parsed: &Value) -> Overlay
     }
     if let Some(s) = parsed.get("layers").and_then(|v| v.as_str()) {
         layout.layers = s.to_string();
+    }
+    if let Some(b) = parsed.get("overlayHidden").and_then(|v| v.as_bool()) {
+        layout.overlay_hidden = b;
+    }
+    let patched_layers = parsed.get("vizLayers").and_then(|v| v.as_array());
+    if let Some(arr) = patched_layers {
+        layout.viz_layers = arr
+            .iter()
+            .map(|v| viz_layer_from_value(OverlayVizLayer::default(), v))
+            .collect();
+    } else if !layout.viz_layers.is_empty()
+        && (parsed.get("vizX").is_some()
+            || parsed.get("vizY").is_some()
+            || parsed.get("vizW").is_some()
+            || parsed.get("vizH").is_some())
+    {
+        if let Some(first) = layout.viz_layers.first_mut() {
+            first.x = layout.viz_x;
+            first.y = layout.viz_y;
+            first.w = layout.viz_w;
+            first.h = layout.viz_h;
+        }
     }
     normalize_overlay_layout(layout)
 }
@@ -700,8 +953,20 @@ pub fn normalize(mut cfg: Config) -> Config {
     }
     cfg.seed_playlists = seeds;
     cfg.twitch_commands = filled_twitch_commands(cfg.twitch_commands);
+    let missing_viz = cfg.overlay_layout.viz_layers.is_empty();
     cfg.overlay_layout = normalize_overlay_layout(cfg.overlay_layout);
     cfg.audio_visualizer = normalize_audio_visualizer(cfg.audio_visualizer);
+    if missing_viz {
+        if let Some(layer) = cfg.overlay_layout.viz_layers.first_mut() {
+            layer.hidden = !cfg.audio_visualizer.enabled;
+            layer.style = cfg.audio_visualizer.style.clone();
+            layer.color = cfg.audio_visualizer.color.clone();
+            layer.color_dir = cfg.audio_visualizer.color_dir.clone();
+            layer.bands = cfg.audio_visualizer.spectrum_bands;
+            layer.mirror = cfg.audio_visualizer.mirror;
+            layer.peak_fall = cfg.audio_visualizer.peak_fall;
+        }
+    }
     cfg
 }
 
@@ -1257,6 +1522,7 @@ mod tests {
             viz_h: 10,
             viz_x: -5,
             viz_y: 9000,
+            viz_layers: vec![],
             ..Default::default()
         });
         assert_eq!(stacked.layers, "viz,overlay");
@@ -1264,6 +1530,59 @@ mod tests {
         assert_eq!(stacked.viz_h, OVERLAY_VIZ_MIN);
         assert_eq!(stacked.viz_x, 0);
         assert_eq!(stacked.viz_y, OVERLAY_CANVAS_1080.1 - OVERLAY_VIZ_MIN);
+        assert_eq!(stacked.viz_layers.len(), 1);
+        assert!(stacked.viz_layers[0].hidden);
+        assert!(!stacked.overlay_hidden);
+    }
+
+    #[test]
+    fn overlay_viz_layers_migrate_cap_and_keep_last() {
+        let migrated = normalize_overlay_layout(OverlayLayout {
+            viz_x: 10,
+            viz_y: 20,
+            viz_w: 400,
+            viz_h: 120,
+            viz_layers: vec![],
+            ..Default::default()
+        });
+        assert_eq!(migrated.viz_layers.len(), 1);
+        assert_eq!(migrated.viz_layers[0].id, "viz");
+        assert_eq!(migrated.viz_layers[0].x, 10);
+        assert_eq!(migrated.viz_layers[0].y, 20);
+        assert_eq!(migrated.viz_layers[0].w, 400);
+        assert_eq!(migrated.viz_layers[0].h, 120);
+
+        let mut many = Vec::new();
+        for i in 0..12 {
+            many.push(OverlayVizLayer {
+                id: format!("viz-{i}"),
+                hidden: i == 0,
+                ..Default::default()
+            });
+        }
+        let capped = normalize_overlay_layout(OverlayLayout {
+            viz_layers: many,
+            layers: "overlay".into(),
+            overlay_hidden: true,
+            ..Default::default()
+        });
+        assert_eq!(capped.viz_layers.len(), 8);
+        assert_eq!(capped.layers.split(',').count(), 9);
+        assert!(capped.overlay_hidden);
+        assert!(capped.viz_layers[0].hidden);
+        assert!(!capped.viz_layers[1].hidden);
+        assert!(any_viz_visible(&capped));
+
+        let last_hidden = normalize_overlay_layout(OverlayLayout {
+            viz_layers: vec![OverlayVizLayer {
+                hidden: true,
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        assert_eq!(last_hidden.viz_layers.len(), 1);
+        assert!(last_hidden.viz_layers[0].hidden);
+        assert!(!any_viz_visible(&last_hidden));
     }
 
     #[test]

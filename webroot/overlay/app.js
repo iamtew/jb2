@@ -54,6 +54,7 @@
     songInfo.style.transformOrigin = "0 0";
     songInfo.style.transform = s === 1 ? "none" : `scale(${s})`;
     applyVizFrame(layout);
+    if (songInfo) songInfo.hidden = Boolean(layout.overlayHidden);
     songInfo.setAttribute("data-theme", layout.theme || "lcd-glass");
     songInfo.setAttribute("data-seek", layout.seekStyle || "sesh-sofa");
     const seekDir = layout.seekDir;
@@ -76,20 +77,52 @@
   }
 
   function applyVizFrame(layout) {
-    const vizBox = document.getElementById("vizBox");
-    if (!vizBox || !layout) return;
-    const order = String(layout.layers || "overlay,viz").split(",");
-    const vizFront = order[0] === "viz";
-    const x = Number(layout.vizX);
-    const y = Number(layout.vizY);
-    const w = Number(layout.vizW);
-    const h = Number(layout.vizH);
-    vizBox.style.left = `${Number.isFinite(x) ? x : 0}px`;
-    vizBox.style.top = `${Number.isFinite(y) ? y : 0}px`;
-    vizBox.style.width = `${Number.isFinite(w) && w > 0 ? w : 1920}px`;
-    vizBox.style.height = `${Number.isFinite(h) && h > 0 ? h : 280}px`;
-    vizBox.style.zIndex = vizFront ? "3" : "1";
-    if (songInfo) songInfo.style.zIndex = vizFront ? "1" : "3";
+    const stack = document.getElementById("vizStack");
+    if (!stack || !layout) return;
+    const vizLayers = Array.isArray(layout.vizLayers) ? layout.vizLayers : [];
+    const byId = {};
+    vizLayers.forEach((layer) => {
+      if (layer && layer.id) byId[layer.id] = layer;
+    });
+    const order = String(layout.layers || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    if (!order.includes("overlay")) order.push("overlay");
+    const depth = order.length;
+    order.forEach((id, i) => {
+      const z = String(depth - i + 1);
+      if (id === "overlay") {
+        if (songInfo) songInfo.style.zIndex = z;
+        return;
+      }
+      const layer = byId[id];
+      if (!layer) return;
+      let box = stack.querySelector(`[data-viz-id="${id}"]`);
+      if (!box) {
+        box = document.createElement("div");
+        box.className = "viz-box";
+        box.dataset.vizId = id;
+        const host = document.createElement("div");
+        host.className = "viz-layer";
+        host.setAttribute("aria-hidden", "true");
+        box.appendChild(host);
+        stack.appendChild(box);
+      }
+      const x = Number(layer.x);
+      const y = Number(layer.y);
+      const w = Number(layer.w);
+      const h = Number(layer.h);
+      box.style.left = `${Number.isFinite(x) ? x : 0}px`;
+      box.style.top = `${Number.isFinite(y) ? y : 0}px`;
+      box.style.width = `${Number.isFinite(w) && w > 0 ? w : 1920}px`;
+      box.style.height = `${Number.isFinite(h) && h > 0 ? h : 280}px`;
+      box.style.zIndex = z;
+    });
+    stack.querySelectorAll("[data-viz-id]").forEach((box) => {
+      if (!byId[box.dataset.vizId]) box.remove();
+    });
+    if (window.JB2Viz) window.JB2Viz.sync(layout);
   }
 
   function followOverlayLayout() {

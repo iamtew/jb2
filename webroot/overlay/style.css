@@ -29,6 +29,12 @@ body.dev {
     width: 100%;
 }
 
+#vizStack {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
 .viz-box {
     position: absolute;
     left: 0;

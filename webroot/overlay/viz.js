@@ -31,21 +31,19 @@
     peakFall: 0.35,
   };
 
-  let app = null;
-  let gfx = null;
-  let host = null;
+  const layers = new Map();
   let enabled = false;
   let hideForStatus = true;
-  let reduced = false;
+  let reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let spectrum = [];
-  let peaks = [];
   let bass = 0;
   let punch = 0;
+  let lastPunchTick = 0;
   let audioSource = null;
-  let look = Object.assign({}, LOOK_DEFAULTS);
+  let selectedId = "";
+  let smoothing = LOOK_DEFAULTS.smoothing;
   let saveTimer = 0;
-  let trailHist = [];
-  let warpZ = 0;
+  let bound = false;
 
   function clampBands(n) {
     const v = Math.round(Number(n));
@@ -75,33 +73,51 @@
     return mix(stops[i], stops[i + 1], x - i);
   }
 
-  function stopsForFrame() {
+  function lookOf(src) {
+    const next = {
+      style: LOOK_DEFAULTS.style,
+      color: LOOK_DEFAULTS.color,
+      colorDir: LOOK_DEFAULTS.colorDir,
+      bands: LOOK_DEFAULTS.bands,
+      mirror: LOOK_DEFAULTS.mirror,
+      peakFall: LOOK_DEFAULTS.peakFall,
+      hidden: true,
+    };
+    if (!src) return next;
+    if (STYLES[src.style]) next.style = src.style;
+    if (typeof src.color === "string") next.color = SEEK[src.color] ? src.color : "";
+    if (typeof src.colorDir === "string") {
+      next.colorDir = DIRS[src.colorDir] ? src.colorDir : LOOK_DEFAULTS.colorDir;
+    }
+    if (src.bands != null) next.bands = clampBands(src.bands);
+    if (src.spectrumBands != null) next.bands = clampBands(src.spectrumBands);
+    if (typeof src.mirror === "boolean") next.mirror = src.mirror;
+    if (src.peakFall != null) next.peakFall = clampUnit(src.peakFall, LOOK_DEFAULTS.peakFall);
+    next.hidden = Boolean(src.hidden);
+    return next;
+  }
+
+  function stopsForFrame(look) {
     const id = look.color || document.getElementById("songInfo")?.getAttribute("data-seek") || "sesh-sofa";
     return SEEK[id] || SEEK["sesh-sofa"];
   }
 
-  function applyVisibility() {
-    const frame = document.getElementById("vizBox") || host;
-    if (!frame) return;
-    const hide = !enabled;
-    if (frame.hidden === hide) return;
-    frame.hidden = hide;
-    if (!hide) window.requestAnimationFrame(resize);
+  function isStage() {
+    return Boolean(document.getElementById("stageCanvas"));
   }
 
   function setLookLock() {
     const set = document.getElementById("vizLook");
-    if (set) set.disabled = !enabled;
+    if (!set) return;
+    const layer = layers.get(selectedId);
+    set.disabled = !layer || layer.look.hidden;
   }
 
   function setEnabled(on) {
     enabled = Boolean(on);
-    const box = document.getElementById("vizInput");
-    if (box && box.checked !== enabled) box.checked = enabled;
-    setLookLock();
-    applyVisibility();
     if (enabled) connectAudio();
     else disconnectAudio();
+    applyVisibility();
   }
 
   function setStatus(text) {
@@ -117,26 +133,13 @@
     }).catch(() => {});
   }
 
-  function saveLook() {
-    window.clearTimeout(saveTimer);
-    saveTimer = 0;
-    saveViz({
-      style: look.style,
-      color: look.color,
-      colorDir: look.colorDir,
-      spectrumBands: look.bands,
-      smoothing: look.smoothing,
-      mirror: look.mirror,
-      peakFall: look.peakFall,
-    });
-  }
-
-  function scheduleSave() {
-    window.clearTimeout(saveTimer);
-    saveTimer = window.setTimeout(saveLook, 120);
+  function selectedLayer() {
+    return layers.get(selectedId) || null;
   }
 
   function syncControls() {
+    const layer = selectedLayer();
+    const look = layer ? layer.look : LOOK_DEFAULTS;
     const styleSel = document.getElementById("vizStyle");
     if (styleSel) styleSel.value = look.style;
     const colorSel = document.getElementById("vizColor");
@@ -147,15 +150,19 @@
     if (bands) bands.value = String(look.bands);
     const bandsOut = document.getElementById("vizBandsOut");
     if (bandsOut) bandsOut.textContent = String(look.bands);
-    const smoothing = document.getElementById("vizSmoothing");
-    if (smoothing) smoothing.value = String(look.smoothing);
+    const smoothingEl = document.getElementById("vizSmoothing");
+    if (smoothingEl) smoothingEl.value = String(smoothing);
     const mirror = document.getElementById("vizMirror");
     if (mirror) mirror.checked = look.mirror;
     const peak = document.getElementById("vizPeak");
     if (peak) peak.value = String(look.peakFall);
+    setLookLock();
   }
 
   function readControls() {
+    const layer = selectedLayer();
+    if (!layer) return;
+    const look = layer.look;
     const styleSel = document.getElementById("vizStyle");
     if (styleSel && STYLES[styleSel.value]) look.style = styleSel.value;
     const colorSel = document.getElementById("vizColor");
@@ -164,8 +171,8 @@
     if (dirSel) look.colorDir = DIRS[dirSel.value] ? dirSel.value : LOOK_DEFAULTS.colorDir;
     const bands = document.getElementById("vizBands");
     if (bands) look.bands = clampBands(bands.value);
-    const smoothing = document.getElementById("vizSmoothing");
-    if (smoothing) look.smoothing = clampUnit(smoothing.value, LOOK_DEFAULTS.smoothing);
+    const smoothingEl = document.getElementById("vizSmoothing");
+    if (smoothingEl) smoothing = clampUnit(smoothingEl.value, LOOK_DEFAULTS.smoothing);
     const mirror = document.getElementById("vizMirror");
     if (mirror) look.mirror = mirror.checked;
     const peak = document.getElementById("vizPeak");
@@ -174,42 +181,59 @@
     if (bandsOut) bandsOut.textContent = String(look.bands);
   }
 
-  function applyLook(patch) {
-    if (!patch) return;
-    if (STYLES[patch.style]) look.style = patch.style;
-    if (typeof patch.color === "string") look.color = SEEK[patch.color] ? patch.color : "";
-    if (typeof patch.colorDir === "string") {
-      look.colorDir = DIRS[patch.colorDir] ? patch.colorDir : LOOK_DEFAULTS.colorDir;
+  function emitLook() {
+    const layer = selectedLayer();
+    if (!layer || typeof window.JB2Viz.onLookChange !== "function") return;
+    window.JB2Viz.onLookChange(layer.id, layer.look);
+  }
+
+  function scheduleLookSave() {
+    window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => {
+      saveTimer = 0;
+      emitLook();
+    }, 120);
+  }
+
+  function resampleSpectrum(src, bands) {
+    const n = src.length;
+    if (!n) return [];
+    const count = clampBands(bands);
+    const out = [];
+    if (count <= n) {
+      for (let i = 0; i < count; i++) {
+        const a = Math.floor((i * n) / count);
+        const b = Math.max(a + 1, Math.floor(((i + 1) * n) / count));
+        let sum = 0;
+        for (let j = a; j < b; j++) sum += Number(src[j]) || 0;
+        out.push(sum / (b - a));
+      }
+      return out;
     }
-    if (patch.spectrumBands != null) look.bands = clampBands(patch.spectrumBands);
-    if (patch.smoothing != null) look.smoothing = clampUnit(patch.smoothing, LOOK_DEFAULTS.smoothing);
-    if (typeof patch.mirror === "boolean") look.mirror = patch.mirror;
-    if (patch.peakFall != null) look.peakFall = clampUnit(patch.peakFall, LOOK_DEFAULTS.peakFall);
-    syncControls();
+    for (let i = 0; i < count; i++) {
+      const t = count <= 1 ? 0 : i / (count - 1);
+      const x = t * (n - 1);
+      const j = Math.min(n - 2, Math.floor(x));
+      const f = x - j;
+      out.push((Number(src[j]) || 0) * (1 - f) + (Number(src[j + 1]) || 0) * f);
+    }
+    return out;
   }
 
-  function resize() {
-    if (!app || !host || host.hidden) return;
-    const w = host.clientWidth;
-    const h = host.clientHeight;
-    if (w < 2 || h < 2) return;
-    if (app.renderer.width === w && app.renderer.height === h) return;
-    app.renderer.resize(w, h);
-  }
-
-  function stepPeaks(levels, dt) {
+  function stepPeaks(layer, levels, dt) {
+    const peaks = layer.peaks;
     if (peaks.length !== levels.length) {
-      peaks = levels.slice();
+      layer.peaks = levels.slice();
       return;
     }
-    if (look.peakFall <= 0) return;
-    const drop = look.peakFall * 0.22 * dt;
+    if (layer.look.peakFall <= 0) return;
+    const drop = layer.look.peakFall * 0.22 * dt;
     for (let i = 0; i < levels.length; i++) {
       peaks[i] = Math.max(levels[i], (peaks[i] || 0) - drop);
     }
   }
 
-  function colorT(i, n, level) {
+  function colorT(look, i, n, level) {
     const dir = DIRS[look.colorDir] ? look.colorDir : "lr";
     if (dir === "tb" || dir === "bt") {
       const t = Math.min(1, Math.max(0, Number(level) || 0));
@@ -219,11 +243,11 @@
     return dir === "rl" ? 1 - t : t;
   }
 
-  function bandColor(stops, i, n, level) {
-    return colorAt(stops, colorT(i, n, level));
+  function bandColor(look, stops, i, n, level) {
+    return colorAt(stops, colorT(look, i, n, level));
   }
 
-  function paintBands(w, h, levels, stops) {
+  function paintBands(gfx, look, w, h, levels, peaks, stops) {
     const n = levels.length;
     const gap = n <= 1 ? 0 : Math.max(2, Math.round(w / 400));
     const bw = Math.max(1, (w - gap * (n + 1)) / n);
@@ -231,7 +255,7 @@
     const mid = h / 2;
     const showPeak = look.peakFall > 0;
     for (let i = 0; i < n; i++) {
-      const color = bandColor(stops, i, n, levels[i]);
+      const color = bandColor(look, stops, i, n, levels[i]);
       const bh = Math.max(1, levels[i] * maxH);
       const x = gap + i * (bw + gap);
       if (look.mirror) {
@@ -250,63 +274,63 @@
     }
   }
 
-  function waveY(h, level, maxH, top) {
+  function waveY(look, h, level, maxH, top) {
     const mid = h / 2;
     if (!look.mirror) return top ? h - level * maxH : h;
     return top ? mid - (level * maxH) / 2 : mid + (level * maxH) / 2;
   }
 
-  function paintWave(w, h, levels, stops) {
+  function paintWave(gfx, look, w, h, levels, peaks, stops) {
     const n = levels.length;
     const maxH = h * 0.92 * (1 + punch * 0.18);
     if (n === 1) {
-      const color = bandColor(stops, 0, 1, levels[0]);
-      const top = waveY(h, levels[0], maxH, true);
-      const bot = waveY(h, levels[0], maxH, false);
+      const color = bandColor(look, stops, 0, 1, levels[0]);
+      const top = waveY(look, h, levels[0], maxH, true);
+      const bot = waveY(look, h, levels[0], maxH, false);
       gfx.rect(0, Math.min(top, bot), w, Math.max(1, Math.abs(bot - top))).fill({ color, alpha: 0.9 });
       if (look.peakFall > 0) {
-        const py = waveY(h, peaks[0], maxH, true);
+        const py = waveY(look, h, peaks[0], maxH, true);
         gfx.rect(0, py, w, 2).fill({ color, alpha: 1 });
-        if (look.mirror) gfx.rect(0, waveY(h, peaks[0], maxH, false) - 2, w, 2).fill({ color, alpha: 1 });
+        if (look.mirror) gfx.rect(0, waveY(look, h, peaks[0], maxH, false) - 2, w, 2).fill({ color, alpha: 1 });
       }
       return;
     }
     for (let i = 0; i < n - 1; i++) {
       const x0 = (i / (n - 1)) * w;
       const x1 = ((i + 1) / (n - 1)) * w;
-      const color = bandColor(stops, i, n, levels[i]);
+      const color = bandColor(look, stops, i, n, levels[i]);
       gfx
         .poly([
-          x0, waveY(h, levels[i], maxH, true),
-          x1, waveY(h, levels[i + 1], maxH, true),
-          x1, waveY(h, levels[i + 1], maxH, false),
-          x0, waveY(h, levels[i], maxH, false),
+          x0, waveY(look, h, levels[i], maxH, true),
+          x1, waveY(look, h, levels[i + 1], maxH, true),
+          x1, waveY(look, h, levels[i + 1], maxH, false),
+          x0, waveY(look, h, levels[i], maxH, false),
         ])
         .fill({ color, alpha: 0.9 });
     }
     if (look.peakFall <= 0) return;
     for (let i = 0; i < n - 1; i++) {
-      const color = bandColor(stops, i, n, levels[i]);
+      const color = bandColor(look, stops, i, n, levels[i]);
       const x0 = (i / (n - 1)) * w;
       const x1 = ((i + 1) / (n - 1)) * w;
-      gfx.moveTo(x0, waveY(h, peaks[i], maxH, true));
-      gfx.lineTo(x1, waveY(h, peaks[i + 1], maxH, true));
+      gfx.moveTo(x0, waveY(look, h, peaks[i], maxH, true));
+      gfx.lineTo(x1, waveY(look, h, peaks[i + 1], maxH, true));
       gfx.stroke({ width: 2, color, alpha: 1 });
       if (!look.mirror) continue;
-      gfx.moveTo(x0, waveY(h, peaks[i], maxH, false));
-      gfx.lineTo(x1, waveY(h, peaks[i + 1], maxH, false));
+      gfx.moveTo(x0, waveY(look, h, peaks[i], maxH, false));
+      gfx.lineTo(x1, waveY(look, h, peaks[i + 1], maxH, false));
       gfx.stroke({ width: 2, color, alpha: 1 });
     }
   }
 
-  function paintDots(w, h, levels, stops) {
+  function paintDots(gfx, look, w, h, levels, peaks, stops) {
     const n = levels.length;
     const slot = w / n;
     const maxR = Math.min(slot * 0.46, h * 0.42);
     const cy = look.mirror ? h * 0.33 : h * 0.5;
     const showPeak = look.peakFall > 0;
     for (let i = 0; i < n; i++) {
-      const color = bandColor(stops, i, n, levels[i]);
+      const color = bandColor(look, stops, i, n, levels[i]);
       const cx = slot * i + slot / 2;
       const r = Math.max(1.5, levels[i] * maxR);
       gfx.circle(cx, cy, r).fill({ color, alpha: 0.9 });
@@ -318,44 +342,44 @@
     }
   }
 
-  function strokeSnap(w, h, snap, stops, alpha, maxH) {
+  function strokeSnap(gfx, look, w, h, snap, stops, alpha, maxH) {
     const n = snap.length;
     if (!n) return;
     const width = 2 + punch * 2;
     if (n === 1) {
-      const color = bandColor(stops, 0, 1, snap[0]);
-      gfx.moveTo(0, waveY(h, snap[0], maxH, true));
-      gfx.lineTo(w, waveY(h, snap[0], maxH, true));
+      const color = bandColor(look, stops, 0, 1, snap[0]);
+      gfx.moveTo(0, waveY(look, h, snap[0], maxH, true));
+      gfx.lineTo(w, waveY(look, h, snap[0], maxH, true));
       gfx.stroke({ width, color, alpha });
       if (!look.mirror) return;
-      gfx.moveTo(0, waveY(h, snap[0], maxH, false));
-      gfx.lineTo(w, waveY(h, snap[0], maxH, false));
+      gfx.moveTo(0, waveY(look, h, snap[0], maxH, false));
+      gfx.lineTo(w, waveY(look, h, snap[0], maxH, false));
       gfx.stroke({ width, color, alpha });
       return;
     }
     for (let i = 0; i < n - 1; i++) {
       const x0 = (i / (n - 1)) * w;
       const x1 = ((i + 1) / (n - 1)) * w;
-      const color = bandColor(stops, i, n, snap[i]);
-      gfx.moveTo(x0, waveY(h, snap[i], maxH, true));
-      gfx.lineTo(x1, waveY(h, snap[i + 1], maxH, true));
+      const color = bandColor(look, stops, i, n, snap[i]);
+      gfx.moveTo(x0, waveY(look, h, snap[i], maxH, true));
+      gfx.lineTo(x1, waveY(look, h, snap[i + 1], maxH, true));
       gfx.stroke({ width, color, alpha });
       if (!look.mirror) continue;
-      gfx.moveTo(x0, waveY(h, snap[i], maxH, false));
-      gfx.lineTo(x1, waveY(h, snap[i + 1], maxH, false));
+      gfx.moveTo(x0, waveY(look, h, snap[i], maxH, false));
+      gfx.lineTo(x1, waveY(look, h, snap[i + 1], maxH, false));
       gfx.stroke({ width, color, alpha });
     }
   }
 
-  function paintTrail(w, h, levels, stops) {
+  function paintTrail(gfx, look, layer, w, h, levels, stops) {
     const cap = look.peakFall <= 0 ? 1 : 1 + Math.round(look.peakFall * 20);
-    if (trailHist.length && trailHist[0].length !== levels.length) trailHist = [];
-    trailHist.push(levels.slice());
-    while (trailHist.length > cap) trailHist.shift();
+    if (layer.trailHist.length && layer.trailHist[0].length !== levels.length) layer.trailHist = [];
+    layer.trailHist.push(levels.slice());
+    while (layer.trailHist.length > cap) layer.trailHist.shift();
     const maxH = h * 0.92 * (1 + punch * 0.18);
-    for (let t = 0; t < trailHist.length; t++) {
-      const alpha = 0.12 + 0.88 * ((t + 1) / trailHist.length);
-      strokeSnap(w, h, trailHist[t], stops, alpha, maxH);
+    for (let t = 0; t < layer.trailHist.length; t++) {
+      const alpha = 0.12 + 0.88 * ((t + 1) / layer.trailHist.length);
+      strokeSnap(gfx, look, w, h, layer.trailHist[t], stops, alpha, maxH);
     }
   }
 
@@ -368,16 +392,17 @@
     return (Number(levels[i]) || 0) * (1 - f) + (Number(levels[i + 1]) || 0) * f;
   }
 
-  function paintWarp(w, h, levels, stops, dt) {
+  function paintWarp(gfx, look, layer, w, h, levels, stops, dt) {
     const n = levels.length;
     if (!n) return;
-    warpZ = (warpZ + (0.01 + bass * 0.05 + punch * 0.08) * dt) % 1;
+    layer.warpZ = (layer.warpZ + (0.01 + bass * 0.05 + punch * 0.08) * dt) % 1;
     const horizon = look.mirror ? h * 0.5 : Math.min(h * 0.18, Math.max(8, h - 48));
     const vpX = w / 2;
     const floorH = h - horizon;
     if (floorH < 4) return;
     const rows = 14;
     const steps = Math.max(2, n);
+    const warpZ = layer.warpZ;
 
     function yAt(depth, t, sign) {
       const persp = depth * depth;
@@ -398,7 +423,7 @@
         for (let i = 0; i < steps - 1; i++) {
           const t0 = i / (steps - 1);
           const t1 = (i + 1) / (steps - 1);
-          const color = bandColor(stops, Math.min(n - 1, i), n, sampleLevel(levels, t0));
+          const color = bandColor(look, stops, Math.min(n - 1, i), n, sampleLevel(levels, t0));
           gfx.moveTo(xAt(depth, t0), yAt(depth, t0, sign));
           gfx.lineTo(xAt(depth, t1), yAt(depth, t1, sign));
           gfx.stroke({ width, color, alpha });
@@ -406,7 +431,7 @@
       }
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
-        const color = bandColor(stops, Math.min(n - 1, i), n, sampleLevel(levels, t));
+        const color = bandColor(look, stops, Math.min(n - 1, i), n, sampleLevel(levels, t));
         const segs = 8;
         for (let s = 0; s < segs; s++) {
           const d0 = s / segs;
@@ -422,28 +447,109 @@
     if (look.mirror) drawFloor(-1);
   }
 
-  function paint(ticker) {
+  function resizeLayer(layer) {
+    if (!layer.app || !layer.host) return;
+    const w = layer.host.clientWidth;
+    const h = layer.host.clientHeight;
+    if (w < 2 || h < 2) return;
+    if (layer.app.renderer.width === w && layer.app.renderer.height === h) return;
+    layer.app.renderer.resize(w, h);
+  }
+
+  function decayPunch(ticker) {
+    const t = ticker && ticker.lastTime;
+    if (t === lastPunchTick) return;
+    lastPunchTick = t;
+    punch *= 0.86;
+  }
+
+  function paintLayer(layer, ticker) {
+    const gfx = layer.gfx;
+    const app = layer.app;
     if (!gfx || !app) return;
     const w = app.renderer.width;
     const h = app.renderer.height;
     gfx.clear();
-    if (!enabled || hideForStatus || reduced || w < 2 || h < 2) return;
-    const n = spectrum.length;
-    if (!n) return;
-    const levels = [];
-    for (let i = 0; i < n; i++) levels.push(Number(spectrum[i]) || 0);
+    decayPunch(ticker);
+    if (!enabled || hideForStatus || reduced || layer.look.hidden || w < 2 || h < 2) return;
+    const levels = resampleSpectrum(spectrum, layer.look.bands);
+    if (!levels.length) return;
     const dt = ticker && ticker.deltaTime ? ticker.deltaTime : 1;
-    stepPeaks(levels, dt);
-    const stops = stopsForFrame();
+    stepPeaks(layer, levels, dt);
+    const stops = stopsForFrame(layer.look);
     const tint = Math.min(0.18, bass * 0.16);
     if (tint > 0.01) gfx.rect(0, 0, w, h).fill({ color: stops[0], alpha: tint });
-    if (look.style !== "trail") trailHist = [];
-    if (look.style === "wave") paintWave(w, h, levels, stops);
-    else if (look.style === "dots") paintDots(w, h, levels, stops);
-    else if (look.style === "trail") paintTrail(w, h, levels, stops);
-    else if (look.style === "warp") paintWarp(w, h, levels, stops, dt);
-    else paintBands(w, h, levels, stops);
-    punch *= 0.86;
+    if (layer.look.style !== "trail") layer.trailHist = [];
+    if (layer.look.style === "wave") paintWave(gfx, layer.look, w, h, levels, layer.peaks, stops);
+    else if (layer.look.style === "dots") paintDots(gfx, layer.look, w, h, levels, layer.peaks, stops);
+    else if (layer.look.style === "trail") paintTrail(gfx, layer.look, layer, w, h, levels, stops);
+    else if (layer.look.style === "warp") paintWarp(gfx, layer.look, layer, w, h, levels, stops, dt);
+    else paintBands(gfx, layer.look, w, h, levels, layer.peaks, stops);
+  }
+
+  function applyVisibility() {
+    layers.forEach((layer) => {
+      const box = layer.box;
+      if (!box) return;
+      if (isStage()) {
+        box.hidden = false;
+        return;
+      }
+      const hide = !enabled || hideForStatus || layer.look.hidden;
+      if (box.hidden !== hide) box.hidden = hide;
+      if (!hide) window.requestAnimationFrame(() => resizeLayer(layer));
+    });
+  }
+
+  function destroyLayer(layer) {
+    if (layer.ro) layer.ro.disconnect();
+    if (layer.app) {
+      try {
+        layer.app.destroy(true);
+      } catch (_) {
+        /* already gone */
+      }
+    }
+    layer.app = null;
+    layer.gfx = null;
+  }
+
+  function mountPixi(layer) {
+    if (typeof PIXI === "undefined" || !layer.host || layer.app || layer.pending) return;
+    layer.pending = true;
+    const app = new PIXI.Application();
+    app
+      .init({
+        width: 32,
+        height: 32,
+        backgroundAlpha: 0,
+        antialias: false,
+        autoDensity: false,
+        resolution: 1,
+        preference: "webgl",
+      })
+      .then(function () {
+        if (!layers.has(layer.id)) {
+          app.destroy(true);
+          return;
+        }
+        layer.pending = false;
+        layer.app = app;
+        app.canvas.setAttribute("aria-hidden", "true");
+        layer.host.appendChild(app.canvas);
+        layer.gfx = new PIXI.Graphics();
+        app.stage.addChild(layer.gfx);
+        app.ticker.add((ticker) => paintLayer(layer, ticker));
+        if (typeof ResizeObserver === "function") {
+          layer.ro = new ResizeObserver(() => resizeLayer(layer));
+          layer.ro.observe(layer.host);
+        }
+        resizeLayer(layer);
+      })
+      .catch(function () {
+        layer.pending = false;
+        if (layer.host) layer.host.hidden = true;
+      });
   }
 
   function onAudio(ev) {
@@ -523,81 +629,137 @@
       .then((env) => {
         const viz = (env && env.data && env.data.audioVisualizer) || {};
         setEnabled(Boolean(viz.enabled));
-        applyLook(viz);
+        if (viz.smoothing != null) smoothing = clampUnit(viz.smoothing, LOOK_DEFAULTS.smoothing);
+        syncControls();
         return fillDevices(viz.device || "default");
       })
       .catch(() => {});
   }
 
   function bindControls() {
-    ["vizStyle", "vizColor", "vizColorDir", "vizBands", "vizSmoothing", "vizMirror", "vizPeak"].forEach((id) => {
+    if (bound) return;
+    bound = true;
+    ["vizStyle", "vizColor", "vizColorDir", "vizBands", "vizMirror", "vizPeak"].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       const event = el.type === "range" || el.type === "checkbox" ? "input" : "change";
       el.addEventListener(event, () => {
         readControls();
-        scheduleSave();
+        scheduleLookSave();
       });
     });
+    const smoothingEl = document.getElementById("vizSmoothing");
+    if (smoothingEl) {
+      smoothingEl.addEventListener("input", () => {
+        smoothing = clampUnit(smoothingEl.value, LOOK_DEFAULTS.smoothing);
+        window.clearTimeout(saveTimer);
+        saveTimer = window.setTimeout(() => {
+          saveTimer = 0;
+          saveViz({ smoothing });
+        }, 120);
+      });
+    }
     document.querySelectorAll("[data-viz-reset]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const key = btn.getAttribute("data-viz-reset");
-        if (Object.prototype.hasOwnProperty.call(LOOK_DEFAULTS, key)) look[key] = LOOK_DEFAULTS[key];
+        if (key === "smoothing") {
+          smoothing = LOOK_DEFAULTS.smoothing;
+          syncControls();
+          saveViz({ smoothing });
+          return;
+        }
+        const layer = selectedLayer();
+        if (layer && Object.prototype.hasOwnProperty.call(LOOK_DEFAULTS, key)) {
+          layer.look[key] = LOOK_DEFAULTS[key];
+        }
         syncControls();
-        saveLook();
+        emitLook();
       });
     });
-  }
-
-  function init(el) {
-    host = el;
-    reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const box = document.getElementById("vizInput");
-    if (box) {
-      box.addEventListener("change", () => {
-        setEnabled(box.checked);
-        saveViz({ enabled: box.checked });
-      });
-    }
     const deviceSel = document.getElementById("vizDevice");
     if (deviceSel) {
       deviceSel.addEventListener("change", () => {
         saveViz({ device: deviceSel.value || "default" });
       });
     }
-    bindControls();
     window.addEventListener("jb2-viz", (event) => {
       const data = event.detail || {};
       if (typeof data.enabled === "boolean") setEnabled(data.enabled);
-      applyLook(data);
+      if (data.smoothing != null) {
+        smoothing = clampUnit(data.smoothing, LOOK_DEFAULTS.smoothing);
+        syncControls();
+      }
+    });
+    const events = new EventSource("/api/events");
+    events.addEventListener("audioVisualizer", (event) => {
+      try {
+        const data = JSON.parse(event.data || "{}");
+        if (typeof data.enabled === "boolean") setEnabled(data.enabled);
+        if (data.smoothing != null) {
+          smoothing = clampUnit(data.smoothing, LOOK_DEFAULTS.smoothing);
+          syncControls();
+        }
+      } catch (_) {
+        /* ignore */
+      }
     });
     followEnabled();
-    if (typeof PIXI === "undefined") return;
-    app = new PIXI.Application();
-    app
-      .init({
-        width: 32,
-        height: 32,
-        backgroundAlpha: 0,
-        antialias: false,
-        autoDensity: false,
-        resolution: 1,
-        preference: "webgl",
-      })
-      .then(function () {
-        app.canvas.setAttribute("aria-hidden", "true");
-        host.appendChild(app.canvas);
-        gfx = new PIXI.Graphics();
-        app.stage.addChild(gfx);
-        app.ticker.add(paint);
-        if (typeof ResizeObserver === "function") new ResizeObserver(resize).observe(host);
-        resize();
-      })
-      .catch(function () {
-        if (host) host.hidden = true;
-      });
   }
 
-  const hostEl = document.querySelector(".viz-layer");
-  if (hostEl) init(hostEl);
+  function select(id) {
+    selectedId = id || "";
+    syncControls();
+  }
+
+  function sync(layout) {
+    bindControls();
+    const list = (layout && layout.vizLayers) || [];
+    const keep = new Set();
+    list.forEach((src) => {
+      if (!src || !src.id) return;
+      keep.add(src.id);
+      let layer = layers.get(src.id);
+      const box = document.querySelector(`[data-viz-id="${src.id}"]`);
+      const host = box ? box.querySelector(".viz-layer") : null;
+      if (!layer) {
+        layer = {
+          id: src.id,
+          box,
+          host,
+          app: null,
+          gfx: null,
+          pending: false,
+          ro: null,
+          look: lookOf(src),
+          peaks: [],
+          trailHist: [],
+          warpZ: 0,
+        };
+        layers.set(src.id, layer);
+      } else {
+        layer.box = box;
+        layer.host = host;
+        layer.look = lookOf(src);
+      }
+      if (host) mountPixi(layer);
+    });
+    Array.from(layers.keys()).forEach((id) => {
+      if (keep.has(id)) return;
+      destroyLayer(layers.get(id));
+      layers.delete(id);
+    });
+    if (selectedId && !layers.has(selectedId)) selectedId = "";
+    if (!selectedId && list.length) selectedId = list[0].id;
+    applyVisibility();
+    syncControls();
+  }
+
+  window.JB2Viz = {
+    sync,
+    select,
+    lookDefaults: LOOK_DEFAULTS,
+    onLookChange: null,
+  };
+
+  bindControls();
 })();

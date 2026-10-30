@@ -711,10 +711,12 @@ Transfer-Encoding: chunked\r\n\
         let layout = config::normalize_overlay_layout(layout);
         *self.overlay_live.lock().expect("overlay") = layout.clone();
         if save {
-            self.store.update(|cfg| {
+            let saved = self.store.update(|cfg| {
                 cfg.overlay_layout = layout.clone();
+                cfg.audio_visualizer.enabled = config::any_viz_visible(&layout);
                 Ok(())
             })?;
+            self.sync_audio(&saved, &json!({ "audioVisualizer": {} }));
         }
         self.emit("overlay", layout.to_json());
         Ok(layout)
