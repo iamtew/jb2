@@ -4,7 +4,7 @@
 
 Composer for placing the now-playing panel on a 16:9 canvas. Open it from the landing page or the tray **Open Overlay Stage**. OBS still uses [`/overlay/`](overlay.md) as a browser source. **Copy Overlay URL** on Stage and in the tray copies that URL.
 
-JB2 owns the layout (`overlayLayout` in `jb2.sqlite`). Dragging or resizing the panel live-updates `/overlay/` over `GET /api/events` (`event: overlay`). Releasing the pointer writes the layout. Look settings save immediately. Stage uses placeholder track text; the preview button cycles play, pause, no-signal, and an 8s auto loop.
+JB2 owns the layout (`overlayLayout` in `jb2.sqlite`). Dragging or resizing the panel live-updates `/overlay/` over `GET /api/events` (`event: overlay`). Releasing the pointer writes the layout. Look settings save immediately. The panel shows the live pear-desktop track (artist, title, album, seek), same as [`/overlay/`](overlay.md): playing, paused, or no signal.
 
 ## Canvas
 
@@ -15,7 +15,7 @@ JB2 owns the layout (`overlayLayout` in `jb2.sqlite`). Dragging or resizing the 
 
 The composer scales that canvas to the window. Pointer math stays in canvas pixels. Set the OBS browser source to the same size so the overlay lands where Stage shows it.
 
-The top bar picks 720p/1080p, preview, and the framing grid. The left sidebar keeps **Layers** on top of both tabs. **Overlay** holds theme, seek, opacity, pulse, glass, and reset size. **Viz** holds the visualizer switch and output device.
+The top bar picks 720p/1080p, the framing grid, and Copy Overlay URL. The left sidebar keeps **Layers** on top of both tabs. **Overlay** holds theme, seek, opacity, pulse, glass, and reset size. **Viz** holds the visualizer switch and output device.
 
 ## Look
 

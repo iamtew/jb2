@@ -1,23 +1,9 @@
 (function () {
   const SNAP_PX = 12;
   const PUT_MS = 100;
-  const DEMO_DURATION = 180;
   const MIN_W = 280;
   const MIN_VIZ = 80;
   const BASE_W = 500;
-  const PREVIEW_MODES = ["cycle", "playing", "paused", "nosignal"];
-  const PREVIEW_LABELS = {
-    cycle: "Preview: cycle",
-    playing: "Preview: playing",
-    paused: "Preview: paused",
-    nosignal: "Preview: no signal",
-  };
-  const PREVIEW_ICONS = {
-    cycle: "#eye",
-    playing: "#player-play",
-    paused: "#player-pause",
-    nosignal: "#eye-off",
-  };
 
   const canvas = document.getElementById("stageCanvas");
   const fit = document.getElementById("stageFit");
@@ -25,7 +11,6 @@
   const vizBox = document.getElementById("vizBox");
   const layerList = document.getElementById("layerList");
   const songInfo = document.getElementById("songInfo");
-  const overlayState = document.getElementById("overlayState");
   const btn720 = document.getElementById("size720");
   const btn1080 = document.getElementById("size1080");
   const themeSelect = document.getElementById("themeSelect");
@@ -36,22 +21,7 @@
   const glassInput = document.getElementById("glassInput");
   const gridChecks = document.querySelectorAll('input[name="grid"]');
   const gridSvg = document.getElementById("stageGridLines");
-  const previewBtn = document.getElementById("previewBtn");
   const copyOverlayUrl = document.getElementById("copyOverlayUrl");
-  const ui = {
-    artist: document.getElementById("artist"),
-    artistWrap: document.getElementById("artistWrap"),
-    title: document.getElementById("title"),
-    titleWrap: document.getElementById("titleWrap"),
-    album: document.getElementById("album"),
-    albumWrap: document.getElementById("albumWrap"),
-    playState: document.getElementById("playState"),
-    currentTime: document.getElementById("currentTime"),
-    totalTime: document.getElementById("totalTime"),
-    marker: document.getElementById("marker"),
-    bar: document.getElementById("bar"),
-    fill: document.getElementById("fill"),
-  };
 
   const DEFAULTS = {
     theme: "lcd-glass",
@@ -83,151 +53,16 @@
   let drag = null;
   let putTimer = null;
   let canvasScale = 1;
-  let demoPaused = false;
-  let demoPos = 0;
-  let previewMode = "cycle";
-  let cycleTimer = null;
 
-  function formatTime(sec) {
-    const n = Math.max(0, Math.floor(sec));
-    const m = Math.floor(n / 60);
-    const s = n % 60;
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }
-
-  function getMarqueeTrack(textEl) {
-    if (!textEl) return null;
-    let track = textEl.querySelector(".overlay-marquee-track");
-    if (track) return track;
-    track = document.createElement("span");
-    track.className = "overlay-marquee-track";
-    track.textContent = textEl.textContent || "";
-    textEl.textContent = "";
-    textEl.appendChild(track);
-    return track;
-  }
-
-  function updateTextMarquee(textEl, wrapEl) {
-    if (!textEl || !wrapEl) return;
-    const track = getMarqueeTrack(textEl);
-    if (!track) return;
-    textEl.classList.remove("is-marquee");
-    textEl.style.removeProperty("--marquee-distance");
-    window.requestAnimationFrame(() => {
-      const overflowWidth = track.scrollWidth - wrapEl.clientWidth;
-      if (overflowWidth > 4) {
-        textEl.style.setProperty("--marquee-distance", `${overflowWidth}px`);
-        textEl.classList.add("is-marquee");
-      }
-    });
-  }
-
-  function updateMarker() {
-    if (!ui.bar || !ui.marker || !ui.fill) return;
-    const barWidth = ui.bar.clientWidth;
-    const pct = demoPos / DEMO_DURATION;
-    const x = Math.min(barWidth - 6, Math.max(0, barWidth * pct));
-    ui.marker.style.transform = `translateX(${x}px)`;
-    ui.fill.style.width = `${Math.max(0, Math.min(barWidth, barWidth * pct))}px`;
-    if (ui.currentTime) ui.currentTime.textContent = formatTime(demoPos);
-    if (ui.totalTime) ui.totalTime.textContent = formatTime(DEMO_DURATION - demoPos);
-  }
-
-  function syncFx() {
-    const fx = window.JB2OverlayFx;
-    if (!fx) return;
-    const playing =
-      previewMode !== "nosignal" &&
-      !(previewMode === "paused" || (previewMode === "cycle" && demoPaused));
-    fx.set({
-      theme: layout.theme,
-      pulse: layout.pulse,
-      glass: layout.glass,
-      playing,
-    });
+  function refreshNow() {
+    if (window.JB2NowPlaying) window.JB2NowPlaying.refresh();
   }
 
   function applyLook() {
     songInfo.setAttribute("data-theme", layout.theme);
     songInfo.setAttribute("data-seek", layout.seekStyle);
     songInfo.classList.toggle("is-text-only", !layout.glass);
-    const speed = Number(layout.pulse) || 0;
-    if (speed <= 0 || demoPaused || previewMode === "nosignal") {
-      songInfo.classList.remove("is-glowing");
-    } else {
-      const speedScale = Math.max(0.1, speed / 5);
-      songInfo.style.setProperty("--glow-duration", `${(2 / speedScale).toFixed(2)}s`);
-      songInfo.classList.add("is-glowing");
-    }
-    syncFx();
-  }
-
-  function applyPreview() {
-    const noSignal = previewMode === "nosignal";
-    const paused = previewMode === "paused" || (previewMode === "cycle" && demoPaused);
-    if (noSignal) {
-      if (overlayState) overlayState.textContent = "NO SIGNAL";
-      songInfo.classList.add("is-status");
-      songInfo.style.transition = "opacity 180ms ease";
-      songInfo.style.opacity = String(layout.playingOpacity);
-      if (ui.playState) ui.playState.textContent = "⏸";
-      songInfo.classList.remove("is-glowing");
-      syncFx();
-      return;
-    }
-    if (paused) {
-      if (overlayState) {
-        overlayState.innerHTML =
-          '<span class="overlay-state-lead">Jukeboks Paused</span><span class="overlay-state-hint">Add song with !sr &lt;song / URL&gt;</span>';
-      }
-      songInfo.classList.add("is-status");
-      songInfo.style.transition = "opacity 600ms ease";
-      songInfo.style.opacity = String(layout.pausedOpacity);
-      if (ui.playState) ui.playState.textContent = "⏸";
-      songInfo.classList.remove("is-glowing");
-      syncFx();
-      return;
-    }
-    songInfo.classList.remove("is-status");
-    songInfo.style.transition = "opacity 180ms ease";
-    songInfo.style.opacity = String(layout.playingOpacity);
-    if (ui.playState) ui.playState.textContent = "⏵";
-    applyLook();
-  }
-
-  function setPaused(paused) {
-    demoPaused = paused;
-    applyPreview();
-  }
-
-  function startCycle() {
-    stopCycle();
-    if (previewMode !== "cycle") return;
-    cycleTimer = window.setInterval(() => {
-      setPaused(!demoPaused);
-    }, 8000);
-  }
-
-  function stopCycle() {
-    if (cycleTimer) {
-      clearInterval(cycleTimer);
-      cycleTimer = null;
-    }
-  }
-
-  function setPreviewMode(mode) {
-    previewMode = mode;
-    const label = PREVIEW_LABELS[mode] || mode;
-    previewBtn.setAttribute("data-preview", mode);
-    previewBtn.setAttribute("aria-label", label);
-    previewBtn.title = label;
-    const icon = previewBtn.querySelector("use");
-    if (icon) icon.setAttribute("href", PREVIEW_ICONS[mode] || "#eye");
-    if (mode === "playing") setPaused(false);
-    else if (mode === "paused") setPaused(true);
-    else if (mode === "nosignal") applyPreview();
-    else applyPreview();
-    startCycle();
+    refreshNow();
   }
 
   function panelScale() {
@@ -617,12 +452,7 @@
     overlayBox.classList.remove("is-dragging");
     if (vizBox) vizBox.classList.remove("is-dragging");
     saveNow();
-    window.requestAnimationFrame(() => {
-      updateTextMarquee(ui.title, ui.titleWrap);
-      updateTextMarquee(ui.artist, ui.artistWrap);
-      updateTextMarquee(ui.album, ui.albumWrap);
-      updateMarker();
-    });
+    refreshNow();
   }
 
   overlayBox.addEventListener("pointerup", endDrag);
@@ -743,8 +573,6 @@
   themeSelect.addEventListener("change", () => {
     layout.theme = themeSelect.value;
     applyLook();
-    applyPreview();
-    applyPanelBox();
     saveNow();
   });
   seekSelect.addEventListener("change", () => {
@@ -754,20 +582,19 @@
   });
   playingOpacity.addEventListener("input", () => {
     layout.playingOpacity = Number(playingOpacity.value);
-    applyPreview();
+    refreshNow();
     scheduleLivePut();
   });
   playingOpacity.addEventListener("change", saveNow);
   pausedOpacity.addEventListener("input", () => {
     layout.pausedOpacity = Number(pausedOpacity.value);
-    applyPreview();
+    refreshNow();
     scheduleLivePut();
   });
   pausedOpacity.addEventListener("change", saveNow);
   pulseInput.addEventListener("input", () => {
     layout.pulse = Number(pulseInput.value);
     applyLook();
-    applyPreview();
     scheduleLivePut();
   });
   pulseInput.addEventListener("change", saveNow);
@@ -786,10 +613,6 @@
       paintGrid();
       saveNow();
     });
-  });
-  previewBtn.addEventListener("click", () => {
-    const i = PREVIEW_MODES.indexOf(previewMode);
-    setPreviewMode(PREVIEW_MODES[(i + 1) % PREVIEW_MODES.length]);
   });
   // execCommand in the click itself. Off-screen nodes often return false;
   // writeText after await loses the user gesture.
@@ -848,15 +671,9 @@
         layout[key] = DEFAULTS[key];
         syncToolbar();
         applyLook();
-        applyPreview();
       }
       saveNow();
-      window.requestAnimationFrame(() => {
-        updateTextMarquee(ui.title, ui.titleWrap);
-        updateTextMarquee(ui.artist, ui.artistWrap);
-        updateTextMarquee(ui.album, ui.albumWrap);
-        updateMarker();
-      });
+      refreshNow();
     });
   });
   window.addEventListener("resize", fitCanvas);
@@ -890,23 +707,15 @@
   applyLook();
   applyVizBox();
   paintLayers();
-  setPreviewMode("cycle");
-  setPaused(false);
 
-  window.requestAnimationFrame(() => {
-    updateTextMarquee(ui.title, ui.titleWrap);
-    updateTextMarquee(ui.artist, ui.artistWrap);
-    updateTextMarquee(ui.album, ui.albumWrap);
-    updateMarker();
-  });
-
-  window.setInterval(() => {
-    if (previewMode === "paused" || previewMode === "nosignal") return;
-    if (previewMode === "cycle" && demoPaused) return;
-    demoPos += 1;
-    if (demoPos > DEMO_DURATION) demoPos = 0;
-    updateMarker();
-  }, 1000);
+  if (window.JB2NowPlaying) {
+    window.JB2NowPlaying.start({
+      look: layout,
+      onChange: function () {
+        applyPanelBox();
+      },
+    });
+  }
 
   fetch("/api/overlay")
     .then((res) => res.json())
@@ -920,7 +729,7 @@
       applyLook();
       applyPanelBox();
       applyVizBox();
-      applyPreview();
+      refreshNow();
       fitCanvas();
     });
 })();

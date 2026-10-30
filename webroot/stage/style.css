@@ -237,51 +237,6 @@ body {
   color: #0ff;
 }
 
-/* Round on purpose: this one cycles modes, the square icons do not. */
-.stage-preview {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: 50%;
-  border: 2px dashed #0ff;
-  background: transparent;
-  color: #0ff;
-  cursor: pointer;
-}
-
-.stage-preview .icon {
-  width: 16px;
-  height: 16px;
-  display: block;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
-
-.stage-preview[data-preview="playing"] {
-  border-style: solid;
-  background: rgba(0, 255, 255, 0.16);
-}
-
-.stage-preview[data-preview="paused"] {
-  border-style: solid;
-  border-color: #e0b040;
-  color: #e0b040;
-}
-
-.stage-preview[data-preview="nosignal"] {
-  border-style: solid;
-  border-color: #666;
-  color: #888;
-}
-
 .stage-fit {
   flex: 1 1 auto;
   position: relative;
