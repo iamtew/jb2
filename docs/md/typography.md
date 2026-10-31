@@ -15,7 +15,7 @@ Licenses: [Credits](credits.md).
 | Streetmark | Display | overlay | Street |
 | Germania One | Display | overlay | Fraktur |
 | Konstruktor | Display | overlay | Konstrukt |
-| Better VCR | Display and Regular | overlay + ui | LCD Glass, Amber Terminal, landing / Stage / docs headings |
+| Better VCR | Display and Regular | overlay + ui | LCD Glass, Smoke Glass, Rose Glass, Jade Glass, Violet Glass, Ember Glass, Amber Terminal, landing / Stage / docs headings |
 | Flapdoodle | Regular | overlay | Crypt |
 | Londrina Solid | Regular | overlay | Poster |
 | Pill Gothic 600mg | Regular | overlay | Capsule |
@@ -30,6 +30,11 @@ Rows marked **catalog** are for future overlay themes. A theme names a family in
 | Theme | Face |
 |---|---|
 | LCD Glass | Better VCR |
+| Smoke Glass | Better VCR |
+| Rose Glass | Better VCR |
+| Jade Glass | Better VCR |
+| Violet Glass | Better VCR |
+| Ember Glass | Better VCR |
 | Lower Third | Geist |
 | Amber Terminal | Better VCR |
 | Crypt | Flapdoodle |

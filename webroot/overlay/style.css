@@ -122,6 +122,26 @@ body.dev .dev-checkerboard {
     animation: overlay-glow var(--glow-duration, 2s) ease-in-out infinite;
 }
 
+#songInfo.is-glowing[data-theme="smoke-glass"] {
+    animation: overlay-glow-smoke var(--glow-duration, 2s) ease-in-out infinite;
+}
+
+#songInfo.is-glowing[data-theme="rose-glass"] {
+    animation: overlay-glow-rose var(--glow-duration, 2s) ease-in-out infinite;
+}
+
+#songInfo.is-glowing[data-theme="jade-glass"] {
+    animation: overlay-glow-jade var(--glow-duration, 2s) ease-in-out infinite;
+}
+
+#songInfo.is-glowing[data-theme="violet-glass"] {
+    animation: overlay-glow-violet var(--glow-duration, 2s) ease-in-out infinite;
+}
+
+#songInfo.is-glowing[data-theme="ember-glass"] {
+    animation: overlay-glow-ember var(--glow-duration, 2s) ease-in-out infinite;
+}
+
 #songInfo.is-glowing[data-theme="lower-third"] {
     animation: overlay-glow-lower-third var(--glow-duration, 2s) ease-in-out infinite;
 }
@@ -203,6 +223,86 @@ body.dev .dev-checkerboard {
             0px 0px 20px rgba(209, 76, 255, 0.75),
             6px 0px 16px rgba(255, 0, 255, 0.42),
             -6px 0px 16px rgba(0, 255, 255, 0.33);
+    }
+}
+
+@keyframes overlay-glow-smoke {
+    0%,
+    100% {
+        text-shadow:
+            0px 0px 6px rgba(200, 212, 224, 0.35),
+            2px 0px 4px rgba(142, 200, 255, 0.2),
+            -2px 0px 4px rgba(180, 200, 220, 0.15);
+    }
+    50% {
+        text-shadow:
+            0px 0px 20px rgba(200, 212, 224, 0.75),
+            6px 0px 16px rgba(142, 200, 255, 0.42),
+            -6px 0px 16px rgba(180, 200, 220, 0.33);
+    }
+}
+
+@keyframes overlay-glow-rose {
+    0%,
+    100% {
+        text-shadow:
+            0px 0px 6px rgba(255, 106, 184, 0.35),
+            2px 0px 4px rgba(255, 208, 112, 0.2),
+            -2px 0px 4px rgba(255, 80, 160, 0.15);
+    }
+    50% {
+        text-shadow:
+            0px 0px 20px rgba(255, 106, 184, 0.75),
+            6px 0px 16px rgba(255, 208, 112, 0.42),
+            -6px 0px 16px rgba(255, 80, 160, 0.33);
+    }
+}
+
+@keyframes overlay-glow-jade {
+    0%,
+    100% {
+        text-shadow:
+            0px 0px 6px rgba(92, 255, 192, 0.35),
+            2px 0px 4px rgba(184, 255, 76, 0.2),
+            -2px 0px 4px rgba(40, 220, 160, 0.15);
+    }
+    50% {
+        text-shadow:
+            0px 0px 20px rgba(92, 255, 192, 0.75),
+            6px 0px 16px rgba(184, 255, 76, 0.42),
+            -6px 0px 16px rgba(40, 220, 160, 0.33);
+    }
+}
+
+@keyframes overlay-glow-violet {
+    0%,
+    100% {
+        text-shadow:
+            0px 0px 6px rgba(180, 140, 255, 0.35),
+            2px 0px 4px rgba(76, 232, 255, 0.2),
+            -2px 0px 4px rgba(140, 80, 255, 0.15);
+    }
+    50% {
+        text-shadow:
+            0px 0px 20px rgba(180, 140, 255, 0.75),
+            6px 0px 16px rgba(76, 232, 255, 0.42),
+            -6px 0px 16px rgba(140, 80, 255, 0.33);
+    }
+}
+
+@keyframes overlay-glow-ember {
+    0%,
+    100% {
+        text-shadow:
+            0px 0px 6px rgba(255, 176, 64, 0.35),
+            2px 0px 4px rgba(255, 76, 40, 0.2),
+            -2px 0px 4px rgba(255, 140, 40, 0.15);
+    }
+    50% {
+        text-shadow:
+            0px 0px 20px rgba(255, 176, 64, 0.75),
+            6px 0px 16px rgba(255, 76, 40, 0.42),
+            -6px 0px 16px rgba(255, 140, 40, 0.33);
     }
 }
 
@@ -461,6 +561,101 @@ body.dev .dev-checkerboard {
         inset 0 1px 0 rgba(255, 255, 255, 0.38),
         inset 0 -10px 22px rgba(0, 40, 80, 0.22),
         0 0 0 1px rgba(80, 180, 255, 0.12),
+        0 14px 34px rgba(0, 0, 0, 0.32);
+    text-shadow: none;
+}
+
+#songInfo[data-theme="smoke-glass"] {
+    font-family: 'Better VCR', sans-serif;
+    color: #e8eef4;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 42%),
+        linear-gradient(160deg,
+            rgba(92, 108, 124, 0.78) 0%,
+            rgba(22, 26, 32, 0.62) 50%,
+            rgba(110, 128, 148, 0.28) 100%);
+    border: 1px solid rgba(220, 230, 240, 0.42);
+    border-radius: 16px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.38),
+        inset 0 -10px 22px rgba(8, 12, 20, 0.22),
+        0 0 0 1px rgba(160, 180, 200, 0.12),
+        0 14px 34px rgba(0, 0, 0, 0.32);
+    text-shadow: none;
+}
+
+#songInfo[data-theme="rose-glass"] {
+    font-family: 'Better VCR', sans-serif;
+    color: #ffe8f4;
+    background:
+        linear-gradient(180deg, rgba(255, 220, 240, 0.18) 0%, rgba(255, 220, 240, 0) 42%),
+        linear-gradient(160deg,
+            rgba(150, 40, 90, 0.78) 0%,
+            rgba(48, 8, 28, 0.62) 50%,
+            rgba(180, 70, 120, 0.28) 100%);
+    border: 1px solid rgba(255, 190, 220, 0.42);
+    border-radius: 16px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.38),
+        inset 0 -10px 22px rgba(80, 0, 40, 0.22),
+        0 0 0 1px rgba(255, 80, 160, 0.12),
+        0 14px 34px rgba(0, 0, 0, 0.32);
+    text-shadow: none;
+}
+
+#songInfo[data-theme="jade-glass"] {
+    font-family: 'Better VCR', sans-serif;
+    color: #e0fff4;
+    background:
+        linear-gradient(180deg, rgba(220, 255, 240, 0.16) 0%, rgba(220, 255, 240, 0) 42%),
+        linear-gradient(160deg,
+            rgba(24, 120, 96, 0.78) 0%,
+            rgba(4, 32, 26, 0.62) 50%,
+            rgba(48, 160, 120, 0.28) 100%);
+    border: 1px solid rgba(180, 255, 220, 0.42);
+    border-radius: 16px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.38),
+        inset 0 -10px 22px rgba(0, 50, 36, 0.22),
+        0 0 0 1px rgba(80, 255, 180, 0.12),
+        0 14px 34px rgba(0, 0, 0, 0.32);
+    text-shadow: none;
+}
+
+#songInfo[data-theme="violet-glass"] {
+    font-family: 'Better VCR', sans-serif;
+    color: #eee4ff;
+    background:
+        linear-gradient(180deg, rgba(236, 220, 255, 0.16) 0%, rgba(236, 220, 255, 0) 42%),
+        linear-gradient(160deg,
+            rgba(88, 40, 150, 0.78) 0%,
+            rgba(24, 8, 48, 0.62) 50%,
+            rgba(120, 70, 180, 0.28) 100%);
+    border: 1px solid rgba(220, 190, 255, 0.42);
+    border-radius: 16px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.38),
+        inset 0 -10px 22px rgba(40, 0, 80, 0.22),
+        0 0 0 1px rgba(160, 80, 255, 0.12),
+        0 14px 34px rgba(0, 0, 0, 0.32);
+    text-shadow: none;
+}
+
+#songInfo[data-theme="ember-glass"] {
+    font-family: 'Better VCR', sans-serif;
+    color: #fff0dc;
+    background:
+        linear-gradient(180deg, rgba(255, 232, 200, 0.16) 0%, rgba(255, 232, 200, 0) 42%),
+        linear-gradient(160deg,
+            rgba(150, 64, 24, 0.78) 0%,
+            rgba(48, 16, 4, 0.62) 50%,
+            rgba(180, 90, 40, 0.28) 100%);
+    border: 1px solid rgba(255, 210, 160, 0.42);
+    border-radius: 16px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.38),
+        inset 0 -10px 22px rgba(80, 20, 0, 0.22),
+        0 0 0 1px rgba(255, 140, 40, 0.12),
         0 14px 34px rgba(0, 0, 0, 0.32);
     text-shadow: none;
 }

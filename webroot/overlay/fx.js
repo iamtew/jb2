@@ -5,6 +5,11 @@
 
   const SKINS = {
     "lcd-glass": { mode: "prism", a: 0x3ec8ff, b: 0xff4cf0 },
+    "smoke-glass": { mode: "prism", a: 0xc8d4e0, b: 0x8ec8ff },
+    "rose-glass": { mode: "prism", a: 0xff6ab8, b: 0xffd070 },
+    "jade-glass": { mode: "prism", a: 0x5cffc0, b: 0xb8ff4c },
+    "violet-glass": { mode: "prism", a: 0xb48cff, b: 0x4ce8ff },
+    "ember-glass": { mode: "prism", a: 0xffb040, b: 0xff4c28 },
     "lower-third": { mode: "edge", a: 0xee1111, b: 0xf4f4f4 },
     "amber-terminal": { mode: "crt", a: 0xffb000, b: 0xff6a00 },
     crypt: { mode: "ember", a: 0xc02020, b: 0xff6a20 },

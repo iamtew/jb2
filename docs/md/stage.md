@@ -24,6 +24,11 @@ Theme, seek style, seek direction, playing/paused opacity, pulse, glass, and the
 | Theme | Look |
 |---|---|
 | LCD Glass | Translucent blue glass, Better VCR |
+| Smoke Glass | Translucent gray glass, Better VCR |
+| Rose Glass | Translucent rose glass, Better VCR |
+| Jade Glass | Translucent teal glass, Better VCR |
+| Violet Glass | Translucent purple glass, Better VCR |
+| Ember Glass | Translucent amber glass, Better VCR |
 | Lower Third | Opaque charcoal chyron, Geist |
 | Amber Terminal | Black slab, amber Better VCR |
 | Crypt | Black / blood, Flapdoodle, red bloom |
