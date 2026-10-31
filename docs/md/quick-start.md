@@ -29,6 +29,8 @@ Flags, ports, and developer builds are in [Running](running.md).
 
 ## 4. Configure OBS
 
+![Overlay Stage](../img/stage.png)
+
 1. Open Overlay Stage from the JB2 landing page or the tray: `http://localhost:42420/stage/`. Pick 720p or 1080p and place the now-playing panel.
 2. In OBS, add a **Browser** source.
 3. URL: `http://localhost:42420/overlay/`
@@ -37,6 +39,8 @@ Flags, ports, and developer builds are in [Running](running.md).
 Details: [Overlay](overlay.md) and [Overlay Stage](stage.md).
 
 ## 5. Configure JB2 and Twitch
+
+![Control Panel](../img/admin-queue.png)
 
 1. Open the Control Panel: tray **Control Panel**, or `http://localhost:42420/admin/`.
 2. Go to **Twitch**.

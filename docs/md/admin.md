@@ -2,6 +2,8 @@
 
 Open `http://localhost:42420/admin/`.
 
+![Control Panel](../img/admin-queue.png)
+
 The dock stays up while you switch pages. Playback state still comes from the [pear-desktop](https://github.com/pear-devs/pear-desktop) WebSocket. JB2 pushes its own changes over `GET /api/events` (Server-Sent Events): `twitch`, `chat`, `seed`, `commands`, `cmdHistory`, `queue`, `overlay`. Hidden tabs close that stream. Opening or focusing a page does a one-shot GET; leftover poll GETs are omitted from the request log (`METHOD path status` plus a timestamp; see [Running](running.md)).
 
 The dock pill **Chat cmds ON/OFF** toggles the global chat-command switch (`twitchCommandsEnabled`). Off still logs chat. HTTP `/cmd/jb/songrequest` and Control Panel Add/Now stay live.
@@ -18,11 +20,21 @@ The Queue page lists what JB2 thinks is coming up. **Previous** expands tracks a
 
 While a seed playlist is active, song requests are inserted after the current track (then after earlier requests) instead of at the tail. JB2 owns that order and corrects pear-desktop until the queue matches. See [Seed](seed.md) and [Requests](requests.md).
 
+## Seed
+
+![Seed](../img/admin-seed.png)
+
+Playlists that fill idle time. Details: [Seed](seed.md).
+
 ## Chat
+
+![Chat](../img/admin-chat.png)
 
 Control Panel → Chat is the live IRC window. Messages send as the bot nick. Nicks follow Twitch `display-name` casing. Login and connect live on the Twitch page, not here.
 
 ## Commands
+
+![Commands](../img/admin-commands.png)
 
 Control Panel → Commands lists the chat commands this process accepts, with YouTube and Spotify link cards, until restart. Accepted commands tint cyan. Denied ones tint orange.
 
@@ -30,9 +42,13 @@ Per-command GCD and UCD are seconds, default 0, counted from accept, capped at 8
 
 ## Twitch
 
+![Twitch](../img/admin-twitch.png)
+
 Join channel and bot nick are separate, so the bot can sit in someone else's chat. **Login with Twitch** runs the built-in PKCE flow. **Connect** and **Disconnect** drop or rejoin without logging in again. Details, including token refresh, are in [Twitch](twitch.md).
 
 ## Settings
+
+![Settings](../img/admin-settings.png)
 
 The theme picker is stored in the browser (`localStorage` key `jb2-admin-theme`), not in `jb2.sqlite`. Choices: Default, Amber, Crimson, Forest, Violet, Teal, Rose, Steel, Lime, each with a high-contrast variant.
 
@@ -45,5 +61,7 @@ Import a JB1 `jukeboks.json` or a JB2 `jb2.json`. Present fields overwrite curre
 The bottom of the page runs a built-in command with optional query params (for example `seconds=10`) and shows the URL and the JSON body. Copy the URL for Streamer.bot or curl. The route list is in [HTTP](http.md).
 
 ## About
+
+![About](../img/admin-about.png)
 
 Product page: name, logo, the build version from `GET /health`, a short description, and links to GitHub, releases, docs, and credits. MIT, copyright, and pear-desktop are listed there too. The Windows tray **About** item still shows the version string. When `GET /api/update` finds a newer GitHub tag, an **Update available** link sits next to Releases and opens the latest release.

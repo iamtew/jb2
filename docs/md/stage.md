@@ -2,6 +2,8 @@
 
 `http://localhost:42420/stage/`
 
+![Overlay Stage](../img/stage.png)
+
 Composer for placing the now-playing panel on a 16:9 canvas. Open it from the landing page or the tray **Overlay Stage**. OBS still uses [`/overlay/`](overlay.md) as a browser source. **Copy Overlay URL** on Stage and in the tray copies that URL.
 
 JB2 owns the layout (`overlayLayout` in `jb2.sqlite`). Dragging or resizing the panel live-updates `/overlay/` over `GET /api/events` (`event: overlay`). Releasing the pointer writes the layout. Look settings save immediately. The panel shows the live pear-desktop track (artist, title, album, seek), same as [`/overlay/`](overlay.md): playing, paused, or no signal.

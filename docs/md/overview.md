@@ -15,6 +15,10 @@ The player is [pear-desktop](https://github.com/pear-devs/pear-desktop). JB2 doe
 - **Overlay Stage** at `http://localhost:42420/stage/`. Place and theme the overlay on a 720p or 1080p canvas; OBS follows live. See [Overlay Stage](stage.md).
 - **HTTP and chat.** Twitch `!sr` and Streamer.bot call the same song-request path the Control Panel uses. See [Twitch](twitch.md), [Requests](requests.md), and [HTTP](http.md).
 
+![Control Panel](../img/admin-queue.png)
+
+![Overlay Stage](../img/stage.png)
+
 `/overlay`, `/stage`, and `/admin` without a trailing slash 301 to the slash form so relative assets resolve.
 
 ## Website

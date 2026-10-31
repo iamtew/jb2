@@ -25,7 +25,14 @@ html, body {
 
 a { color: var(--cyan); }
 
-img { image-rendering: pixelated; image-rendering: crisp-edges; }
+.logo-fallback, .brand img { image-rendering: pixelated; image-rendering: crisp-edges; }
+
+.doc img, .look img {
+  image-rendering: auto;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+}
 
 /* Landing */
 
@@ -174,6 +181,25 @@ img { image-rendering: pixelated; image-rendering: crisp-edges; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
 
 .landing-copy p.actions { margin-top: 40px; }
+
+.look {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 8px 24px 48px;
+  background: var(--page-bg);
+}
+
+.look a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.look figure { margin: 0; }
+
+.look figcaption { margin-top: 8px; font-size: 0.9rem; }
 
 .button {
   display: inline-flex;
@@ -353,6 +379,7 @@ img { image-rendering: pixelated; image-rendering: crisp-edges; }
 .muted { color: var(--muted); }
 
 @media (max-width: 800px) {
+  .look { grid-template-columns: 1fr; }
   .shell { grid-template-columns: 1fr; }
   .nav {
     display: flex;

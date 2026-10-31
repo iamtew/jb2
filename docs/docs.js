@@ -60,6 +60,10 @@
       var match = href.match(/^(?:\.\/)?([a-z0-9-]+)\.md(#[a-z0-9-]*)?$/);
       if (match && known(match[1])) link.setAttribute("href", "#" + match[1]);
     });
+    root.querySelectorAll("img[src]").forEach(function (img) {
+      var src = img.getAttribute("src") || "";
+      if (src.indexOf("../img/") === 0) img.setAttribute("src", src.slice(3));
+    });
   }
 
   function show() {
