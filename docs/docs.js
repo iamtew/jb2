@@ -1,22 +1,31 @@
 (function () {
   var pages = [
-    { id: "overview", title: "Overview", icon: "home" },
-    { id: "running", title: "Running", icon: "player-play" },
-    { id: "admin", title: "Admin", icon: "settings" },
-    { id: "overlay", title: "Overlay", icon: "device-tv" },
-    { id: "stage", title: "Overlay Stage", icon: "artboard" },
-    { id: "typography", title: "Typography", icon: "typography" },
-    { id: "twitch", title: "Twitch", icon: "brand-twitch" },
-    { id: "requests", title: "Requests", icon: "music" },
-    { id: "seed", title: "Seed", icon: "plant" },
-    { id: "http", title: "HTTP", icon: "api" },
-    { id: "credits", title: "Credits", icon: "certificate" },
+    { id: "quick-start", title: "Quick Start", icon: "download" },
+    { id: "overview", title: "Overview", icon: "home", group: "Start" },
+    { id: "running", title: "Running", icon: "player-play", group: "Start" },
+    { id: "admin", title: "Control Panel", icon: "settings", group: "Surfaces" },
+    { id: "overlay", title: "Overlay", icon: "device-tv", group: "Surfaces" },
+    { id: "stage", title: "Overlay Stage", icon: "artboard", group: "Surfaces" },
+    { id: "typography", title: "Typography", icon: "typography", group: "Surfaces" },
+    { id: "twitch", title: "Twitch", icon: "brand-twitch", group: "Requests" },
+    { id: "requests", title: "Requests", icon: "music", group: "Requests" },
+    { id: "seed", title: "Seed", icon: "plant", group: "Requests" },
+    { id: "http", title: "HTTP", icon: "api", group: "Build" },
+    { id: "credits", title: "Credits", icon: "certificate", group: "About" },
   ];
 
   var nav = document.getElementById("nav");
   var article = document.getElementById("doc");
+  var lastGroup = "";
 
   pages.forEach(function (page) {
+    if (page.group && page.group !== lastGroup) {
+      lastGroup = page.group;
+      var heading = document.createElement("p");
+      heading.className = "nav-group";
+      heading.textContent = page.group;
+      nav.appendChild(heading);
+    }
     var link = document.createElement("a");
     link.href = "#" + page.id;
     var icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");

@@ -1,6 +1,6 @@
 # Overview
 
-JB2 is a Rust rewrite of Jukeboks. It is a local HTTP control plane for [YouTube Music Desktop (pear-desktop)](https://github.com/pear-devs/pear-desktop): Twitch chat commands, an OBS overlay, Overlay Stage, and a Control Panel.
+JB2 is a Rust rewrite of Jukeboks. It is a local HTTP control plane for [YouTube Music Desktop (pear-desktop)](https://github.com/pear-devs/pear-desktop): Twitch chat commands, an OBS overlay, Overlay Stage, and a Control Panel. New here: [Quick Start](quick-start.md).
 
 One process, one `jb2.sqlite`, one `webroot/`.
 
