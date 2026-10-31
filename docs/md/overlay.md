@@ -8,7 +8,7 @@ Look (theme, seek style, seek direction, opacities, size, pulse, glass) comes fr
 
 Each theme paints a small PixiJS FX layer behind the widget (scan, motes, neon, and so on). Type and the seek bar stay HTML. Text-only (`glass` off or `?bg=0`) hides the FX. If WebGL fails, the canvas is removed and CSS look still works.
 
-Each visualizer is a Pixi `.viz-layer` box from `overlayLayout.vizLayers` (position, look, hide). They share `GET /sse/audio`. Style is `bands`, `wave`, `dots`, `trail`, or `warp`, colored by that layer’s `color` (or the live seek when empty). `colorDir` is `lr`, `rl`, `tb`, or `bt`. Peak caps follow `peakFall`; on Trail that value is wake length. Overlay Stage owns the stack. This page follows `event: overlay` for look and boxes, and `event: audioVisualizer` for capture on/off. Capture errors and a hidden layer skip drawing. `overlayHidden` hides the now-playing panel. The panel does not move the drawing.
+Each visualizer is a Pixi `.viz-layer` box from `overlayLayout.vizLayers` (position, look, hide). They share `GET /sse/audio`. Style is `bands`, `wave`, `dots`, `trail`, or `warp`, colored by that layer’s `color` (or the live seek when empty). `colorDir` is `lr`, `rl`, `tb`, or `bt`. Peak caps follow `peakFall` (0 off, positive drops, negative flies up); on Trail the absolute value is wake length. Overlay Stage owns the stack. This page follows `event: overlay` for look and boxes, and `event: audioVisualizer` for capture on/off. Capture errors and a hidden layer skip drawing. `overlayHidden` hides the now-playing panel. The panel does not move the drawing.
 
 Playback does not come from JB2. The page opens a WebSocket to [pear-desktop](https://github.com/pear-devs/pear-desktop):
 

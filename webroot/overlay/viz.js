@@ -57,6 +57,12 @@
     return Math.min(1, Math.max(0, v));
   }
 
+  function clampPeak(n, fallback) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return fallback;
+    return Math.min(1, Math.max(-1, v));
+  }
+
   function mix(a, b, t) {
     const ch = (c, shift) => (c >> shift) & 255;
     const r = Math.round(ch(a, 16) + (ch(b, 16) - ch(a, 16)) * t);
@@ -92,7 +98,7 @@
     if (src.bands != null) next.bands = clampBands(src.bands);
     if (src.spectrumBands != null) next.bands = clampBands(src.spectrumBands);
     if (typeof src.mirror === "boolean") next.mirror = src.mirror;
-    if (src.peakFall != null) next.peakFall = clampUnit(src.peakFall, LOOK_DEFAULTS.peakFall);
+    if (src.peakFall != null) next.peakFall = clampPeak(src.peakFall, LOOK_DEFAULTS.peakFall);
     next.hidden = Boolean(src.hidden);
     return next;
   }
@@ -176,7 +182,7 @@
     const mirror = document.getElementById("vizMirror");
     if (mirror) look.mirror = mirror.checked;
     const peak = document.getElementById("vizPeak");
-    if (peak) look.peakFall = clampUnit(peak.value, LOOK_DEFAULTS.peakFall);
+    if (peak) look.peakFall = clampPeak(peak.value, LOOK_DEFAULTS.peakFall);
     const bandsOut = document.getElementById("vizBandsOut");
     if (bandsOut) bandsOut.textContent = String(look.bands);
   }
@@ -226,10 +232,23 @@
       layer.peaks = levels.slice();
       return;
     }
-    if (layer.look.peakFall <= 0) return;
-    const drop = layer.look.peakFall * 0.22 * dt;
+    const fall = layer.look.peakFall;
+    if (!fall) return;
+    // Positive drops toward the bar. Negative flies up, then re-arms at 1.
+    const drop = Math.abs(fall) * 0.22 * dt;
     for (let i = 0; i < levels.length; i++) {
-      peaks[i] = Math.max(levels[i], (peaks[i] || 0) - drop);
+      const level = levels[i];
+      const peak = peaks[i] || 0;
+      if (fall > 0) {
+        peaks[i] = Math.max(level, peak - drop);
+        continue;
+      }
+      if (level >= peak) {
+        peaks[i] = level;
+        continue;
+      }
+      const next = peak + drop;
+      peaks[i] = next > 1 ? level : next;
     }
   }
 
@@ -253,7 +272,7 @@
     const bw = Math.max(1, (w - gap * (n + 1)) / n);
     const maxH = h * 0.92 * (1 + punch * 0.18);
     const mid = h / 2;
-    const showPeak = look.peakFall > 0;
+    const showPeak = look.peakFall !== 0;
     for (let i = 0; i < n; i++) {
       const color = bandColor(look, stops, i, n, levels[i]);
       const bh = Math.max(1, levels[i] * maxH);
@@ -288,7 +307,7 @@
       const top = waveY(look, h, levels[0], maxH, true);
       const bot = waveY(look, h, levels[0], maxH, false);
       gfx.rect(0, Math.min(top, bot), w, Math.max(1, Math.abs(bot - top))).fill({ color, alpha: 0.9 });
-      if (look.peakFall > 0) {
+      if (look.peakFall !== 0) {
         const py = waveY(look, h, peaks[0], maxH, true);
         gfx.rect(0, py, w, 2).fill({ color, alpha: 1 });
         if (look.mirror) gfx.rect(0, waveY(look, h, peaks[0], maxH, false) - 2, w, 2).fill({ color, alpha: 1 });
@@ -308,7 +327,7 @@
         ])
         .fill({ color, alpha: 0.9 });
     }
-    if (look.peakFall <= 0) return;
+    if (!look.peakFall) return;
     for (let i = 0; i < n - 1; i++) {
       const color = bandColor(look, stops, i, n, levels[i]);
       const x0 = (i / (n - 1)) * w;
@@ -328,7 +347,7 @@
     const slot = w / n;
     const maxR = Math.min(slot * 0.46, h * 0.42);
     const cy = look.mirror ? h * 0.33 : h * 0.5;
-    const showPeak = look.peakFall > 0;
+    const showPeak = look.peakFall !== 0;
     for (let i = 0; i < n; i++) {
       const color = bandColor(look, stops, i, n, levels[i]);
       const cx = slot * i + slot / 2;
@@ -372,7 +391,7 @@
   }
 
   function paintTrail(gfx, look, layer, w, h, levels, stops) {
-    const cap = look.peakFall <= 0 ? 1 : 1 + Math.round(look.peakFall * 20);
+    const cap = !look.peakFall ? 1 : 1 + Math.round(Math.abs(look.peakFall) * 20);
     if (layer.trailHist.length && layer.trailHist[0].length !== levels.length) layer.trailHist = [];
     layer.trailHist.push(levels.slice());
     while (layer.trailHist.length > cap) layer.trailHist.shift();

@@ -171,7 +171,7 @@ pub struct AudioVisualizer {
     pub color_dir: String,
     #[serde(default)]
     pub mirror: bool,
-    /// 0 hides peak caps. Higher drops faster.
+    /// 0 hides peak caps. Positive drops toward the bar. Negative flies up.
     #[serde(rename = "peakFall", default = "default_viz_peak_fall")]
     pub peak_fall: f32,
 }
@@ -212,7 +212,7 @@ pub fn normalize_audio_visualizer(mut viz: AudioVisualizer) -> AudioVisualizer {
     if !viz.peak_fall.is_finite() {
         viz.peak_fall = default_viz_peak_fall();
     } else {
-        viz.peak_fall = viz.peak_fall.clamp(0.0, 1.0);
+        viz.peak_fall = viz.peak_fall.clamp(-1.0, 1.0);
     }
     viz.update_hz = match viz.update_hz {
         45 => 45,
@@ -342,6 +342,7 @@ pub struct OverlayVizLayer {
     pub bands: i32,
     #[serde(default)]
     pub mirror: bool,
+    /// 0 hides caps. Positive drops. Negative flies up.
     #[serde(rename = "peakFall", default = "default_viz_peak_fall")]
     pub peak_fall: f32,
 }
@@ -432,7 +433,7 @@ fn normalize_viz_layer(
     if !layer.peak_fall.is_finite() {
         layer.peak_fall = default_viz_peak_fall();
     } else {
-        layer.peak_fall = layer.peak_fall.clamp(0.0, 1.0);
+        layer.peak_fall = layer.peak_fall.clamp(-1.0, 1.0);
     }
     clamp_viz_rect(&mut layer, canvas_w, canvas_h);
     layer
@@ -1660,7 +1661,7 @@ mod tests {
         assert_eq!(cfg.audio_visualizer.style, "wave");
         assert_eq!(cfg.audio_visualizer.color, "ice");
         assert_eq!(cfg.audio_visualizer.color_dir, "rl");
-        assert_eq!(cfg.audio_visualizer.peak_fall, 0.0);
+        assert_eq!(cfg.audio_visualizer.peak_fall, -1.0);
 
         let mut cfg = cfg;
         apply_patch(
