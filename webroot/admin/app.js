@@ -1009,9 +1009,52 @@ let queueDragFromIndex = null;
 let queueMoveInFlight = false;
 let queueRefreshDebounceTimer = null;
 let progressStallTimer = null;
+let holdPaused = null;
+let holdUntil = 0;
+let holdExpireTimer = null;
 
 // YTMD position ticks are often ~1s; keep headroom so we don't false-pause between ticks.
 const PROGRESS_STALL_MS = 1800;
+// Leftover POSITION_CHANGED / stale PLAYER_STATE_CHANGED after a click snap the glow back.
+const PLAYBACK_HOLD_MS = 2500;
+
+function holdPlayback(paused) {
+  holdPaused = Boolean(paused);
+  holdUntil = Date.now() + PLAYBACK_HOLD_MS;
+  window.clearTimeout(holdExpireTimer);
+  holdExpireTimer = window.setTimeout(() => {
+    holdPaused = null;
+    holdUntil = 0;
+    // Play click does not stall immediately; if no confirming tick, stall after the hold.
+    if (!paused && playbackState.hasSong && !playbackState.isPaused) {
+      notePlaybackProgress();
+    }
+  }, PLAYBACK_HOLD_MS);
+}
+
+function playbackHoldLive() {
+  if (holdPaused === null) return false;
+  if (Date.now() >= holdUntil) {
+    holdPaused = null;
+    return false;
+  }
+  return true;
+}
+
+function clearPlaybackHold() {
+  holdPaused = null;
+  holdUntil = 0;
+  window.clearTimeout(holdExpireTimer);
+}
+
+function wsMaySetPaused(paused) {
+  if (!playbackHoldLive()) return true;
+  if (holdPaused === Boolean(paused)) {
+    clearPlaybackHold();
+    return true;
+  }
+  return false;
+}
 
 function isNowPlayingSocketOpen() {
   return window.__jukeboksSocket?.readyState === WebSocket.OPEN;
@@ -1194,6 +1237,7 @@ function notePlaybackProgress() {
   window.clearTimeout(progressStallTimer);
   progressStallTimer = window.setTimeout(() => {
     if (!playbackState.hasSong || playbackState.isPaused) return;
+    if (!wsMaySetPaused(true)) return;
     setAdminPaused(true);
   }, PROGRESS_STALL_MS);
 }
@@ -1203,8 +1247,10 @@ function applyPositionFromWS(position) {
   const advanced = next > playbackState.position + 0.05;
   playbackState.position = next;
   if (advanced && playbackState.hasSong) {
-    setAdminPaused(false);
-    notePlaybackProgress();
+    if (wsMaySetPaused(false)) {
+      setAdminPaused(false);
+      notePlaybackProgress();
+    }
   } else if (playbackState.hasSong) {
     setPlayGlyph(playbackState.isPaused);
   }
@@ -1225,11 +1271,13 @@ function resolveIsPaused(...candidates) {
 function applyPlayerStateFromWS(data) {
   const isPaused = resolveIsPaused(data);
   if (isPaused === null) return;
-  setAdminPaused(isPaused);
-  if (!isPaused) {
-    notePlaybackProgress();
-  } else {
-    window.clearTimeout(progressStallTimer);
+  if (wsMaySetPaused(isPaused)) {
+    setAdminPaused(isPaused);
+    if (!isPaused) {
+      notePlaybackProgress();
+    } else {
+      window.clearTimeout(progressStallTimer);
+    }
   }
   if (data.position != null) {
     playbackState.position = Math.max(0, Number(data.position) || 0);
@@ -2247,10 +2295,11 @@ Object.entries(playerButtons).forEach(([key, button]) => {
 
   button.addEventListener('click', async () => {
     if (key === 'play') {
+      holdPlayback(false);
       setAdminPaused(false);
-      notePlaybackProgress();
     } else if (key === 'pause') {
       window.clearTimeout(progressStallTimer);
+      holdPlayback(true);
       setAdminPaused(true);
     } else if (key === 'shuffle') {
       playbackState.shuffle = !playbackState.shuffle;
