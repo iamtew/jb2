@@ -6,7 +6,7 @@
     <title>Overlay Stage</title>
     <link rel="icon" href="/img/jukeboks.png" />
     <link rel="stylesheet" href="/overlay/style.css?v=20261030k" />
-    <link rel="stylesheet" href="/stage/style.css?v=20261030l" />
+    <link rel="stylesheet" href="/stage/style.css?v=20261031b" />
   </head>
   <body>
     <!-- Tabler Icons (outline), MIT. https://github.com/tabler/tabler-icons -->
@@ -152,6 +152,7 @@
           <label class="stage-field">Playing
             <span class="stage-control">
               <input id="playingOpacity" type="range" min="0" max="1" step="0.05" value="1" />
+              <input id="playingOpacityNum" class="stage-viz-out" type="number" min="0" max="1" step="0.05" value="1" aria-label="Playing opacity value" />
               <button type="button" class="stage-reset" data-reset="playingOpacity" aria-label="Reset playing opacity">
                 <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
               </button>
@@ -160,6 +161,7 @@
           <label class="stage-field">Paused
             <span class="stage-control">
               <input id="pausedOpacity" type="range" min="0" max="1" step="0.05" value="0.25" />
+              <input id="pausedOpacityNum" class="stage-viz-out" type="number" min="0" max="1" step="0.05" value="0.25" aria-label="Paused opacity value" />
               <button type="button" class="stage-reset" data-reset="pausedOpacity" aria-label="Reset paused opacity">
                 <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
               </button>
@@ -168,6 +170,7 @@
           <label class="stage-field">Pulse
             <span class="stage-control">
               <input id="pulseInput" type="range" min="0" max="10" step="1" value="3" />
+              <input id="pulseInputNum" class="stage-viz-out" type="number" min="0" max="10" step="1" value="3" aria-label="Pulse value" />
               <button type="button" class="stage-reset" data-reset="pulse" aria-label="Reset pulse">
                 <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
               </button>
@@ -197,6 +200,7 @@
           <label class="stage-field">Smoothing
             <span class="stage-control">
               <input id="vizSmoothing" type="range" min="0" max="1" step="0.05" value="0.35" />
+              <input id="vizSmoothingNum" class="stage-viz-out" type="number" min="0" max="1" step="0.05" value="0.35" aria-label="Smoothing value" />
               <button type="button" class="stage-reset" data-viz-reset="smoothing" aria-label="Reset smoothing">
                 <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
               </button>
@@ -220,7 +224,7 @@
           <label class="stage-field">Bands
             <span class="stage-control">
               <input id="vizBands" type="range" min="1" max="32" step="1" value="16" />
-              <output id="vizBandsOut" class="stage-viz-out" for="vizBands">16</output>
+              <input id="vizBandsNum" class="stage-viz-out" type="number" min="1" max="32" step="1" value="16" aria-label="Bands value" />
               <button type="button" class="stage-reset" data-viz-reset="bands" aria-label="Reset bands">
                 <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
               </button>
@@ -277,6 +281,7 @@
           <label class="stage-field">Peak fall
             <span class="stage-control">
               <input id="vizPeak" type="range" min="-1" max="1" step="0.05" value="0.35" />
+              <input id="vizPeakNum" class="stage-viz-out" type="number" min="-1" max="1" step="0.05" value="0.35" aria-label="Peak fall value" />
               <button type="button" class="stage-reset" data-viz-reset="peakFall" aria-label="Reset peak fall">
                 <svg class="icon" aria-hidden="true"><use href="#refresh"></use></svg>
               </button>
@@ -332,9 +337,9 @@
       </div>
     </div>
     <script src="/vendor/pixi.min.js"></script>
-    <script src="/overlay/viz.js?v=20261031a"></script>
+    <script src="/overlay/viz.js?v=20261031b"></script>
     <script src="/overlay/fx.js?v=20261029ad"></script>
     <script src="/overlay/now.js?v=20261030i"></script>
-    <script src="/stage/app.js?v=20261030k"></script>
+    <script src="/stage/app.js?v=20261031a"></script>
   </body>
 </html>

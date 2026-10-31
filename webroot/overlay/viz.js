@@ -63,6 +63,36 @@
     return Math.min(1, Math.max(-1, v));
   }
 
+  function rangeNum(range) {
+    return range && range.parentElement && range.parentElement.querySelector('input[type="number"]');
+  }
+
+  function fillRangeNum(range) {
+    const num = rangeNum(range);
+    if (num) num.value = range.value;
+  }
+
+  function pairRange(range) {
+    const num = rangeNum(range);
+    if (!range || !num) return;
+    range.addEventListener("input", () => {
+      num.value = range.value;
+    });
+    num.addEventListener("change", () => {
+      const min = Number(range.min);
+      const max = Number(range.max);
+      let v = Number(num.value);
+      if (!Number.isFinite(v)) v = Number(range.value);
+      range.value = String(Math.min(max, Math.max(min, v)));
+      num.value = range.value;
+      range.dispatchEvent(new Event("input", { bubbles: true }));
+      range.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    num.addEventListener("blur", () => {
+      if (num.value === "" || !Number.isFinite(Number(num.value))) num.value = range.value;
+    });
+  }
+
   function mix(a, b, t) {
     const ch = (c, shift) => (c >> shift) & 255;
     const r = Math.round(ch(a, 16) + (ch(b, 16) - ch(a, 16)) * t);
@@ -153,15 +183,22 @@
     const dirSel = document.getElementById("vizColorDir");
     if (dirSel) dirSel.value = DIRS[look.colorDir] ? look.colorDir : LOOK_DEFAULTS.colorDir;
     const bands = document.getElementById("vizBands");
-    if (bands) bands.value = String(look.bands);
-    const bandsOut = document.getElementById("vizBandsOut");
-    if (bandsOut) bandsOut.textContent = String(look.bands);
+    if (bands) {
+      bands.value = String(look.bands);
+      fillRangeNum(bands);
+    }
     const smoothingEl = document.getElementById("vizSmoothing");
-    if (smoothingEl) smoothingEl.value = String(smoothing);
+    if (smoothingEl) {
+      smoothingEl.value = String(smoothing);
+      fillRangeNum(smoothingEl);
+    }
     const mirror = document.getElementById("vizMirror");
     if (mirror) mirror.checked = look.mirror;
     const peak = document.getElementById("vizPeak");
-    if (peak) peak.value = String(look.peakFall);
+    if (peak) {
+      peak.value = String(look.peakFall);
+      fillRangeNum(peak);
+    }
     setLookLock();
   }
 
@@ -183,8 +220,6 @@
     if (mirror) look.mirror = mirror.checked;
     const peak = document.getElementById("vizPeak");
     if (peak) look.peakFall = clampPeak(peak.value, LOOK_DEFAULTS.peakFall);
-    const bandsOut = document.getElementById("vizBandsOut");
-    if (bandsOut) bandsOut.textContent = String(look.bands);
   }
 
   function emitLook() {
@@ -658,6 +693,7 @@
   function bindControls() {
     if (bound) return;
     bound = true;
+    ["vizBands", "vizSmoothing", "vizPeak"].forEach((id) => pairRange(document.getElementById(id)));
     ["vizStyle", "vizColor", "vizColorDir", "vizBands", "vizMirror", "vizPeak"].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;

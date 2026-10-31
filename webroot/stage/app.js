@@ -28,6 +28,36 @@
   const addViz = document.getElementById("addViz");
   const overlayLook = document.getElementById("overlayLook");
 
+  function rangeNum(range) {
+    return range && range.parentElement && range.parentElement.querySelector('input[type="number"]');
+  }
+
+  function fillRangeNum(range) {
+    const num = rangeNum(range);
+    if (num) num.value = range.value;
+  }
+
+  function pairRange(range) {
+    const num = rangeNum(range);
+    if (!range || !num) return;
+    range.addEventListener("input", () => {
+      num.value = range.value;
+    });
+    num.addEventListener("change", () => {
+      const min = Number(range.min);
+      const max = Number(range.max);
+      let v = Number(num.value);
+      if (!Number.isFinite(v)) v = Number(range.value);
+      range.value = String(Math.min(max, Math.max(min, v)));
+      num.value = range.value;
+      range.dispatchEvent(new Event("input", { bubbles: true }));
+      range.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    num.addEventListener("blur", () => {
+      if (num.value === "" || !Number.isFinite(Number(num.value))) num.value = range.value;
+    });
+  }
+
   const DEFAULTS = {
     theme: "lcd-glass",
     seekStyle: "sesh-sofa",
@@ -433,8 +463,11 @@
     seekSelect.value = layout.seekStyle;
     if (seekDirSelect) seekDirSelect.value = seekDirOf(layout.seekDir);
     playingOpacity.value = String(layout.playingOpacity);
+    fillRangeNum(playingOpacity);
     pausedOpacity.value = String(layout.pausedOpacity);
+    fillRangeNum(pausedOpacity);
     pulseInput.value = String(layout.pulse);
+    fillRangeNum(pulseInput);
     glassInput.checked = layout.glass;
     const selected = new Set(parseGrid(layout.grid));
     gridChecks.forEach((el) => {
@@ -847,6 +880,9 @@
       saveNow();
     });
   }
+  pairRange(playingOpacity);
+  pairRange(pausedOpacity);
+  pairRange(pulseInput);
   playingOpacity.addEventListener("input", () => {
     layout.playingOpacity = Number(playingOpacity.value);
     refreshNow();

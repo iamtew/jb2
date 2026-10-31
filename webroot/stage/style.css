@@ -98,10 +98,18 @@ body {
 }
 
 .stage-viz-out {
-  flex: 0 0 3ch;
+  box-sizing: border-box;
+  flex: 0 0 8ch;
+  width: 8ch;
+  padding: 2px 4px;
   text-align: right;
   color: #eee;
+  font-family: inherit;
+  font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
+  background: #1c1c1c;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
 }
 
 .stage-control select,
