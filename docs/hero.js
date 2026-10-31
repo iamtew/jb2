@@ -15,6 +15,26 @@
   var sound = { playing: false, bins: null, analyser: null, kick: 0, bass: 0, bassAvg: 0.2, file: "" };
   var audioCtx = null;
   var playGen = 0;
+  var logoFade = 1;
+  var fadeLogo = null;
+
+  function heroFade() {
+    var h = window.innerHeight || 1;
+    var f = 1 - Math.min(1, Math.max(0, window.scrollY / h));
+    if (reduced) f = window.scrollY >= h * 0.85 ? 0 : 1;
+    return f;
+  }
+
+  function syncLogoFade() {
+    logoFade = heroFade();
+    if (fadeLogo) fadeLogo();
+    if (!fallback || fallback.classList.contains("is-hidden")) return;
+    fallback.style.opacity = String(logoFade);
+    fallback.style.visibility = logoFade < 0.02 ? "hidden" : "";
+  }
+
+  window.addEventListener("scroll", syncLogoFade, { passive: true });
+  syncLogoFade();
 
   function setPlaying(on) {
     sound.playing = on;
@@ -236,6 +256,12 @@
       var logo = new PIXI.Sprite(texture);
       logo.anchor.set(0.5);
       logo.roundPixels = true;
+      fadeLogo = function () {
+        logo.alpha = logoFade;
+        ghostCyan.alpha = 0.55 * logoFade;
+        ghostOrange.alpha = 0.4 * logoFade;
+        glow.alpha = logoFade;
+      };
 
       app.stage.addChild(sky);
       app.stage.addChild(grid);
@@ -324,6 +350,10 @@
         stamp(logo, scale, layout.x, y);
         stamp(ghostCyan, scale, layout.x - split, y);
         stamp(ghostOrange, scale, layout.x + split, y + 1);
+        logo.alpha = logoFade;
+        ghostCyan.alpha = 0.55 * logoFade;
+        ghostOrange.alpha = 0.4 * logoFade;
+        glow.alpha = logoFade;
 
         var logoW = texture.width * scale;
         var logoH = texture.height * scale;
