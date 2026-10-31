@@ -1,6 +1,6 @@
 # Typography
 
-Overlay catalog faces, vendored under `webroot/vendor/fonts/`. Overlay and Overlay Stage load the full list via `webroot/vendor/fonts/overlay.css`. Landing and this docs site load Better VCR + Geist via `ui.css`. Admin stays Geist-only.
+Overlay catalog faces, vendored under `webroot/vendor/fonts/`. Overlay and Overlay Stage load the full list via `webroot/vendor/fonts/overlay.css`. Landing and this docs site load Better VCR + Geist via `ui.css`. Control Panel stays Geist-only.
 
 Quote family names and give a generic fallback, for example `font-family: 'Better VCR', sans-serif`. Do not block paint waiting for a font; sheets use `font-display: swap`.
 
@@ -19,7 +19,7 @@ Licenses: [Credits](credits.md).
 | Flapdoodle | Regular | overlay | Crypt |
 | Londrina Solid | Regular | overlay | Poster |
 | Pill Gothic 600mg | Regular | overlay | Capsule |
-| Geist | Regular | overlay + ui (variable `Geist-Variable.woff2`) | Lower Third, admin, Stage chrome, landing / docs body |
+| Geist | Regular | overlay + ui (variable `Geist-Variable.woff2`) | Lower Third, Control Panel, Stage chrome, landing / docs body |
 | Lemondrop | Display | overlay | Drop |
 | Brighton Sans NBP | Regular | overlay | catalog |
 

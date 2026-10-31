@@ -33,7 +33,7 @@ Compiled into `jb2`. Versions are the ones locked in `Cargo.lock`.
 
 ## Fonts
 
-Catalog and who paints them: [Typography](docs/md/typography.md). Overlay loads [`webroot/vendor/fonts/overlay.css`](webroot/vendor/fonts/overlay.css). Landing and this docs site load `ui.css` (Better VCR + Geist). Admin keeps its own Geist `@font-face`.
+Catalog and who paints them: [Typography](docs/md/typography.md). Overlay loads [`webroot/vendor/fonts/overlay.css`](webroot/vendor/fonts/overlay.css). Landing and this docs site load `ui.css` (Better VCR + Geist). Control Panel keeps its own Geist `@font-face`.
 
 [Geist Sans](https://github.com/vercel/geist-font) variable, v1.8.2, SIL Open Font License 1.1, The Geist Project Authors (Vercel). Vendored as `webroot/vendor/Geist-Variable.woff2` and `docs/vendor/Geist-Variable.woff2`. License text sits next to each file as `Geist.LICENSE`.
 

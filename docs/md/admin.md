@@ -1,10 +1,10 @@
-# Admin
+# Control Panel
 
 Open `http://localhost:42420/admin/`.
 
 The dock stays up while you switch pages. Playback state still comes from the [pear-desktop](https://github.com/pear-devs/pear-desktop) WebSocket. JB2 pushes its own changes over `GET /api/events` (Server-Sent Events): `twitch`, `chat`, `seed`, `commands`, `cmdHistory`, `queue`, `overlay`. Hidden tabs close that stream. Opening or focusing a page does a one-shot GET; leftover poll GETs are omitted from the request log (`METHOD path status` plus a timestamp; see [Running](running.md)).
 
-The dock pill **Chat cmds ON/OFF** toggles the global chat-command switch (`twitchCommandsEnabled`). Off still logs chat. HTTP `/cmd/jb/songrequest` and Admin Add/Now stay live.
+The dock pill **Chat cmds ON/OFF** toggles the global chat-command switch (`twitchCommandsEnabled`). Off still logs chat. HTTP `/cmd/jb/songrequest` and Control Panel Add/Now stay live.
 
 ## Player
 
@@ -20,11 +20,11 @@ While a seed playlist is active, song requests are inserted after the current tr
 
 ## Chat
 
-Admin → Chat is the live IRC window. Messages send as the bot nick. Nicks follow Twitch `display-name` casing. Login and connect live on the Twitch page, not here.
+Control Panel → Chat is the live IRC window. Messages send as the bot nick. Nicks follow Twitch `display-name` casing. Login and connect live on the Twitch page, not here.
 
 ## Commands
 
-Admin → Commands lists the chat commands this process accepts, with YouTube and Spotify link cards, until restart. Accepted commands tint cyan. Denied ones tint orange.
+Control Panel → Commands lists the chat commands this process accepts, with YouTube and Spotify link cards, until restart. Accepted commands tint cyan. Denied ones tint orange.
 
 Per-command GCD and UCD are seconds, default 0, counted from accept, capped at 86400. Save writes them to `jb2.sqlite`. The global on/off switch is the same one as the dock pill.
 

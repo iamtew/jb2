@@ -47,8 +47,8 @@ Stderr is `YYYY-MM-DD HH:MM:SS` (local on Windows, UTC elsewhere). Request lines
 
 `jb2.sqlite` is created if it is missing. If a sibling `jb2.json` exists and the database is empty, that JSON is imported once. The JSON file is left in place.
 
-Admin → Settings can import an old JB1 `jukeboks.json` or a JB2 `jb2.json` later. See [Admin](admin.md).
+Control Panel → Settings can import an old JB1 `jukeboks.json` or a JB2 `jb2.json` later. See [Control Panel](admin.md).
 
 ## Version
 
-`GET /health` returns liveness. `data.version` is `{git tag}-{git hash short}`, plus `-dirty` if the build tree was dirty. Admin → About and the tray **About** item show that string.
+`GET /health` returns liveness. `data.version` is `{git tag}-{git hash short}`, plus `-dirty` if the build tree was dirty. Control Panel → About and the tray **About** item show that string.

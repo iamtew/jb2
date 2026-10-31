@@ -1,6 +1,6 @@
 # Overview
 
-JB2 is a Rust rewrite of Jukeboks. It is a local HTTP control plane for [YouTube Music Desktop (pear-desktop)](https://github.com/pear-devs/pear-desktop): Twitch chat commands, an OBS overlay, Overlay Stage, and a small admin dock.
+JB2 is a Rust rewrite of Jukeboks. It is a local HTTP control plane for [YouTube Music Desktop (pear-desktop)](https://github.com/pear-devs/pear-desktop): Twitch chat commands, an OBS overlay, Overlay Stage, and a Control Panel.
 
 One process, one `jb2.sqlite`, one `webroot/`.
 
@@ -10,10 +10,10 @@ The player is [pear-desktop](https://github.com/pear-devs/pear-desktop). JB2 doe
 
 ## Surfaces
 
-- **Admin dock** at `http://localhost:42420/admin/`. Queue, seed playlists, Twitch chat, command cooldowns, and settings (including a small API runner). See [Admin](admin.md).
+- **Control Panel** at `http://localhost:42420/admin/`. Queue, seed playlists, Twitch chat, command cooldowns, and settings (including a small API runner). See [Control Panel](admin.md).
 - **OBS overlay** at `http://localhost:42420/overlay/`. Now playing, playback state, and progress. See [Overlay](overlay.md).
 - **Overlay Stage** at `http://localhost:42420/stage/`. Place and theme the overlay on a 720p or 1080p canvas; OBS follows live. See [Overlay Stage](stage.md).
-- **HTTP and chat.** Twitch `!sr` and Streamer.bot call the same song-request path the admin dock uses. See [Twitch](twitch.md), [Requests](requests.md), and [HTTP](http.md).
+- **HTTP and chat.** Twitch `!sr` and Streamer.bot call the same song-request path the Control Panel uses. See [Twitch](twitch.md), [Requests](requests.md), and [HTTP](http.md).
 
 `/overlay`, `/stage`, and `/admin` without a trailing slash 301 to the slash form so relative assets resolve.
 

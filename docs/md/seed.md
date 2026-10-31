@@ -1,6 +1,6 @@
 # Seed
 
-A seed playlist keeps [pear-desktop](https://github.com/pear-devs/pear-desktop) from running dry. Admin → Seed takes a playlist URL or ID. JB2 stores the id, name, and track count on the playlist (`seedPlaylists` in `jb2.sqlite`).
+A seed playlist keeps [pear-desktop](https://github.com/pear-devs/pear-desktop) from running dry. Control Panel → Seed takes a playlist URL or ID. JB2 stores the id, name, and track count on the playlist (`seedPlaylists` in `jb2.sqlite`).
 
 While seed mode is active, song requests insert after the current track (then after earlier requests). Leftover seed stays after those requests. JB2 owns that order and corrects pear-desktop until the queue matches. A successful player response is not trusted on its own. See [Requests](requests.md).
 

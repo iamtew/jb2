@@ -17,7 +17,7 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | `GET /cmd/jb/play` `pause` `next` `previous` | transport aliases (`GET` or `POST`) |
 | `/cmd/ytmd/*` | pear-desktop proxy (method suffix or `?_method=`) |
 | `GET /api/events` | SSE (`twitch` / `chat` / `seed` / `commands` / `cmdHistory` / `queue` / `overlay` / `audioVisualizer`) |
-| `GET /api/queue` | admin queue rows |
+| `GET /api/queue` | Control Panel queue rows |
 | `/api/config` | blacklist, maxDuration, Twitch, command cooldowns, overlayLayout (`GET`, and `POST` or `PUT` to save) |
 | `GET /api/ytmd` | pear-desktop JWT for overlay/admin WebSocket (`data.accessToken`) |
 | `GET` / `PUT /api/overlay` | live overlay layout (`x`, `y`, `canvasW`, `canvasH`, `theme`, `seekStyle`, `seekDir` `lr`/`rl`/`tb`/`bt` default `lr`, opacities, `panelW`/`panelH`, `pulse`, `glass`, `grid` comma list or `off`, `snap` default true, `overlayHidden`, `vizLayers` up to 8 `{ id, x, y, w, h, hidden, style, color, colorDir, bands, mirror, peakFall -1..1 }`, `layers` front-to-back ids, plus `vizX`/`vizY`/`vizW`/`vizH` copies of the first viz layer). `save: true` on PUT writes sqlite and sets `audioVisualizer.enabled` if any viz layer is visible. See [Overlay Stage](stage.md) |
@@ -30,6 +30,6 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 
 Twitch login, connect, and chat routes are listed in [Twitch](twitch.md).
 
-OBS overlay: `http://localhost:42420/overlay/`. Overlay Stage: `http://localhost:42420/stage/`. Admin dock: `http://localhost:42420/admin/`.
+OBS overlay: `http://localhost:42420/overlay/`. Overlay Stage: `http://localhost:42420/stage/`. Control Panel: `http://localhost:42420/admin/`.
 
 `/overlay`, `/stage`, and `/admin` without a trailing slash 301 to the slash form so relative assets resolve.
