@@ -264,8 +264,13 @@ fn normalize_hz_pair(pair: [i32; 2], fallback: [i32; 2]) -> [i32; 2] {
     }
 }
 
-const OVERLAY_THEMES: [&str; 10] = [
+const OVERLAY_THEMES: [&str; 15] = [
     "lcd-glass",
+    "smoke-glass",
+    "rose-glass",
+    "jade-glass",
+    "violet-glass",
+    "ember-glass",
     "lower-third",
     "amber-terminal",
     "crypt",
@@ -1438,6 +1443,17 @@ mod tests {
         });
         assert_eq!(kept.theme, "crypt");
         assert_eq!(kept.seek_style, "vapor");
+
+        let smoke = normalize_overlay_layout(OverlayLayout {
+            theme: "smoke-glass".into(),
+            ..Default::default()
+        });
+        assert_eq!(smoke.theme, "smoke-glass");
+        let rose = normalize_overlay_layout(OverlayLayout {
+            theme: "rose-glass".into(),
+            ..Default::default()
+        });
+        assert_eq!(rose.theme, "rose-glass");
 
         let mut cfg = Config::default();
         apply_patch(

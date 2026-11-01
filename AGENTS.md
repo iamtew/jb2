@@ -17,4 +17,4 @@ JB2 is the source of truth and owns queue order. YTMD is a slave: after every qu
 
 ## Overlay layout
 
-Overlay Stage owns overlay position, canvas size, look, and panel size (`overlayLayout`). The OBS overlay follows the live SSE `overlay` event, then the persisted layout. Do not treat a local CSS default as the source of truth.
+Overlay Stage owns overlay position, canvas size, look, and panel size (`overlayLayout`). OBS `/overlay/` **must** follow every Stage layout change live (`event: overlay`): position, canvas, theme (including glass themes), seek, opacities, size, pulse, glass, hide, viz boxes. Same session, no refresh. Persisted layout is the reconnect fallback, not the live path. Do not treat a local CSS default as the source of truth.
