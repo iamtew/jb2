@@ -396,12 +396,9 @@
         }
       })
       .catch(() => {});
-    const events = new EventSource("/api/events");
-    events.addEventListener("commands", (event) => {
-      try {
-        const data = JSON.parse(event.data || "{}");
-        if (typeof data.enabled === "boolean") setCommandsEnabled(data.enabled);
-      } catch (_) {}
+    window.addEventListener("jb2-commands", (event) => {
+      const data = event.detail || {};
+      if (typeof data.enabled === "boolean") setCommandsEnabled(data.enabled);
     });
   }
 

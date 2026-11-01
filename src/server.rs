@@ -1,7 +1,7 @@
 use crate::audio;
 use crate::config::{self, Config, OverlayLayout, SeedPlaylist, Store};
 use crate::envelope::Envelope;
-use crate::events::EventBus;
+use crate::events::{self, EventBus};
 use crate::jsonutil::{mime_for, parse_query, percent_decode, query_get, split_url};
 use crate::policy;
 use crate::seed::State;
@@ -103,12 +103,8 @@ impl App {
             );
             return;
         }
-        let mut body = Vec::new();
-        let _ = request
-            .as_reader()
-            .take(MAX_BODY_BYTES)
-            .read_to_end(&mut body);
-
+        // SSE holds the socket. Do not wait on a body, and do not keep-alive:
+        // tiny_http would queue the next request (a refresh) behind this stream.
         if method_s == "GET" && path.trim_end_matches('/') == "/api/events" {
             self.serve_events(request, &method_s, &path);
             return;
@@ -117,6 +113,12 @@ impl App {
             self.serve_audio(request, &method_s, &path);
             return;
         }
+
+        let mut body = Vec::new();
+        let _ = request
+            .as_reader()
+            .take(MAX_BODY_BYTES)
+            .read_to_end(&mut body);
 
         if path.starts_with("/cmd/ytmd") {
             self.proxy_ytmd(request, &method_s, &path, query_raw, &query, &body);
@@ -146,16 +148,24 @@ impl App {
             return;
         };
         let mut writer = request.into_writer();
+        let overlay = self.overlay_live().to_json();
+        let snapshot = events::pad_sse_frame(&format!("event: overlay\ndata: {overlay}\n\n"));
         let ok = writer
             .write_all(
                 b"HTTP/1.1 200 OK\r\n\
 Content-Type: text/event-stream\r\n\
 Cache-Control: no-cache\r\n\
-Connection: keep-alive\r\n\
+Connection: close\r\n\
 Transfer-Encoding: chunked\r\n\
 \r\n",
             )
-            .and_then(|_| sse_chunk(&mut writer, b": connected\n\n"));
+            .and_then(|_| {
+                sse_chunk(
+                    &mut writer,
+                    events::pad_sse_frame(": connected\n\n").as_bytes(),
+                )
+            })
+            .and_then(|_| sse_chunk(&mut writer, snapshot.as_bytes()));
         if ok.is_err() {
             return;
         }
@@ -163,12 +173,14 @@ Transfer-Encoding: chunked\r\n\
         loop {
             match rx.recv_timeout(Duration::from_secs(15)) {
                 Ok(frame) => {
-                    if sse_chunk(&mut writer, frame.as_bytes()).is_err() {
+                    if sse_chunk(&mut writer, events::pad_sse_frame(&frame).as_bytes()).is_err() {
                         break;
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {
-                    if sse_chunk(&mut writer, b": ping\n\n").is_err() {
+                    if sse_chunk(&mut writer, events::pad_sse_frame(": ping\n\n").as_bytes())
+                        .is_err()
+                    {
                         break;
                     }
                 }
@@ -2121,5 +2133,67 @@ mod tests {
         assert!(!version_newer("0.1.3-abc", "0.1.3"));
         assert!(!version_newer("0.2.0-abc", "0.1.9"));
         assert!(!version_newer("nope", "0.1.0"));
+    }
+
+    #[test]
+    fn overlay_get_works_while_events_sse_is_open() {
+        use crate::config::Store;
+        use crate::server::App;
+        use crate::ytmd::Client;
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+        use std::path::PathBuf;
+        use std::thread;
+        use std::time::Duration;
+        use tiny_http::Server;
+
+        let dir = std::env::temp_dir().join(format!("jb2-sse-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let store = Store::new(dir.join("jb2.sqlite")).expect("store");
+        let app = App::new(
+            store,
+            Client::new("127.0.0.1", "9"),
+            PathBuf::from("webroot"),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let server = Server::from_listener(listener, None).expect("server");
+        let worker = app.clone();
+        thread::spawn(move || {
+            for request in server.incoming_requests() {
+                let app = worker.clone();
+                thread::spawn(move || app.handle(request));
+            }
+        });
+
+        let mut events = TcpStream::connect(addr).expect("events");
+        events
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        events
+            .write_all(b"GET /api/events HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+            .unwrap();
+        let mut head = Vec::new();
+        let mut buf = [0u8; 512];
+        while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+            let n = events.read(&mut buf).expect("sse bytes");
+            assert!(n > 0, "sse closed before headers");
+            head.extend_from_slice(&buf[..n]);
+            if head.len() > 4096 {
+                break;
+            }
+        }
+        let text = String::from_utf8_lossy(&head);
+        assert!(text.contains("event-stream"), "{text}");
+        assert!(text.contains("Connection: close"), "{text}");
+
+        let mut page = TcpStream::connect(addr).expect("overlay");
+        page.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        page.write_all(b"GET /overlay/ HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+            .unwrap();
+        let mut body = Vec::new();
+        page.read_to_end(&mut body).expect("overlay body");
+        let html = String::from_utf8_lossy(&body);
+        assert!(html.contains("Now Playing Overlay"), "{html}");
     }
 }

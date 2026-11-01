@@ -746,17 +746,19 @@
       }
     });
     const events = new EventSource("/api/events");
-    events.addEventListener("audioVisualizer", (event) => {
-      try {
-        const data = JSON.parse(event.data || "{}");
-        if (typeof data.enabled === "boolean") setEnabled(data.enabled);
-        if (data.smoothing != null) {
-          smoothing = clampUnit(data.smoothing, LOOK_DEFAULTS.smoothing);
-          syncControls();
+    ["overlay", "audioVisualizer", "commands"].forEach((name) => {
+      events.addEventListener(name, (event) => {
+        let data;
+        try {
+          data = JSON.parse(event.data || "{}");
+        } catch (_) {
+          data = {};
         }
-      } catch (_) {
-        /* ignore */
-      }
+        window.dispatchEvent(new CustomEvent("jb2-" + name, { detail: data }));
+        if (name === "audioVisualizer") {
+          window.dispatchEvent(new CustomEvent("jb2-viz", { detail: data }));
+        }
+      });
     });
     followEnabled();
   }

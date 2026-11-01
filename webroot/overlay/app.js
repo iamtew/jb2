@@ -132,20 +132,11 @@
         if (env && env.exitCode === 0) applyLayout(env.data);
       })
       .catch(() => {});
-    const events = new EventSource("/api/events");
-    events.addEventListener("overlay", (event) => {
+    window.addEventListener("jb2-overlay", (event) => {
       try {
-        applyLayout(JSON.parse(event.data || "{}"));
+        applyLayout(event.detail || {});
       } catch (err) {
         log({ error: "overlay layout parse", details: String(err) });
-      }
-    });
-    events.addEventListener("audioVisualizer", (event) => {
-      try {
-        const data = JSON.parse(event.data || "{}");
-        window.dispatchEvent(new CustomEvent("jb2-viz", { detail: data }));
-      } catch (err) {
-        log({ error: "audio visualizer parse", details: String(err) });
       }
     });
   }
@@ -156,8 +147,8 @@
     window.JB2OverlayFx.init(document.querySelector(".overlay-stage"));
   }
 
+  followOverlayLayout();
   if (window.JB2NowPlaying) {
     window.JB2NowPlaying.start({ look: look, onMessage: log });
   }
-  followOverlayLayout();
 })();

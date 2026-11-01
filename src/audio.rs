@@ -884,7 +884,7 @@ pub fn write_sse<W: std::io::Write>(hub: &Hub, writer: &mut W) -> std::io::Resul
         b"HTTP/1.1 200 OK\r\n\
 Content-Type: text/event-stream\r\n\
 Cache-Control: no-cache\r\n\
-Connection: keep-alive\r\n\
+Connection: close\r\n\
 Transfer-Encoding: chunked\r\n\
 \r\n",
     )?;
@@ -906,16 +906,7 @@ Transfer-Encoding: chunked\r\n\
 }
 
 fn sse_event(value: &Value) -> String {
-    let mut s = format!("event: audio\ndata: {value}\n:\n");
-    // ponytail: tiny_http has no set_nodelay. Windows delayed-ACK holds a short
-    // write ~200ms. Pad to one full segment so the frame leaves now.
-    if s.len() < 1600 {
-        let extra = 1600 - s.len();
-        let at = s.len() - 1;
-        s.insert_str(at, &" ".repeat(extra));
-    }
-    s.push('\n');
-    s
+    crate::events::pad_sse_frame(&format!("event: audio\ndata: {value}\n\n"))
 }
 
 fn sse_chunk<W: std::io::Write>(writer: &mut W, data: &[u8]) -> std::io::Result<()> {
