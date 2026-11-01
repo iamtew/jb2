@@ -28,6 +28,8 @@ gh run download <run-id> -n dist -D dist
 
 `just build-dist` on Windows writes the same zip and MSI (and the unpacked `dist/` tree). `just msi` needs WiX 5 on PATH (`dotnet tool install -g wix`).
 
+Defender may flag unsigned `jb2.exe` with `Trojan:Win32/Sabsik.TE.A!ml` (machine-learning false positive). Restore/allow it, then submit the release files to Microsoft; see [Running](docs/md/running.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE). Third-party software, icons, and fonts: [CREDITS.md](CREDITS.md).

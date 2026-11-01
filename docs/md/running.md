@@ -22,6 +22,14 @@ The `dist` artifact is `jb2-<version>-win-x64.zip` and `jb2-<version>-win-x64.ms
 gh run download <run-id> -n dist -D dist
 ```
 
+After each zip and MSI, submit those exact files at [Microsoft Security Intelligence](https://www.microsoft.com/en-us/wdsi/filesubmission) as a software developer, “I believe this file is incorrectly detected,” with source `https://github.com/iamtew/jb2`. Cloud definitions usually catch up in 1–5 days for that hash only.
+
+## Windows Defender
+
+Unsigned `jb2.exe` can trip Defender’s machine-learning guess `Trojan:Win32/Sabsik.TE.A!ml`. That is a false positive: JB2 does not download or run attacker commands. A freshly downloaded Actions zip is more likely to trip it than a local `just build` / `cargo run --release`.
+
+If Defender quarantined the exe: Virus & threat protection → Protection history → restore / allow `jb2.exe`.
+
 ## Flags
 
 `-port`, `-bind`, `-ytmd_host`, `-ytmd_port`, `-webroot`, `-config`.

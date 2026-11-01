@@ -9,14 +9,27 @@ fn main() {
     );
 
     #[cfg(windows)]
-    {
-        let ico = std::path::Path::new("webroot/img/jukeboks.ico");
-        if ico.exists() {
-            let mut res = winres::WindowsResource::new();
-            res.set_icon("webroot/img/jukeboks.ico");
-            let _ = res.compile();
-        }
+    stamp_winres();
+}
+
+#[cfg(windows)]
+fn stamp_winres() {
+    println!("cargo:rerun-if-changed=webroot/img/jukeboks.ico");
+    let ver = env!("CARGO_PKG_VERSION");
+    let mut res = winres::WindowsResource::new();
+    res.set("CompanyName", "TEW020");
+    res.set("ProductName", "JB2");
+    res.set("FileDescription", env!("CARGO_PKG_DESCRIPTION"));
+    res.set("LegalCopyright", "Copyright (c) 2026 TEW020");
+    res.set("OriginalFilename", "jb2.exe");
+    res.set("InternalName", "jb2.exe");
+    res.set("FileVersion", ver);
+    res.set("ProductVersion", ver);
+    let ico = std::path::Path::new("webroot/img/jukeboks.ico");
+    if ico.exists() {
+        res.set_icon("webroot/img/jukeboks.ico");
     }
+    res.compile().expect("winres VERSIONINFO");
 }
 
 fn build_version(pkg: &str) -> String {
