@@ -14,13 +14,9 @@ The MSI is per-user: `%LOCALAPPDATA%\Programs\JB2`, no admin. The Start Menu sho
 
 ## Release
 
-Windows zip and MSI come from GitHub Actions (`.github/workflows/dist.yml`). Run it from the Actions tab, or push a numeric tag such as `0.0.1` (no `v` prefix). The workflow does not publish a release.
+Windows zip and MSI come from GitHub Actions (`.github/workflows/dist.yml`). Run it from the Actions tab for artifacts only, or push a numeric tag such as `0.0.1` (no `v` prefix) to build and publish a GitHub Release with the zip and MSI attached.
 
-The `dist` artifact is `jb2-<version>-win-x64.zip` and `jb2-<version>-win-x64.msi`. Download it with:
-
-```
-gh run download <run-id> -n dist -D dist
-```
+The `dist` artifact is `jb2-<version>-win-x64.zip` and `jb2-<version>-win-x64.msi`.
 
 After each zip and MSI, submit those exact files at [Microsoft Security Intelligence](https://www.microsoft.com/en-us/wdsi/filesubmission) as a software developer, “I believe this file is incorrectly detected,” with source `https://github.com/iamtew/jb2`. Cloud definitions usually catch up in 1–5 days for that hash only.
 

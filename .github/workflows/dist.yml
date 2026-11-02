@@ -1,5 +1,6 @@
 # Windows release zip and per-user MSI. One artifact named dist.
-# Run from the Actions tab, or push a numeric tag such as 0.0.1. Does not publish a release.
+# Push a numeric tag such as 0.0.1 to build and publish a GitHub Release.
+# workflow_dispatch builds artifacts only.
 name: dist
 
 on:
@@ -11,6 +12,8 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,3 +44,10 @@ jobs:
             dist/*.zip
             dist/*.msi
           if-no-files-found: error
+
+      - name: Release
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip dist/*.msi --generate-notes
