@@ -1586,7 +1586,7 @@ input[type="file"] {
 
 .seed-list__actions {
   display: flex;
-  gap: 0;
+  gap: 8px;
   flex-shrink: 0;
   align-items: center;
 }
@@ -1594,10 +1594,6 @@ input[type="file"] {
 .seed-list__action {
   color: var(--text);
   font-weight: 600;
-}
-
-.seed-list__action + .seed-list__action {
-  margin-left: 8px;
 }
 
 @keyframes marquee {
