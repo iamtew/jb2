@@ -1086,15 +1086,17 @@ pre {
 }
 
 .queue-item {
-  border-radius: var(--radius);
   background: var(--row);
-  border: 1px solid var(--border);
   padding: 4px 6px;
 }
 
-.queue-item.is-current {
+/* Even rows only. `of` ignores feedback and the previous block so the stripe stays put. */
+.queue-item:nth-child(even of .queue-item) {
+  background: color-mix(in srgb, var(--text) 8%, var(--row));
+}
+
+.queue-list .queue-item.is-current {
   background: color-mix(in srgb, var(--cyan) 16%, transparent);
-  border-color: var(--cyan);
 }
 
 .queue-row {
@@ -1135,7 +1137,7 @@ body.is-queue-dragging .queue-drag-handle {
   opacity: 0.45;
 }
 
-.queue-item.is-drop-target {
+.queue-list .queue-item.is-drop-target {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--cyan) 85%, transparent);
   background: color-mix(in srgb, var(--cyan) 18%, transparent);
 }
@@ -1567,9 +1569,11 @@ input[type="file"] {
   gap: var(--gap);
   min-width: 0;
   padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   background: var(--row);
+}
+
+.seed-list__item:nth-child(even of .seed-list__item) {
+  background: color-mix(in srgb, var(--text) 8%, var(--row));
 }
 
 .seed-list__label {
