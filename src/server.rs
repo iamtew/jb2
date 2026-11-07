@@ -501,13 +501,29 @@ Transfer-Encoding: chunked\r\n\
                     )
                 }
             };
-        let song_payload = self
+        let mut song_payload = self
             .ytmd
             .fetch_json_retry("/api/v1/song", 3, Duration::from_millis(250))
             .unwrap_or(Value::Null);
+        // YT leftover queue sits selected at elapsed 0 with isPaused false. Clock moves
+        // by ~2s when actually playing; stall that long only in that pose.
+        if !play_now
+            && !ytmd::playback_idle(&song_payload, &queue_payload)
+            && ytmd::song_clock_at_zero(&song_payload)
+        {
+            std::thread::sleep(Duration::from_millis(2200));
+            if let Ok(fresh) = self
+                .ytmd
+                .fetch_json_retry("/api/v1/song", 3, Duration::from_millis(250))
+            {
+                song_payload = fresh;
+            }
+        }
         let current_video_id = ytmd::current_song_video_id(&song_payload);
+        let idle = ytmd::playback_idle(&song_payload, &queue_payload)
+            || ytmd::song_clock_at_zero(&song_payload);
 
-        if play_now || ytmd::playback_idle(&song_payload, &queue_payload) {
+        if play_now || idle {
             return match self.play_song_now(&video_id, &current_video_id, queue_payload, &lookup) {
                 Ok(env) => {
                     self.emit_queue();

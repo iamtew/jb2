@@ -153,7 +153,20 @@ pub fn current_song_video_id(song_payload: &Value) -> String {
     id
 }
 
-/// Empty queue, no current track, or last row finished. Ignores isPaused/isPlaying (GET /song lies).
+pub fn song_elapsed_seconds(song_payload: &Value) -> i32 {
+    let song_data = flatten_song_payload(song_payload);
+    as_f64(song_data.get("elapsedSeconds").unwrap_or(&Value::Null))
+        .map(|n| n as i32)
+        .unwrap_or(0)
+}
+
+/// YT leftover queue: current still selected, upcoming rows remain, clock at 0, isPaused false.
+pub fn song_clock_at_zero(song_payload: &Value) -> bool {
+    song_elapsed_seconds(song_payload) == 0
+}
+
+/// Empty queue, paused, or last row finished. Leftover upcoming rows still count as idle when paused.
+/// `isPaused: false` + elapsed 0 is YT's ended-queue pose — caller re-samples elapsed.
 pub fn playback_idle(song_payload: &Value, queue_payload: &Value) -> bool {
     let items = queue_item_video_ids(queue_payload);
     if items.is_empty() {
@@ -171,10 +184,10 @@ pub fn playback_idle(song_payload: &Value, queue_payload: &Value) -> bool {
     if current_index < 0 {
         return true;
     }
-    if (current_index as usize) + 1 < items.len() {
-        return false;
-    }
     let song_data = flatten_song_payload(song_payload);
+    if as_bool(song_data.get("isPaused").unwrap_or(&Value::Null)).unwrap_or(false) {
+        return true;
+    }
     let duration = as_f64(song_data.get("songDuration").unwrap_or(&Value::Null))
         .map(|n| n as i32)
         .filter(|n| *n > 0)
@@ -182,9 +195,7 @@ pub fn playback_idle(song_payload: &Value, queue_payload: &Value) -> bool {
     if duration <= 0 {
         return false;
     }
-    let elapsed = as_f64(song_data.get("elapsedSeconds").unwrap_or(&Value::Null))
-        .map(|n| n as i32)
-        .unwrap_or(0);
+    let elapsed = song_elapsed_seconds(song_payload);
     elapsed >= duration
 }
 
@@ -2236,5 +2247,45 @@ mod tests {
             "elapsedSeconds": 0
         });
         assert!(!playback_idle(&song, &queue));
+        assert!(song_clock_at_zero(&song));
+    }
+
+    #[test]
+    fn playback_idle_paused_with_upcoming_is_idle() {
+        let queue = json!({
+            "items": [
+                { "videoId": "cur", "title": "Now", "artist": "A" },
+                { "videoId": "next", "title": "Next", "artist": "B" }
+            ]
+        });
+        let song = json!({
+            "videoId": "cur",
+            "title": "Now",
+            "artist": "A",
+            "songDuration": 180,
+            "elapsedSeconds": 40,
+            "isPaused": true
+        });
+        assert!(playback_idle(&song, &queue));
+    }
+
+    #[test]
+    fn playback_idle_yt_leftover_at_zero_needs_resample() {
+        let queue = json!({
+            "items": [
+                { "videoId": "cur", "title": "Now", "artist": "A" },
+                { "videoId": "next", "title": "Next", "artist": "B" }
+            ]
+        });
+        let song = json!({
+            "videoId": "cur",
+            "title": "Now",
+            "artist": "A",
+            "songDuration": 166,
+            "elapsedSeconds": 0,
+            "isPaused": false
+        });
+        assert!(!playback_idle(&song, &queue));
+        assert!(song_clock_at_zero(&song));
     }
 }
