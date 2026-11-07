@@ -1,6 +1,6 @@
 # Requests
 
-Chat `!sr`, Streamer.bot `GET /cmd/jb/songrequest`, and Control Panel Add/Now all queue through JB2 into [pear-desktop](https://github.com/pear-devs/pear-desktop). `now=1` plays the hit immediately instead of appending it.
+Chat `!sr`, Streamer.bot `GET /cmd/jb/songrequest`, and Control Panel Add/Now all queue through JB2 into [pear-desktop](https://github.com/pear-devs/pear-desktop). If nothing is playing (empty queue or last track finished), the request starts immediately. `now=1` plays the hit immediately even when something else is already playing.
 
 `GET /cmd/jb/search?input=` returns search hits. `browse=` lists album tracks, artist top songs, or playlist tracks.
 

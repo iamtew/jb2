@@ -507,7 +507,7 @@ Transfer-Encoding: chunked\r\n\
             .unwrap_or(Value::Null);
         let current_video_id = ytmd::current_song_video_id(&song_payload);
 
-        if play_now {
+        if play_now || ytmd::playback_idle(&song_payload, &queue_payload) {
             return match self.play_song_now(&video_id, &current_video_id, queue_payload, &lookup) {
                 Ok(env) => {
                     self.emit_queue();
@@ -628,7 +628,14 @@ Transfer-Encoding: chunked\r\n\
         mut queue_payload: Value,
         lookup: &SongLookup,
     ) -> Result<Envelope, String> {
-        if current_video_id.eq_ignore_ascii_case(video_id) {
+        if self.seed.is_active() {
+            self.seed.append_request(video_id);
+        }
+        let empty = current_video_id.trim().is_empty()
+            || ytmd::queue_item_video_ids(&queue_payload).is_empty();
+        if !empty && current_video_id.eq_ignore_ascii_case(video_id) {
+            let _ = self.ytmd.post_json("/api/v1/play", json!({}));
+            self.seed.sync_from_queue(&queue_payload, video_id);
             return Ok(playing_now(ytmd::build_song_request_response(
                 video_id,
                 &queue_payload,
@@ -645,6 +652,7 @@ Transfer-Encoding: chunked\r\n\
             {
                 queue_payload = fresh;
             }
+            let _ = self.ytmd.post_json("/api/v1/play", json!({}));
             self.seed.sync_from_queue(&queue_payload, video_id);
             return Ok(playing_now(ytmd::build_song_request_response(
                 video_id,
@@ -653,19 +661,27 @@ Transfer-Encoding: chunked\r\n\
                 None,
             )));
         }
+        let position = if empty {
+            "INSERT_AT_END"
+        } else {
+            "INSERT_AFTER_CURRENT_VIDEO"
+        };
         self.ytmd.post_json(
             "/api/v1/queue",
-            json!({"videoId": video_id, "insertPosition": "INSERT_AFTER_CURRENT_VIDEO"}),
+            json!({"videoId": video_id, "insertPosition": position}),
         )?;
         let (mut fresh, index) =
             self.wait_for_queue_video(video_id, 12, Duration::from_millis(150))?;
-        self.patch_queue_index(index)?;
-        if let Ok(q) = self
-            .ytmd
-            .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
-        {
-            fresh = q;
+        if !empty {
+            self.patch_queue_index(index)?;
+            if let Ok(q) = self
+                .ytmd
+                .fetch_json_retry("/api/v1/queue", 3, Duration::from_millis(250))
+            {
+                fresh = q;
+            }
         }
+        let _ = self.ytmd.post_json("/api/v1/play", json!({}));
         self.seed.sync_from_queue(&fresh, video_id);
         Ok(playing_now(ytmd::build_song_request_response(
             video_id, &fresh, lookup, None,

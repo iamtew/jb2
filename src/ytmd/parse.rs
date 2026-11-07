@@ -153,6 +153,41 @@ pub fn current_song_video_id(song_payload: &Value) -> String {
     id
 }
 
+/// Empty queue, no current track, or last row finished. Ignores isPaused/isPlaying (GET /song lies).
+pub fn playback_idle(song_payload: &Value, queue_payload: &Value) -> bool {
+    let items = queue_item_video_ids(queue_payload);
+    if items.is_empty() {
+        return true;
+    }
+    let current_id = current_song_video_id(song_payload);
+    if current_id.trim().is_empty() {
+        return true;
+    }
+    let song = parse_current_song(song_payload);
+    if song.title.is_empty() && song.artist.is_empty() {
+        return true;
+    }
+    let current_index = resolve_current_queue_index(queue_payload, &current_id);
+    if current_index < 0 {
+        return true;
+    }
+    if (current_index as usize) + 1 < items.len() {
+        return false;
+    }
+    let song_data = flatten_song_payload(song_payload);
+    let duration = as_f64(song_data.get("songDuration").unwrap_or(&Value::Null))
+        .map(|n| n as i32)
+        .filter(|n| *n > 0)
+        .unwrap_or(0);
+    if duration <= 0 {
+        return false;
+    }
+    let elapsed = as_f64(song_data.get("elapsedSeconds").unwrap_or(&Value::Null))
+        .map(|n| n as i32)
+        .unwrap_or(0);
+    elapsed >= duration
+}
+
 pub fn search_songs(client: &Client, query: &str, limit: usize) -> Result<Vec<SearchHit>, String> {
     let payload = client.post_json("/api/v1/search", json!({"query": query}))?;
     Ok(list_search_results(&payload, limit))
@@ -2134,5 +2169,72 @@ mod tests {
             env.message.as_deref(),
             Some("Added to queue: Artist - Title. #3 in queue ~4:20 until play.")
         );
+    }
+
+    #[test]
+    fn playback_idle_empty_queue() {
+        let song = json!({"videoId": "cur", "title": "Now", "artist": "A", "songDuration": 180, "elapsedSeconds": 10});
+        assert!(playback_idle(&song, &json!({"items": []})));
+        assert!(playback_idle(&json!({}), &json!({})));
+    }
+
+    #[test]
+    fn playback_idle_no_current() {
+        let queue = json!({"items": [{"videoId": "a", "title": "A", "artist": "X"}]});
+        assert!(playback_idle(&json!({}), &queue));
+        assert!(playback_idle(
+            &json!({"title": "Now", "artist": "A"}),
+            &queue
+        ));
+    }
+
+    #[test]
+    fn playback_idle_finished_last_row() {
+        let queue = json!({
+            "items": [
+                { "videoId": "old", "title": "Old", "artist": "A" },
+                { "videoId": "cur", "title": "Now", "artist": "B" }
+            ]
+        });
+        let done = json!({
+            "videoId": "cur",
+            "title": "Now",
+            "artist": "B",
+            "songDuration": 180,
+            "elapsedSeconds": 180
+        });
+        assert!(playback_idle(&done, &queue));
+    }
+
+    #[test]
+    fn playback_idle_mid_track_with_remaining_is_not_idle() {
+        let queue = json!({
+            "items": [
+                { "videoId": "cur", "title": "Now", "artist": "A" },
+                { "videoId": "next", "title": "Next", "artist": "B" }
+            ]
+        });
+        let song = json!({
+            "videoId": "cur",
+            "title": "Now",
+            "artist": "A",
+            "songDuration": 180,
+            "elapsedSeconds": 40
+        });
+        assert!(!playback_idle(&song, &queue));
+        let last_only = json!({"items": [{"videoId": "cur", "title": "Now", "artist": "A"}]});
+        assert!(!playback_idle(&song, &last_only));
+    }
+
+    #[test]
+    fn playback_idle_missing_duration_is_not_idle() {
+        let queue = json!({"items": [{"videoId": "cur", "title": "Now", "artist": "A"}]});
+        let song = json!({
+            "videoId": "cur",
+            "title": "Now",
+            "artist": "A",
+            "elapsedSeconds": 0
+        });
+        assert!(!playback_idle(&song, &queue));
     }
 }
