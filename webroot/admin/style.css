@@ -920,11 +920,39 @@ body {
   margin-bottom: 0;
 }
 
-#page-settings .panel {
+#page-settings.active > .panel {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(20rem, 28rem) minmax(0, 1fr);
+  gap: 16px 24px;
+  align-items: start;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+#page-settings .settings-form,
+#page-settings .settings-side {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 40rem;
+  min-width: 0;
+}
+
+#page-settings .settings-json-block pre {
+  max-height: 70vh;
+  min-height: 16rem;
+}
+
+#page-settings.active {
+  overflow: hidden;
+}
+
+@media (max-width: 760px) {
+  #page-settings.active > .panel {
+    grid-template-columns: 1fr;
+  }
 }
 
 #page-settings .settings-pair {
@@ -972,8 +1000,9 @@ body {
 }
 
 #page-settings #importFileInput {
-  flex: 0 1 auto;
-  width: auto;
+  flex: 1 1 auto;
+  width: 8rem;
+  min-width: 0;
   max-width: 100%;
 }
 
