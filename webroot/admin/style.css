@@ -920,8 +920,71 @@ body {
   margin-bottom: 0;
 }
 
-#themeSelect {
-  width: 100%;
+#page-settings .panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 40rem;
+}
+
+#page-settings .settings-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  align-items: end;
+}
+
+#page-settings .settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+#page-settings .settings-block > label,
+#page-settings .controls label,
+#page-settings .url-box label {
+  margin-bottom: 4px;
+}
+
+#page-settings #themeSelect {
+  width: 14rem;
+  max-width: 100%;
+}
+
+#page-settings #maxDurationInput {
+  width: 6.5rem;
+  max-width: 100%;
+  flex: 0 0 auto;
+}
+
+#page-settings #blacklistInput {
+  flex: 0 1 auto;
+  width: 18rem;
+  max-width: 100%;
+}
+
+#page-settings .controls select,
+#page-settings .controls input {
+  flex: 0 1 auto;
+  width: 16rem;
+  max-width: 100%;
+}
+
+#page-settings #importFileInput {
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 100%;
+}
+
+#page-settings #commandUrl {
+  flex: 1 1 12rem;
+  width: auto;
+  max-width: 100%;
+}
+
+#page-settings .chip-list {
+  gap: 6px;
 }
 
 .settings-block:last-child {
