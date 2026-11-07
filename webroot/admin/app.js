@@ -292,12 +292,11 @@ function renderSeedPlaylists(playlists) {
       ? `${labelText} (${playlist.id})`
       : labelText;
 
-    const playButton = document.createElement('button');
-    playButton.type = 'button';
-    playButton.className = 'queue-action-btn queue-action-btn--play';
-    playButton.innerHTML = icon('player-play');
-    playButton.setAttribute('aria-label', 'Enqueue seed playlist');
-    playButton.addEventListener('click', () => enqueueSeedPlaylist(playlist.id));
+    const addButton = document.createElement('button');
+    addButton.type = 'button';
+    addButton.className = 'seed-list__action';
+    addButton.textContent = 'Add';
+    addButton.addEventListener('click', () => enqueueSeedPlaylist(playlist.id));
 
     const purgeButton = document.createElement('button');
     purgeButton.type = 'button';
@@ -319,7 +318,7 @@ function renderSeedPlaylists(playlists) {
 
     const actions = document.createElement('div');
     actions.className = 'seed-list__actions';
-    actions.append(purgeButton, playButton, removeButton);
+    actions.append(purgeButton, addButton, removeButton);
 
     item.append(label, actions);
     seedPlaylistList.appendChild(item);
