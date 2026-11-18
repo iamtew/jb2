@@ -11,7 +11,7 @@ No auth, so the LAN (OBS, Streamer.bot on another PC) can reach everything. Brow
 | `GET /cmd/jb/songinfo` | now playing |
 | `GET /cmd/jb/queueinfo` | upcoming queue (fails if paused) |
 | `GET /cmd/jb/songrequest?input=` | search and queue (`now=1` plays immediately) |
-| `GET /cmd/jb/search?input=` | search hits (`browse=` lists album, artist top songs, or playlist tracks) |
+| `GET /cmd/jb/search?input=` | search hits (`browse=` lists album, artist top songs, or playlist tracks; `limit=` 1–40, default 8) |
 | `GET /cmd/jb/commands` | Twitch chat commands on/off |
 | `GET /cmd/jb/commands/on` `off` | enable or disable Twitch chat commands |
 | `GET /cmd/jb/play` `pause` `next` `previous` | transport aliases (`GET` or `POST`) |

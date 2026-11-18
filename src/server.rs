@@ -387,7 +387,7 @@ Transfer-Encoding: chunked\r\n\
         if input.len() > MAX_SONG_REQUEST_INPUT_LEN {
             return Dispatch::Json(200, Envelope::fail("input too long"));
         }
-        match ytmd::search_songs(&self.ytmd, input, 8) {
+        match ytmd::search_songs(&self.ytmd, input, search_limit(query)) {
             Ok(items) => Dispatch::Json(
                 200,
                 Envelope::ok_msg(
@@ -1785,6 +1785,14 @@ impl Dispatch {
     }
 }
 
+/// Dock typeahead omits `limit` (8). Control Panel Search sends up to 32. Cap 40.
+fn search_limit(query: &[(String, String)]) -> usize {
+    match query_get(query, "limit").map(str::trim).filter(|s| !s.is_empty()) {
+        None => 8,
+        Some(raw) => raw.parse::<usize>().unwrap_or(8).clamp(1, 40),
+    }
+}
+
 fn song_request_play_now(query: &[(String, String)]) -> bool {
     let now = query_get(query, "now").unwrap_or("").trim();
     if now == "1" || now.eq_ignore_ascii_case("true") {
@@ -2091,8 +2099,8 @@ fn is_inside(root: &Path, path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        dir_slash_location, is_quiet_poll_get, origin_allowed, tag_from_location, version_newer,
-        version_tag,
+        dir_slash_location, is_quiet_poll_get, origin_allowed, search_limit, tag_from_location,
+        version_newer, version_tag,
     };
 
     #[test]
@@ -2121,6 +2129,16 @@ mod tests {
         assert!(!origin_allowed("https://evil.example", "localhost:42420"));
         assert!(!origin_allowed("http://localhost:42421", "localhost:42420"));
         assert!(!origin_allowed("null", "localhost:42420"));
+    }
+
+    #[test]
+    fn search_limit_defaults_and_clamps() {
+        assert_eq!(search_limit(&[]), 8);
+        assert_eq!(search_limit(&[("limit".into(), "".into())]), 8);
+        assert_eq!(search_limit(&[("limit".into(), "32".into())]), 32);
+        assert_eq!(search_limit(&[("limit".into(), "0".into())]), 1);
+        assert_eq!(search_limit(&[("limit".into(), "999".into())]), 40);
+        assert_eq!(search_limit(&[("limit".into(), "nope".into())]), 8);
     }
 
     #[test]

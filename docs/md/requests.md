@@ -2,7 +2,7 @@
 
 Chat `!sr`, Streamer.bot `GET /cmd/jb/songrequest`, and Control Panel Add/Now all queue through JB2 into [pear-desktop](https://github.com/pear-devs/pear-desktop). If nothing is playing, the request starts immediately — including YouTube's leftover queue (tracks still listed, current selected, paused or stuck at 0:00). `now=1` plays the hit immediately even when something else is already playing.
 
-`GET /cmd/jb/search?input=` returns search hits. `browse=` lists album tracks, artist top songs, or playlist tracks.
+`GET /cmd/jb/search?input=` returns search hits. `browse=` lists album tracks, artist top songs, or playlist tracks. `limit=` is 1–40, default 8 (Control Panel Search uses 32).
 
 ## What gets queued
 
