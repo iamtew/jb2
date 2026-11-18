@@ -761,6 +761,148 @@ body {
   min-width: 0;
 }
 
+#page-search.active {
+  overflow: hidden;
+}
+
+#page-search.active > .panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.search-page__form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.search-page__form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-page__kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.search-kind {
+  min-height: 2rem;
+  padding: 0 10px;
+  color: var(--muted);
+  background: var(--field);
+}
+
+.search-kind.is-on {
+  color: var(--ink);
+  background: var(--cyan);
+  border-color: transparent;
+}
+
+.search-page__crumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.search-page__crumb[hidden] {
+  display: none;
+}
+
+.search-page__status {
+  margin: 0 0 8px;
+}
+
+.search-page__status--error {
+  color: var(--orange);
+}
+
+.search-page__list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.search-hit {
+  background: var(--row);
+  padding: 6px 8px;
+}
+
+.search-hit:nth-child(even) {
+  background: color-mix(in srgb, var(--text) 8%, var(--row));
+}
+
+.search-hit.is-active {
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+}
+
+.search-hit__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.search-hit__art {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
+  background: var(--field);
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.search-hit__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.search-hit__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-hit__title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-hit__sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-hit__duration {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.search-hit__actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .page-chat.active {
   display: flex;
   flex: 1;

@@ -50,6 +50,10 @@
         <path d="M3 7h3a5 5 0 0 1 5 5a5 5 0 0 0 5 5h5" />
         <path d="M21 7h-5a4.978 4.978 0 0 0 -3 1m-4 8a4.984 4.984 0 0 1 -3 1h-3" />
       </symbol>
+      <symbol id="search" viewBox="0 0 24 24">
+        <path d="M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+        <path d="M21 21l-6 -6" />
+      </symbol>
       <symbol id="playlist" viewBox="0 0 24 24">
         <path d="M11 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
         <path d="M17 17v-13h4" />
@@ -228,6 +232,28 @@
             <button id="clearQueueButton" class="queue-toolbar-btn" type="button"><svg class="icon" data-icon="trash" aria-hidden="true"></svg>Clear</button>
           </div>
           <div id="queueList" class="queue-list"></div>
+        </div>
+      </section>
+
+      <section id="page-search" class="page">
+        <div class="panel">
+          <form id="pageSearchForm" class="search-page__form" action="#">
+            <input id="pageSearchInput" type="search" placeholder="Search YouTube Music…" aria-label="Search YouTube Music" autocomplete="off" />
+            <button type="submit"><svg class="icon" data-icon="search" aria-hidden="true"></svg>Search</button>
+          </form>
+          <div id="pageSearchKinds" class="search-page__kinds" role="group" aria-label="Result kind">
+            <button type="button" class="search-kind is-on" data-kind="all">All</button>
+            <button type="button" class="search-kind" data-kind="song">Songs</button>
+            <button type="button" class="search-kind" data-kind="album">Albums</button>
+            <button type="button" class="search-kind" data-kind="artist">Artists</button>
+            <button type="button" class="search-kind" data-kind="playlist">Playlists</button>
+          </div>
+          <p id="pageSearchCrumb" class="search-page__crumb" hidden>
+            <button id="pageSearchBack" type="button">← Back</button>
+            <span id="pageSearchCrumbLabel"></span>
+          </p>
+          <p id="pageSearchStatus" class="muted search-page__status">Type at least two characters.</p>
+          <div id="pageSearchList" class="search-page__list" role="listbox" aria-label="Search results"></div>
         </div>
       </section>
 
@@ -449,6 +475,7 @@
 
       <nav class="tabs" aria-label="Control Panel sections">
         <button class="tab active" data-page="queue" type="button"><svg class="icon" data-icon="playlist" aria-hidden="true"></svg><span>Queue</span></button>
+        <button class="tab" data-page="search" type="button"><svg class="icon" data-icon="search" aria-hidden="true"></svg><span>Search</span></button>
         <button class="tab" data-page="seed" type="button"><svg class="icon" data-icon="plant" aria-hidden="true"></svg><span>Seed</span></button>
         <button class="tab" data-page="chat" type="button"><svg class="icon" data-icon="message-circle" aria-hidden="true"></svg><span>Chat</span></button>
         <button class="tab" data-page="commands" type="button"><svg class="icon" data-icon="terminal-2" aria-hidden="true"></svg><span>Commands</span></button>

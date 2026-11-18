@@ -14,6 +14,10 @@ Previous, back 10 seconds, play, pause, forward 10 seconds, next, and shuffle. T
 
 **Add** queues a search. **Now** plays it immediately (`now=1` on the song-request call). The field suggests YouTube Music hits, including album, artist, and playlist browses. Matching rules are in [Requests](requests.md).
 
+## Search
+
+Control Panel → Search is the full YouTube Music lookup: more hits than the dock, thumbs, duration, kind chips, and per-row Add / Now. Albums, artists, and playlists still drill into a track list. The dock field stays as the quick path.
+
 ## Queue
 
 The Queue page lists what JB2 thinks is coming up. **Previous** expands tracks already played. Drag a row by its handle to reorder. **Clear** asks, then deletes the pear-desktop queue.

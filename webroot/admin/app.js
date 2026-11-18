@@ -88,6 +88,14 @@ const songRequestInput = document.getElementById('songRequestInput');
 const songRequestForm = document.getElementById('songRequestForm');
 const songRequestNow = document.getElementById('songRequestNow');
 const songSearchPopup = document.getElementById('songSearchPopup');
+const pageSearchForm = document.getElementById('pageSearchForm');
+const pageSearchInput = document.getElementById('pageSearchInput');
+const pageSearchKinds = document.getElementById('pageSearchKinds');
+const pageSearchCrumb = document.getElementById('pageSearchCrumb');
+const pageSearchBack = document.getElementById('pageSearchBack');
+const pageSearchCrumbLabel = document.getElementById('pageSearchCrumbLabel');
+const pageSearchStatus = document.getElementById('pageSearchStatus');
+const pageSearchList = document.getElementById('pageSearchList');
 const seedStatusLine = document.getElementById('seedStatusLine');
 const seedPlaylistInput = document.getElementById('seedPlaylistInput');
 const addSeedPlaylistButton = document.getElementById('addSeedPlaylistButton');
@@ -220,6 +228,9 @@ function showAdminPage(page) {
   }
   if (page === 'about') {
     loadAboutPanel();
+  }
+  if (page === 'search') {
+    pageSearchInput?.focus();
   }
 }
 
@@ -2082,15 +2093,23 @@ function renderSongSearchPopup(items) {
   sizeSongSearchPopup();
 }
 
+async function fetchJbSearch({ input, browse, limit } = {}) {
+  const params = new URLSearchParams();
+  if (browse) params.set('browse', browse);
+  else params.set('input', input || '');
+  if (limit) params.set('limit', String(limit));
+  const response = await fetch(`/cmd/jb/search?${params}`, {
+    headers: { Accept: 'application/json' },
+  });
+  return readCommandEnvelope(response);
+}
+
 async function fetchSongSearch(query) {
   const token = ++songSearchToken;
   songSearchBack = '';
   songSearchStack = [];
   try {
-    const response = await fetch(`/cmd/jb/search?input=${encodeURIComponent(query)}`, {
-      headers: { Accept: 'application/json' },
-    });
-    const payload = await readCommandEnvelope(response);
+    const payload = await fetchJbSearch({ input: query });
     if (token !== songSearchToken) return;
     const items = payload?.data?.items;
     renderSongSearchPopup(Array.isArray(items) ? items : []);
@@ -2129,10 +2148,7 @@ async function drillSearch(item) {
   songSearchBack = item.title || 'Back';
   renderSongSearchPopup([]);
   try {
-    const response = await fetch(`/cmd/jb/search?browse=${encodeURIComponent(browse)}`, {
-      headers: { Accept: 'application/json' },
-    });
-    const payload = await readCommandEnvelope(response);
+    const payload = await fetchJbSearch({ browse });
     if (token !== songSearchToken) return;
     const items = payload?.data?.items;
     renderSongSearchPopup(Array.isArray(items) ? items : []);
@@ -2382,6 +2398,264 @@ if (songRequestInput) {
   });
   songRequestInput.addEventListener('blur', () => {
     window.setTimeout(hideSongSearchPopup, 120);
+  });
+}
+
+const PAGE_SEARCH_LIMIT = 32;
+let pageSearchTimer = null;
+let pageSearchToken = 0;
+let pageSearchItems = [];
+let pageSearchHighlight = -1;
+let pageSearchKind = 'all';
+let pageSearchStack = [];
+let pageSearchBackTitle = '';
+
+function setPageSearchStatus(message, kind) {
+  if (!pageSearchStatus) return;
+  pageSearchStatus.textContent = message || '';
+  pageSearchStatus.className = `muted search-page__status${kind === 'error' ? ' search-page__status--error' : ''}`;
+}
+
+function visiblePageSearchItems() {
+  if (pageSearchKind === 'all') return pageSearchItems;
+  return pageSearchItems.filter((item) => (item.kind || 'song') === pageSearchKind);
+}
+
+function searchThumbUrl(item) {
+  const id = item?.videoId;
+  if (!id || id.length !== 11) return '';
+  return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+}
+
+function renderPageSearch() {
+  if (!pageSearchList) return;
+  const items = visiblePageSearchItems();
+  if (pageSearchHighlight >= items.length) pageSearchHighlight = items.length ? 0 : -1;
+  if (pageSearchCrumb) {
+    pageSearchCrumb.hidden = !pageSearchBackTitle;
+    if (pageSearchCrumbLabel) pageSearchCrumbLabel.textContent = pageSearchBackTitle;
+  }
+  if (!items.length) {
+    pageSearchList.innerHTML = '';
+    return;
+  }
+  pageSearchList.innerHTML = items.map((item, i) => {
+    const song = isSongHit(item);
+    const title = escapeHtml(item.title || item.videoId || 'Untitled');
+    const kind = searchKindLabel(item.kind);
+    const sub = [kind, item.artist].filter(Boolean).join(' · ');
+    const duration = Number(item.duration) > 0
+      ? `<span class="search-hit__duration">${escapeHtml(formatTime(item.duration))}</span>`
+      : '';
+    const thumb = searchThumbUrl(item);
+    const art = thumb
+      ? `<img src="${escapeHtml(thumb)}" alt="" onerror="this.remove()">`
+      : icon('search');
+    const actions = song
+      ? `<div class="search-hit__actions">
+          <button class="queue-action-btn" type="button" data-search-add="${i}" aria-label="Add">${icon('plus')}</button>
+          <button class="queue-action-btn queue-action-btn--play" type="button" data-search-now="${i}" aria-label="Play now">${icon('player-play')}</button>
+        </div>`
+      : '';
+    return `<div class="search-hit${i === pageSearchHighlight ? ' is-active' : ''}" role="option" data-search-index="${i}">
+      <div class="search-hit__row">
+        <span class="search-hit__art">${art}</span>
+        <span class="search-hit__meta"><span class="search-hit__title">${title}</span>${sub ? `<span class="search-hit__sub">${escapeHtml(sub)}</span>` : ''}</span>
+        ${duration}
+        ${actions}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function runPageSearch(query) {
+  const q = String(query || '').trim();
+  if (q.length < 2) {
+    pageSearchToken += 1;
+    pageSearchItems = [];
+    pageSearchHighlight = -1;
+    pageSearchStack = [];
+    pageSearchBackTitle = '';
+    renderPageSearch();
+    setPageSearchStatus('Type at least two characters.');
+    return;
+  }
+  const token = ++pageSearchToken;
+  pageSearchStack = [];
+  pageSearchBackTitle = '';
+  pageSearchHighlight = -1;
+  setPageSearchStatus('Searching…');
+  try {
+    const payload = await fetchJbSearch({ input: q, limit: PAGE_SEARCH_LIMIT });
+    if (token !== pageSearchToken) return;
+    pageSearchItems = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+    renderPageSearch();
+    const shown = visiblePageSearchItems().length;
+    setPageSearchStatus(shown ? `${shown} result${shown === 1 ? '' : 's'}` : 'No results.');
+  } catch (err) {
+    if (token !== pageSearchToken) return;
+    pageSearchItems = [];
+    renderPageSearch();
+    setPageSearchStatus(err.message || 'Search failed', 'error');
+  }
+}
+
+function schedulePageSearch() {
+  window.clearTimeout(pageSearchTimer);
+  pageSearchTimer = window.setTimeout(() => {
+    runPageSearch(pageSearchInput?.value);
+  }, 250);
+}
+
+async function drillPageSearch(item) {
+  const browse = item?.browseId;
+  if (!browse) return;
+  const token = ++pageSearchToken;
+  pageSearchStack.push({ items: pageSearchItems.slice(), back: pageSearchBackTitle, kind: pageSearchKind });
+  pageSearchBackTitle = item.title || 'Back';
+  pageSearchKind = 'all';
+  syncPageSearchKindButtons();
+  pageSearchItems = [];
+  pageSearchHighlight = -1;
+  renderPageSearch();
+  setPageSearchStatus('Loading…');
+  try {
+    const payload = await fetchJbSearch({ browse });
+    if (token !== pageSearchToken) return;
+    pageSearchItems = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+    renderPageSearch();
+    const shown = pageSearchItems.length;
+    setPageSearchStatus(shown ? `${shown} song${shown === 1 ? '' : 's'}` : 'No songs.');
+  } catch (err) {
+    if (token !== pageSearchToken) return;
+    const prev = pageSearchStack.pop();
+    pageSearchBackTitle = prev?.back || '';
+    pageSearchKind = prev?.kind || 'all';
+    pageSearchItems = prev?.items || [];
+    syncPageSearchKindButtons();
+    renderPageSearch();
+    setPageSearchStatus(err.message || 'No songs', 'error');
+  }
+}
+
+function popPageSearch() {
+  pageSearchToken += 1;
+  const prev = pageSearchStack.pop();
+  if (!prev) return;
+  pageSearchBackTitle = prev.back;
+  pageSearchKind = prev.kind || 'all';
+  pageSearchItems = prev.items;
+  pageSearchHighlight = -1;
+  syncPageSearchKindButtons();
+  renderPageSearch();
+  const shown = visiblePageSearchItems().length;
+  setPageSearchStatus(shown ? `${shown} result${shown === 1 ? '' : 's'}` : 'No results.');
+}
+
+function syncPageSearchKindButtons() {
+  pageSearchKinds?.querySelectorAll('[data-kind]').forEach((btn) => {
+    btn.classList.toggle('is-on', btn.dataset.kind === pageSearchKind);
+  });
+}
+
+async function queuePageSearchHit(item, playNow) {
+  if (!isSongHit(item)) return;
+  await submitSongRequest(item.videoId, playNow);
+  if (queueActionFeedback) {
+    setPageSearchStatus(queueActionFeedback.message, queueActionFeedback.kind);
+  }
+}
+
+function activatePageSearchSelection(playNow) {
+  const items = visiblePageSearchItems();
+  const item = items[pageSearchHighlight];
+  if (!item) return;
+  if (item.kind && item.kind !== 'song') {
+    drillPageSearch(item);
+    return;
+  }
+  queuePageSearchHit(item, playNow);
+}
+
+if (pageSearchForm) {
+  pageSearchForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    window.clearTimeout(pageSearchTimer);
+    if (pageSearchHighlight >= 0) {
+      activatePageSearchSelection(false);
+      return;
+    }
+    runPageSearch(pageSearchInput?.value);
+  });
+}
+if (pageSearchInput) {
+  pageSearchInput.addEventListener('input', schedulePageSearch);
+  pageSearchInput.addEventListener('keydown', (event) => {
+    const items = visiblePageSearchItems();
+    if (event.key === 'ArrowDown' && items.length) {
+      event.preventDefault();
+      const next = pageSearchHighlight < items.length - 1 ? pageSearchHighlight + 1 : 0;
+      pageSearchHighlight = next;
+      renderPageSearch();
+      return;
+    }
+    if (event.key === 'ArrowUp' && items.length) {
+      event.preventDefault();
+      pageSearchHighlight = pageSearchHighlight > 0 ? pageSearchHighlight - 1 : items.length - 1;
+      renderPageSearch();
+      return;
+    }
+    if (event.key === 'Escape') {
+      if (pageSearchStack.length) {
+        event.preventDefault();
+        popPageSearch();
+      }
+    }
+  });
+}
+if (pageSearchKinds) {
+  pageSearchKinds.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-kind]');
+    if (!btn) return;
+    pageSearchKind = btn.dataset.kind;
+    pageSearchHighlight = -1;
+    syncPageSearchKindButtons();
+    renderPageSearch();
+    const shown = visiblePageSearchItems().length;
+    setPageSearchStatus(pageSearchItems.length
+      ? (shown ? `${shown} result${shown === 1 ? '' : 's'}` : 'No results in this kind.')
+      : (pageSearchStatus?.textContent || ''));
+  });
+}
+if (pageSearchBack) {
+  pageSearchBack.addEventListener('click', popPageSearch);
+}
+if (pageSearchList) {
+  pageSearchList.addEventListener('click', (event) => {
+    const add = event.target.closest('[data-search-add]');
+    const now = event.target.closest('[data-search-now]');
+    const row = event.target.closest('[data-search-index]');
+    const items = visiblePageSearchItems();
+    if (add) {
+      const item = items[Number(add.dataset.searchAdd)];
+      if (item) queuePageSearchHit(item, false);
+      return;
+    }
+    if (now) {
+      const item = items[Number(now.dataset.searchNow)];
+      if (item) queuePageSearchHit(item, true);
+      return;
+    }
+    if (!row) return;
+    const item = items[Number(row.dataset.searchIndex)];
+    if (!item) return;
+    pageSearchHighlight = Number(row.dataset.searchIndex);
+    renderPageSearch();
+    if (item.kind && item.kind !== 'song') {
+      drillPageSearch(item);
+      return;
+    }
+    queuePageSearchHit(item, false);
   });
 }
 
