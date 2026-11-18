@@ -468,18 +468,11 @@ pub(crate) fn browse_id_for_playlist(playlist_id: &str) -> String {
 }
 
 pub fn post_innertube_browse(browse_id: &str) -> Result<Value, String> {
-    let body = json!({
-        "context": {
-            "client": {
-                "clientName": "WEB_REMIX",
-                "clientVersion": innertube_client_version(),
-                "hl": "en",
-                "gl": "US"
-            },
-            "user": {}
-        },
-        "browseId": browse_id
-    });
+    post_innertube_browse_with(browse_id, None)
+}
+
+pub fn post_innertube_browse_with(browse_id: &str, params: Option<&str>) -> Result<Value, String> {
+    let body = innertube_browse_body(browse_id, params);
     let resp = ureq::post(INNERTUBE_BROWSE)
         .set("Content-Type", "application/json")
         .set("User-Agent", INNERTUBE_UA)
@@ -498,6 +491,25 @@ pub fn post_innertube_browse(browse_id: &str) -> Result<Value, String> {
     }
     resp.into_json()
         .map_err(|e| format!("failed to decode innertube response: {e}"))
+}
+
+fn innertube_browse_body(browse_id: &str, params: Option<&str>) -> Value {
+    let mut body = json!({
+        "context": {
+            "client": {
+                "clientName": "WEB_REMIX",
+                "clientVersion": innertube_client_version(),
+                "hl": "en",
+                "gl": "US"
+            },
+            "user": {}
+        },
+        "browseId": browse_id
+    });
+    if let Some(p) = params.map(str::trim).filter(|s| !s.is_empty()) {
+        body["params"] = json!(p);
+    }
+    body
 }
 
 pub fn lookup_playlist_by_id(client: &Client, playlist_id: &str) -> Result<PlaylistLookup, String> {
@@ -596,5 +608,14 @@ mod tests {
         assert_eq!(title, "The X-Files Opening Credits");
         assert_eq!(author, "Emily Hinnekens");
         assert!(thumb.contains("v4-GcS1UQyg"));
+    }
+
+    #[test]
+    fn innertube_browse_body_omits_empty_params() {
+        let plain = innertube_browse_body("UCabc", None);
+        assert_eq!(plain["browseId"], "UCabc");
+        assert!(plain.get("params").is_none());
+        let with = innertube_browse_body("UCabc", Some("ggMore"));
+        assert_eq!(with["params"], "ggMore");
     }
 }

@@ -214,8 +214,8 @@ pub fn list_search_results(payload: &Value, limit: usize) -> Vec<SearchHit> {
     out
 }
 
-/// Album, playlist, or artist top-songs for `GET /cmd/jb/search?browse=`.
-/// ponytail: first 100 album/playlist rows and 20 artist top songs; page when a shelf is longer.
+/// Album, playlist, or artist page for `GET /cmd/jb/search?browse=`.
+/// ponytail: 100 album/playlist/artist songs; one Songs Show-all fetch, no further paging.
 pub fn search_browse(browse_id: &str) -> Result<(String, Vec<SearchHit>), String> {
     let browse_id = browse_id.trim();
     let kind = browse_target(browse_id).ok_or_else(|| "bad browse id".to_string())?;
@@ -226,9 +226,9 @@ pub fn search_browse(browse_id: &str) -> Result<(String, Vec<SearchHit>), String
     };
     let payload = super::post_innertube_browse(&id)?;
     if kind == "artist" {
-        let items = list_artist_top_songs(&payload, 20);
+        let items = list_artist_page(&payload);
         if items.is_empty() {
-            return Err("no top songs".into());
+            return Err("no songs or albums".into());
         }
         return Ok((extract_playlist_name(&payload), items));
     }
@@ -270,14 +270,104 @@ pub fn browse_target(id: &str) -> Option<&'static str> {
     }
 }
 
+const ARTIST_SONG_CAP: usize = 100;
+const ARTIST_ALBUM_CAP: usize = 40;
+
+/// Preview Songs shelf, then Show-all if present, then Albums carousel.
+pub fn list_artist_page(payload: &Value) -> Vec<SearchHit> {
+    let mut songs = list_artist_top_songs(payload, ARTIST_SONG_CAP);
+    if let Some((id, params)) = songs_more_browse(payload) {
+        if let Ok(more) = super::post_innertube_browse_with(&id, Some(&params)) {
+            let extra: Vec<SearchHit> = list_search_results(&more, ARTIST_SONG_CAP)
+                .into_iter()
+                .filter(|h| h.kind == "song")
+                .collect();
+            if extra.len() > songs.len() {
+                songs = extra;
+            }
+        }
+    }
+    songs.truncate(ARTIST_SONG_CAP);
+    let mut albums = list_artist_albums(payload, ARTIST_ALBUM_CAP);
+    if let Some((id, params)) = albums_more_browse(payload) {
+        if let Ok(more) = super::post_innertube_browse_with(&id, Some(&params)) {
+            let extra: Vec<SearchHit> = list_search_results(&more, ARTIST_ALBUM_CAP)
+                .into_iter()
+                .filter(|h| h.kind == "album")
+                .collect();
+            if extra.len() > albums.len() {
+                albums = extra;
+            }
+        }
+    }
+    albums.truncate(ARTIST_ALBUM_CAP);
+    songs.append(&mut albums);
+    songs
+}
+
 pub fn list_artist_top_songs(payload: &Value, limit: usize) -> Vec<SearchHit> {
     if limit == 0 {
         return Vec::new();
     }
     let mut out = Vec::new();
     let mut seen = HashSet::new();
-    collect_top_song_shelves(payload, limit, &mut out, &mut seen);
+    collect_matching_shelves(payload, limit, &mut out, &mut seen, is_top_songs_shelf);
     out
+}
+
+pub fn list_artist_albums(payload: &Value, limit: usize) -> Vec<SearchHit> {
+    if limit == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    collect_matching_shelves(payload, limit, &mut out, &mut seen, is_albums_shelf);
+    out.retain(|h| h.kind == "album");
+    out.truncate(limit);
+    out
+}
+
+/// Songs shelf Show-all: `browseId` + `params` for a second Innertube call.
+pub fn songs_more_browse(value: &Value) -> Option<(String, String)> {
+    shelf_more_for(value, is_top_songs_shelf)
+}
+
+pub fn albums_more_browse(value: &Value) -> Option<(String, String)> {
+    shelf_more_for(value, is_albums_shelf)
+}
+
+fn shelf_more_for(value: &Value, pred: fn(&Value) -> bool) -> Option<(String, String)> {
+    match value {
+        Value::Array(arr) => arr.iter().find_map(|v| shelf_more_for(v, pred)),
+        Value::Object(map) => {
+            for key in ["musicShelfRenderer", "musicCarouselShelfRenderer"] {
+                let Some(shelf) = map.get(key) else {
+                    continue;
+                };
+                if pred(shelf) {
+                    if let Some(pair) = shelf_more_browse(shelf) {
+                        return Some(pair);
+                    }
+                }
+            }
+            map.values().find_map(|v| shelf_more_for(v, pred))
+        }
+        _ => None,
+    }
+}
+
+fn shelf_more_browse(shelf: &Value) -> Option<(String, String)> {
+    let browse = shelf
+        .pointer("/bottomEndpoint/browseEndpoint")
+        .or_else(|| {
+            shelf.pointer("/moreContentButton/buttonRenderer/navigationEndpoint/browseEndpoint")
+        })?;
+    let id = browse.get("browseId")?.as_str()?.trim();
+    let params = browse.get("params")?.as_str()?.trim();
+    if id.is_empty() || params.is_empty() {
+        return None;
+    }
+    Some((id.to_string(), params.to_string()))
 }
 
 fn walk_search_hits(
@@ -297,6 +387,11 @@ fn walk_search_hits(
                 }
             }
             if let Some(item) = map.get("musicResponsiveListItemRenderer") {
+                if push_search_hit(item, limit, out, seen) {
+                    return true;
+                }
+            }
+            if let Some(item) = map.get("musicTwoRowItemRenderer") {
                 if push_search_hit(item, limit, out, seen) {
                     return true;
                 }
@@ -406,8 +501,34 @@ fn kind_and_browse(renderer: &Value, byline: &str) -> (&'static str, String) {
     ("song", String::new())
 }
 
+/// Root, onTap, then title runs. Skip byline — a song's artist link is not the item.
+fn item_browse_endpoint(renderer: &Value) -> Option<&Value> {
+    renderer
+        .pointer("/navigationEndpoint/browseEndpoint")
+        .or_else(|| renderer.pointer("/onTap/browseEndpoint"))
+        .or_else(|| first_run_browse(renderer.get("title")))
+        .or_else(|| title_flex_browse(renderer))
+}
+
+fn first_run_browse(text: Option<&Value>) -> Option<&Value> {
+    let runs = text?.get("runs")?.as_array()?;
+    runs.iter()
+        .find_map(|run| run.pointer("/navigationEndpoint/browseEndpoint"))
+}
+
+fn title_flex_browse(renderer: &Value) -> Option<&Value> {
+    let col = renderer.get("flexColumns")?.as_array()?.first()?;
+    let text = nested_map(col, "musicResponsiveListItemFlexColumnRenderer")
+        .and_then(|flex| flex.get("text"))
+        .or_else(|| col.get("text"));
+    first_run_browse(text)
+}
+
 fn nav_page_kind(renderer: &Value) -> Option<(&'static str, String)> {
-    let browse = renderer.pointer("/navigationEndpoint/browseEndpoint")?;
+    kind_from_browse(item_browse_endpoint(renderer)?)
+}
+
+fn kind_from_browse(browse: &Value) -> Option<(&'static str, String)> {
     let id = browse
         .get("browseId")
         .and_then(|v| v.as_str())
@@ -434,8 +555,8 @@ fn nav_page_kind(renderer: &Value) -> Option<(&'static str, String)> {
 }
 
 fn direct_browse_id(renderer: &Value) -> String {
-    renderer
-        .pointer("/navigationEndpoint/browseEndpoint/browseId")
+    item_browse_endpoint(renderer)
+        .and_then(|browse| browse.get("browseId"))
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .trim()
@@ -483,11 +604,12 @@ fn is_result_type_word(s: &str) -> bool {
     )
 }
 
-fn collect_top_song_shelves(
+fn collect_matching_shelves(
     value: &Value,
     limit: usize,
     out: &mut Vec<SearchHit>,
     seen: &mut HashSet<String>,
+    pred: fn(&Value) -> bool,
 ) {
     if out.len() >= limit {
         return;
@@ -495,7 +617,7 @@ fn collect_top_song_shelves(
     match value {
         Value::Array(arr) => {
             for item in arr {
-                collect_top_song_shelves(item, limit, out, seen);
+                collect_matching_shelves(item, limit, out, seen, pred);
                 if out.len() >= limit {
                     return;
                 }
@@ -506,7 +628,7 @@ fn collect_top_song_shelves(
                 let Some(shelf) = map.get(key) else {
                     continue;
                 };
-                if !is_top_songs_shelf(shelf) {
+                if !pred(shelf) {
                     continue;
                 }
                 if let Some(contents) = shelf.get("contents") {
@@ -520,11 +642,11 @@ fn collect_top_song_shelves(
                 if matches!(
                     key.as_str(),
                     "musicShelfRenderer" | "musicCarouselShelfRenderer"
-                ) && is_top_songs_shelf(nested)
+                ) && pred(nested)
                 {
                     continue;
                 }
-                collect_top_song_shelves(nested, limit, out, seen);
+                collect_matching_shelves(nested, limit, out, seen, pred);
                 if out.len() >= limit {
                     return;
                 }
@@ -534,11 +656,32 @@ fn collect_top_song_shelves(
     }
 }
 
+fn shelf_title(shelf: &Value) -> String {
+    let direct = extract_text_from_runs(shelf.get("title").unwrap_or(&Value::Null));
+    if !direct.trim().is_empty() {
+        return direct;
+    }
+    for path in [
+        "/header/musicCarouselShelfBasicHeaderRenderer/title",
+        "/header/musicShelfHeaderRenderer/title",
+    ] {
+        if let Some(v) = shelf.pointer(path) {
+            let t = extract_text_from_runs(v);
+            if !t.trim().is_empty() {
+                return t;
+            }
+        }
+    }
+    String::new()
+}
+
 fn is_top_songs_shelf(shelf: &Value) -> bool {
-    let title = extract_text_from_runs(shelf.get("title").unwrap_or(&Value::Null))
-        .trim()
-        .to_ascii_lowercase();
+    let title = shelf_title(shelf).trim().to_ascii_lowercase();
     title == "top songs" || title == "songs"
+}
+
+fn is_albums_shelf(shelf: &Value) -> bool {
+    shelf_title(shelf).trim().eq_ignore_ascii_case("albums")
 }
 
 pub fn lookup_song_by_query(client: &Client, query: &str) -> Result<(String, SongLookup), String> {
@@ -2023,6 +2166,128 @@ mod tests {
         assert!(hits[2].artist.is_empty());
     }
 
+    fn artist_browse_nav(id: &str) -> Value {
+        json!({
+            "browseEndpoint": {
+                "browseId": id,
+                "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                    }
+                }
+            }
+        })
+    }
+
+    fn play_overlay(video_id: &str) -> Value {
+        json!({
+            "musicItemThumbnailOverlayRenderer": {
+                "content": {
+                    "musicPlayButtonRenderer": {
+                        "playNavigationEndpoint": {
+                            "watchEndpoint": { "videoId": video_id }
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    #[test]
+    fn search_keeps_artist_card_with_ontap() {
+        let payload = json!([{
+            "musicCardShelfRenderer": {
+                "title": { "runs": [{ "text": "JPEGMAFIA" }] },
+                "subtitle": { "runs": [{ "text": "Artist" }] },
+                "onTap": artist_browse_nav("UCjpegmafiaxxxxxxxxxxxxx"),
+                "overlay": play_overlay("playVid")
+            }
+        }]);
+        let hits = list_search_results(&payload, 8);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, "artist");
+        assert_eq!(hits[0].title, "JPEGMAFIA");
+        assert_eq!(hits[0].browse_id, "UCjpegmafiaxxxxxxxxxxxxx");
+        assert!(hits[0].video_id.is_empty());
+    }
+
+    #[test]
+    fn search_keeps_artist_two_row_tile() {
+        let payload = json!([{
+            "musicTwoRowItemRenderer": {
+                "title": { "runs": [{ "text": "JPEGMAFIA" }] },
+                "subtitle": { "runs": [{ "text": "Artist" }] },
+                "onTap": artist_browse_nav("UCjpegmafiaxxxxxxxxxxxxx"),
+                "overlay": play_overlay("playVid")
+            }
+        }]);
+        let hits = list_search_results(&payload, 8);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, "artist");
+        assert_eq!(hits[0].browse_id, "UCjpegmafiaxxxxxxxxxxxxx");
+        assert!(hits[0].video_id.is_empty());
+    }
+
+    #[test]
+    fn search_keeps_artist_browse_on_title_run() {
+        let payload = json!([{
+            "musicResponsiveListItemRenderer": {
+                "flexColumns": [
+                    {
+                        "musicResponsiveListItemFlexColumnRenderer": {
+                            "text": {
+                                "runs": [{
+                                    "text": "JPEGMAFIA",
+                                    "navigationEndpoint": artist_browse_nav("UCjpegmafiaxxxxxxxxxxxxx")
+                                }]
+                            }
+                        }
+                    },
+                    flex("Artist")
+                ]
+            }
+        }]);
+        let hits = list_search_results(&payload, 8);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, "artist");
+        assert_eq!(hits[0].browse_id, "UCjpegmafiaxxxxxxxxxxxxx");
+        assert!(hits[0].video_id.is_empty());
+    }
+
+    #[test]
+    fn search_song_byline_artist_link_stays_song() {
+        let payload = json!([{
+            "musicResponsiveListItemRenderer": {
+                "flexColumns": [
+                    flex("Never Gonna"),
+                    {
+                        "musicResponsiveListItemFlexColumnRenderer": {
+                            "text": {
+                                "runs": [
+                                    { "text": "Song • " },
+                                    {
+                                        "text": "Rick Astley",
+                                        "navigationEndpoint": artist_browse_nav("UCrickastleyxxxxxxxxxxxx")
+                                    },
+                                    { "text": " • 3:33" }
+                                ]
+                            }
+                        }
+                    }
+                ],
+                "navigationEndpoint": {
+                    "watchEndpoint": { "videoId": "dQw4w9WgXcQ" }
+                }
+            }
+        }]);
+        let hits = list_search_results(&payload, 8);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, "song");
+        assert_eq!(hits[0].video_id, "dQw4w9WgXcQ");
+        assert_eq!(hits[0].title, "Never Gonna");
+        assert!(hits[0].browse_id.is_empty());
+    }
+
     #[test]
     fn artist_top_songs_ignore_other_shelves() {
         let payload = json!({
@@ -2059,6 +2324,112 @@ mod tests {
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].video_id, "topVid");
         assert_eq!(hits[0].kind, "song");
+    }
+
+    #[test]
+    fn songs_more_browse_reads_bottom_endpoint() {
+        let payload = json!({
+            "musicShelfRenderer": {
+                "title": { "runs": [{ "text": "Songs" }] },
+                "contents": [{
+                    "musicResponsiveListItemRenderer": {
+                        "flexColumns": [flex("One"), flex("Song • JPEGMAFIA")],
+                        "navigationEndpoint": { "watchEndpoint": { "videoId": "s1" } }
+                    }
+                }],
+                "bottomEndpoint": {
+                    "browseEndpoint": {
+                        "browseId": "UCjpegmafiaxxxxxxxxxxxxx",
+                        "params": "ggMoreSongs"
+                    }
+                }
+            }
+        });
+        assert_eq!(
+            songs_more_browse(&payload),
+            Some(("UCjpegmafiaxxxxxxxxxxxxx".into(), "ggMoreSongs".into()))
+        );
+    }
+
+    #[test]
+    fn artist_page_lists_songs_then_albums() {
+        let payload = json!({
+            "contents": [
+                {
+                    "musicShelfRenderer": {
+                        "title": { "runs": [{ "text": "Songs" }] },
+                        "contents": [{
+                            "musicResponsiveListItemRenderer": {
+                                "flexColumns": [flex("Lean Beef Patty"), flex("Song • JPEGMAFIA")],
+                                "navigationEndpoint": { "watchEndpoint": { "videoId": "song1" } }
+                            }
+                        }]
+                    }
+                },
+                {
+                    "musicCarouselShelfRenderer": {
+                        "title": { "runs": [{ "text": "Albums" }] },
+                        "contents": [{
+                            "musicTwoRowItemRenderer": {
+                                "title": { "runs": [{ "text": "I LAY DOWN MY LIFE FOR YOU" }] },
+                                "subtitle": { "runs": [{ "text": "Album" }] },
+                                "navigationEndpoint": {
+                                    "browseEndpoint": {
+                                        "browseId": "MPREb_jpegalbumxxxx",
+                                        "browseEndpointContextSupportedConfigs": {
+                                            "browseEndpointContextMusicConfig": {
+                                                "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }]
+                    }
+                }
+            ]
+        });
+        let hits = list_artist_page(&payload);
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].kind, "song");
+        assert_eq!(hits[0].video_id, "song1");
+        assert_eq!(hits[1].kind, "album");
+        assert_eq!(hits[1].browse_id, "MPREb_jpegalbumxxxx");
+        assert_eq!(hits[1].title, "I LAY DOWN MY LIFE FOR YOU");
+    }
+
+    #[test]
+    fn artist_albums_read_carousel_header_title() {
+        let payload = json!({
+            "musicCarouselShelfRenderer": {
+                "header": {
+                    "musicCarouselShelfBasicHeaderRenderer": {
+                        "title": { "runs": [{ "text": "Albums" }] }
+                    }
+                },
+                "contents": [{
+                    "musicTwoRowItemRenderer": {
+                        "title": { "runs": [{ "text": "Veteran" }] },
+                        "subtitle": { "runs": [{ "text": "Album" }] },
+                        "navigationEndpoint": {
+                            "browseEndpoint": {
+                                "browseId": "MPREb_veteranxxxxxxxx",
+                                "browseEndpointContextSupportedConfigs": {
+                                    "browseEndpointContextMusicConfig": {
+                                        "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }]
+            }
+        });
+        let hits = list_artist_albums(&payload, 40);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, "album");
+        assert_eq!(hits[0].title, "Veteran");
+        assert_eq!(hits[0].browse_id, "MPREb_veteranxxxxxxxx");
     }
 
     #[test]
