@@ -791,6 +791,10 @@ body {
   margin-bottom: 8px;
 }
 
+.search-page__kinds[hidden] {
+  display: none;
+}
+
 .search-kind {
   min-height: 2rem;
   padding: 0 10px;

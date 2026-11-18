@@ -91,6 +91,7 @@ const songSearchPopup = document.getElementById('songSearchPopup');
 const pageSearchForm = document.getElementById('pageSearchForm');
 const pageSearchInput = document.getElementById('pageSearchInput');
 const pageSearchKinds = document.getElementById('pageSearchKinds');
+const pageSearchArtistNav = document.getElementById('pageSearchArtistNav');
 const pageSearchCrumb = document.getElementById('pageSearchCrumb');
 const pageSearchBack = document.getElementById('pageSearchBack');
 const pageSearchCrumbLabel = document.getElementById('pageSearchCrumbLabel');
@@ -2407,6 +2408,7 @@ let pageSearchToken = 0;
 let pageSearchItems = [];
 let pageSearchHighlight = -1;
 let pageSearchKind = 'all';
+let pageSearchArtist = false;
 let pageSearchStack = [];
 let pageSearchBackTitle = '';
 
@@ -2476,6 +2478,9 @@ async function runPageSearch(query) {
     pageSearchHighlight = -1;
     pageSearchStack = [];
     pageSearchBackTitle = '';
+    pageSearchArtist = false;
+    pageSearchKind = 'all';
+    syncPageSearchKindButtons();
     renderPageSearch();
     setPageSearchStatus('Type at least two characters.');
     return;
@@ -2484,6 +2489,9 @@ async function runPageSearch(query) {
   pageSearchStack = [];
   pageSearchBackTitle = '';
   pageSearchHighlight = -1;
+  pageSearchArtist = false;
+  pageSearchKind = 'all';
+  syncPageSearchKindButtons();
   setPageSearchStatus('Searching…');
   try {
     const payload = await fetchJbSearch({ input: q, limit: PAGE_SEARCH_LIMIT });
@@ -2511,9 +2519,15 @@ async function drillPageSearch(item) {
   const browse = item?.browseId;
   if (!browse) return;
   const token = ++pageSearchToken;
-  pageSearchStack.push({ items: pageSearchItems.slice(), back: pageSearchBackTitle, kind: pageSearchKind });
+  pageSearchStack.push({
+    items: pageSearchItems.slice(),
+    back: pageSearchBackTitle,
+    kind: pageSearchKind,
+    artist: pageSearchArtist,
+  });
   pageSearchBackTitle = item.title || 'Back';
-  pageSearchKind = 'all';
+  pageSearchArtist = item.kind === 'artist';
+  pageSearchKind = pageSearchArtist ? 'song' : 'all';
   syncPageSearchKindButtons();
   pageSearchItems = [];
   pageSearchHighlight = -1;
@@ -2525,12 +2539,13 @@ async function drillPageSearch(item) {
     pageSearchItems = Array.isArray(payload?.data?.items) ? payload.data.items : [];
     renderPageSearch();
     const shown = pageSearchItems.length;
-    setPageSearchStatus(shown ? `${shown} song${shown === 1 ? '' : 's'}` : 'No songs.');
+    setPageSearchStatus(shown ? `${shown} result${shown === 1 ? '' : 's'}` : 'No results.');
   } catch (err) {
     if (token !== pageSearchToken) return;
     const prev = pageSearchStack.pop();
     pageSearchBackTitle = prev?.back || '';
     pageSearchKind = prev?.kind || 'all';
+    pageSearchArtist = !!prev?.artist;
     pageSearchItems = prev?.items || [];
     syncPageSearchKindButtons();
     renderPageSearch();
@@ -2544,6 +2559,7 @@ function popPageSearch() {
   if (!prev) return;
   pageSearchBackTitle = prev.back;
   pageSearchKind = prev.kind || 'all';
+  pageSearchArtist = !!prev.artist;
   pageSearchItems = prev.items;
   pageSearchHighlight = -1;
   syncPageSearchKindButtons();
@@ -2553,7 +2569,10 @@ function popPageSearch() {
 }
 
 function syncPageSearchKindButtons() {
-  pageSearchKinds?.querySelectorAll('[data-kind]').forEach((btn) => {
+  if (pageSearchKinds) pageSearchKinds.hidden = pageSearchArtist;
+  if (pageSearchArtistNav) pageSearchArtistNav.hidden = !pageSearchArtist;
+  const root = pageSearchArtist ? pageSearchArtistNav : pageSearchKinds;
+  root?.querySelectorAll('[data-kind]').forEach((btn) => {
     btn.classList.toggle('is-on', btn.dataset.kind === pageSearchKind);
   });
 }
@@ -2613,20 +2632,20 @@ if (pageSearchInput) {
     }
   });
 }
-if (pageSearchKinds) {
-  pageSearchKinds.addEventListener('click', (event) => {
-    const btn = event.target.closest('[data-kind]');
-    if (!btn) return;
-    pageSearchKind = btn.dataset.kind;
-    pageSearchHighlight = -1;
-    syncPageSearchKindButtons();
-    renderPageSearch();
-    const shown = visiblePageSearchItems().length;
-    setPageSearchStatus(pageSearchItems.length
-      ? (shown ? `${shown} result${shown === 1 ? '' : 's'}` : 'No results in this kind.')
-      : (pageSearchStatus?.textContent || ''));
-  });
+function onPageSearchKindClick(event) {
+  const btn = event.target.closest('[data-kind]');
+  if (!btn) return;
+  pageSearchKind = btn.dataset.kind;
+  pageSearchHighlight = -1;
+  syncPageSearchKindButtons();
+  renderPageSearch();
+  const shown = visiblePageSearchItems().length;
+  setPageSearchStatus(pageSearchItems.length
+    ? (shown ? `${shown} result${shown === 1 ? '' : 's'}` : 'No results in this kind.')
+    : (pageSearchStatus?.textContent || ''));
 }
+pageSearchKinds?.addEventListener('click', onPageSearchKindClick);
+pageSearchArtistNav?.addEventListener('click', onPageSearchKindClick);
 if (pageSearchBack) {
   pageSearchBack.addEventListener('click', popPageSearch);
 }
